@@ -7,6 +7,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v6.0.0] - 2026-05-16
+
+### Added
+
+- 🍎 Restored macOS 10.12 compatibility (previous releases required macOS 10.13)
+- 💄 Accent color now follows system theme (again)
+- 📝 Game directories now contain a <ID>.crc32 with the crc32 of the game file instead of embedding the hashes in wbfs/ciso files. You can easily compare this with the output of `crc32` or any other external tool.
+- ✅ Checksums now work on update-partion-scubbed games
+- 🔄 A button to force a cache refresh for Open Shop Channel data
+- 🖼️ Download PAL covers in your PC language (if available). configurable in settings.
+
+### Changed
+
+- ⚡️ Better UI performance (especially on old GPUs and VMs)
+- ⚡️ Restored linker-plugin-lto for all builds (might improve compression/decompression speed)
+- 🪶 Reduced UI resource usage
+- ️️️️️⚡️ Faster disc info reading
+- 🕶️ Dark/light mode switch is now in the Settings page
+- 💄 UI refinements, TinyWiiBackupManager should feel more polished
+- 🪟 Removed windows-legacy builds, standard windows builds should now work on Windows 7+
+- 📦 Dist assets are now named more clearly, a more familiar arch name is used for each OS. Note to myself: make a PR to modmii to mirror this.
+- 📦 Windows builds are now distributed as UPX packed executables instead of zip files, so you don't even need to unzip the binary before running it anymore.
+- 💬 Windows dialogs should work more reliably on Windows < 10
+- ⬇️ Cheat/covers downloading should be more reliable
+
+### Removed
+
+Open an issue if you need any of these (explaining why you think feature X is important for TWBM), but I consider them out of scope for TinyWiiBackupManager.
+
+- 📝 Removed gametdb info from the game info modal. A gametdb page link is still available with more complete/up to date info.
+- 📝 Removed nkit metadata from the game info modal. https://github.com/encounter/nod is the recommended tool for this.
+- ⚡️ Removed x86_64-vX builds: zstd should already enable modern CPU features with runtime dispatch, so there should be no need for separate builds.
+- 📦 Removed macos-x86_64 and macos-arm64 builds: the universal binary works on both architectures and is only slightly larger.
+- 📝 Removed suggested downloads in the releases page now that we have way less - and easier to navigate - assets
+- 🍨 Removed scoop package now that winget seems to work consistently
+- 📦 Deprecated TinyWiiBackupManagerInstaller, as the windows builds have been unified. I'll continue to work, but it's a bit useless now.
+- 😓 Windows XP and Vista are no longer supported (as maintaining a custom file dialog implementation is a hassle for me, and this already caused regressions in previous TWBM releases). TWBM now requires at least Windows 7.
+- 🛜 Network features (https) won't probably work on older windows versions anymore. Game conversion will still work as expected.
+- 🖥️ Removed armhf build
+- 🛠️ Bulk cheat downloading. Individual downloading is not affected.
+
 ## [v5.2.1] - 2026-03-19
 
 ### Fixed
@@ -333,7 +374,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - 🖼️ TinyWiiBackupManager icon now shows up again on the windows exe
 
-[Unreleased]: https://github.com/mq1/TinyWiiBackupManager/compare/v5.2.1...HEAD
+[Unreleased]: https://github.com/mq1/TinyWiiBackupManager/compare/v6.0.0...HEAD
+[v6.0.0]: https://github.com/mq1/TinyWiiBackupManager/compare/v5.2.1...v6.0.0
 [v5.2.1]: https://github.com/mq1/TinyWiiBackupManager/compare/v5.2.0...v5.2.1
 [v5.2.0]: https://github.com/mq1/TinyWiiBackupManager/compare/v5.1.27...v5.2.0
 [v5.1.27]: https://github.com/mq1/TinyWiiBackupManager/compare/v5.1.26...v5.1.27
