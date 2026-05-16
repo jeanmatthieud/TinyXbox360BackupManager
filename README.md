@@ -2,7 +2,7 @@
 
 ### `TinyWiiBackupManager`<br><sub><sup>:star: A tiny game backup and homebrew app manager for the Wii</sup></sub>
 
-[![release: vX.X.X](https://img.shields.io/github/v/release/mq1/TinyWiiBackupManager)](#arrow_down-downloads)
+[![release: vX.X.X](https://img.shields.io/github/v/release/mq1/TinyWiiBackupManager)](https://github.com/mq1/TinyWiiBackupManager/releases/latest)
 [![license: GPL-3.0](https://img.shields.io/github/license/mq1/TinyWiiBackupManager)](https://github.com/mq1/TinyWiiBackupManager/blob/main/COPYING)
 
 <br>
