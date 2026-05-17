@@ -7,9 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v6.0.1] - 2026-05-17
+
 ### Changed
 
 - 💄 UI polishing (#632, @GABO1423)
+
+### Fixed
+
+- 📝 Game folders are now named with ASCII characters to prevent issues with game backup loaders. Unicode characters are turned into ASCII equivalents where possible (for ex. "テイルズ オブ グレイセス" becomes "teiruzu obu gureisesu")
 
 ## [v6.0.0] - 2026-05-16
 

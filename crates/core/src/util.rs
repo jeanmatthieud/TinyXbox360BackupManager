@@ -43,14 +43,15 @@ pub static AGENT: LazyLock<ureq::Agent> = LazyLock::new(|| {
         .new_agent()
 });
 
-pub fn sanitize(s: &str) -> Cow<'_, str> {
-    let opts = sanitize_filename::Options {
+pub fn sanitize(text: &str) -> Cow<'_, str> {
+    const OPTS: sanitize_filename::Options<'static> = sanitize_filename::Options {
         truncate: true,
         windows: true,
         replacement: "",
     };
 
-    sanitize_filename::sanitize_with_options(s, opts)
+    let ascii = deunicode::deunicode_with_tofu_cow(text, "");
+    sanitize_filename::sanitize_with_options(ascii, OPTS)
 }
 
 pub fn get_threads_num() -> (usize, usize) {

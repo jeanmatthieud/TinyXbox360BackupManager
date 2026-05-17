@@ -486,21 +486,31 @@ impl State {
 
                 let existing_ids = self.games.iter().map(|g| g.id).collect::<Vec<_>>();
 
-                let paths = paths
+                self.games_to_add = paths
                     .into_iter()
-                    .filter_map(|path| util::should_add_game(&path, &existing_ids));
+                    .filter_map(|path| util::should_add_game(path, &existing_ids))
+                    .collect();
 
-                self.games_to_add.clear();
-                self.games_to_add.extend(paths);
+                let displayed_games_to_add = self
+                    .games_to_add
+                    .iter()
+                    .map(|p| match p.file_name() {
+                        Some(filename) => filename.to_string_lossy().to_shared_string(),
+                        None => "?".to_shared_string(),
+                    })
+                    .collect::<Vec<_>>();
+
+                self.displayed_games_to_add.set_vec(displayed_games_to_add);
             }
             Message::ConfirmGamesToAdd => {
-                for path in self.games_to_add.iter() {
-                    let conv = QueuedConversion::Standard(PathBuf::from(&path));
+                while let Some(path) = self.games_to_add.pop_front() {
+                    let _ = self.displayed_games_to_add.remove(0);
+
+                    let conv = QueuedConversion::Standard(path);
                     let displayed_conv = conv.to_shared_string();
                     self.conversion_queue.push_back(conv);
                     self.displayed_conversion_queue.push(displayed_conv);
                 }
-                self.games_to_add.clear();
 
                 if !self.is_converting {
                     self.is_converting = true;
@@ -527,6 +537,7 @@ impl State {
             }
             Message::ClearGamesToAdd => {
                 self.games_to_add.clear();
+                self.displayed_games_to_add.clear();
             }
             Message::SetCrc32Status => {
                 let app = weak.upgrade().unwrap();
@@ -928,12 +939,17 @@ impl State {
                 let app = weak.upgrade().unwrap();
 
                 if app.global::<UiState<'_>>().get_current_page() == Page::Games {
-                    let path = Path::new(&payload);
+                    let path = PathBuf::from(&payload);
                     let existing_ids = self.games.iter().map(|g| g.id).collect::<Vec<_>>();
 
-                    if let Some(path) = util::should_add_game(path, &existing_ids) {
-                        self.games_to_add.clear();
-                        self.games_to_add.push(path);
+                    if let Some(path) = util::should_add_game(path, &existing_ids)
+                        && let Some(filename) = path.file_name()
+                    {
+                        let displayed_games_to_add =
+                            vec![filename.to_string_lossy().to_shared_string()];
+
+                        self.games_to_add = VecDeque::from([path]);
+                        self.displayed_games_to_add.set_vec(displayed_games_to_add);
                     }
                 }
             }

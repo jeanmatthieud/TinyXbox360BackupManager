@@ -1,11 +1,11 @@
 // SPDX-FileCopyrightText: 2026 Manuel Quarneti <mq1@ik.me>
 // SPDX-License-Identifier: GPL-3.0-only
 
-use slint::{SharedString, ToSharedString};
+use slint::SharedString;
 use std::{
     fmt::{Display, Write},
     fs::File,
-    path::Path,
+    path::PathBuf,
 };
 use twbm_core::game_id::GameID;
 use zip::ZipArchive;
@@ -31,16 +31,17 @@ where
     s
 }
 
-pub fn should_add_game(path: &Path, existing_ids: &[GameID]) -> Option<SharedString> {
+pub fn should_add_game(path: PathBuf, existing_ids: &[GameID]) -> Option<PathBuf> {
+    let _ = path.file_name()?;
     let ext = path.extension()?;
 
     let meta = if ext.eq_ignore_ascii_case("zip") {
-        let mut f = File::open(path).ok()?;
+        let mut f = File::open(&path).ok()?;
         let mut zip = ZipArchive::new(&mut f).ok()?;
         let mut disc_file = zip.by_index(0).ok()?;
         wii_disc_info::Meta::read(&mut disc_file).ok()?
     } else {
-        let mut f = File::open(path).ok()?;
+        let mut f = File::open(&path).ok()?;
         wii_disc_info::Meta::read(&mut f).ok()?
     };
 
@@ -49,5 +50,5 @@ pub fn should_add_game(path: &Path, existing_ids: &[GameID]) -> Option<SharedStr
         return None;
     }
 
-    Some(path.to_string_lossy().to_shared_string())
+    Some(path)
 }

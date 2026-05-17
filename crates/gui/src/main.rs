@@ -73,7 +73,7 @@ fn main() -> Result<()> {
     ui_state.set_osc_apps(ModelRc::from(state.displayed_osc_apps.clone()));
     ui_state.set_notifications(ModelRc::from(state.notifications.clone()));
     ui_state.set_conversion_queue(ModelRc::from(state.displayed_conversion_queue.clone()));
-    ui_state.set_games_to_add(ModelRc::from(state.games_to_add.clone()));
+    ui_state.set_games_to_add(ModelRc::from(state.displayed_games_to_add.clone()));
 
     // Process messages
     dispatcher.on_dispatch({

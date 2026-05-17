@@ -3,7 +3,7 @@
 
 use crate::{DisplayedGame, DisplayedHomebrewApp, DisplayedOscApp, Notification};
 use slint::{SharedString, VecModel};
-use std::{collections::VecDeque, rc::Rc};
+use std::{collections::VecDeque, path::PathBuf, rc::Rc};
 use twbm_core::{
     config::Config, conversion_queue::QueuedConversion, drive_info::DriveInfo, game::Game,
     homebrew_app::HomebrewApp, osc::OscApp,
@@ -20,7 +20,8 @@ pub struct State {
     pub displayed_osc_apps: Rc<VecModel<DisplayedOscApp>>,
     pub conversion_queue: VecDeque<QueuedConversion>,
     pub displayed_conversion_queue: Rc<VecModel<SharedString>>,
-    pub games_to_add: Rc<VecModel<SharedString>>,
+    pub games_to_add: VecDeque<PathBuf>,
+    pub displayed_games_to_add: Rc<VecModel<SharedString>>,
     pub notifications: Rc<VecModel<Notification>>,
     pub is_converting: bool,
     pub is_downloading_osc_icons: bool,
@@ -43,7 +44,8 @@ impl State {
             displayed_osc_apps: Rc::new(VecModel::from(Vec::new())),
             conversion_queue: VecDeque::new(),
             displayed_conversion_queue: Rc::new(VecModel::from(Vec::new())),
-            games_to_add: Rc::new(VecModel::from(Vec::new())),
+            games_to_add: VecDeque::new(),
+            displayed_games_to_add: Rc::new(VecModel::from(Vec::new())),
             notifications: Rc::new(VecModel::from(Vec::new())),
             is_converting: false,
             is_downloading_osc_icons: false,
