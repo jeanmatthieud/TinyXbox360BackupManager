@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- 💄 UI polishing (https://github.com/mq1/TinyWiiBackupManager/pull/632 @GABO1423)
+- 💄 UI polishing (https://github.com/mq1/TinyWiiBackupManager/pull/632, [@GABO1423](https://github.com/GABO1423))
 
 ### Fixed
 
