@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- 💄 UI polishing (@GABO1423)
+- 💄 UI polishing (#632, @GABO1423)
 
 ## [v6.0.0] - 2026-05-16
 
