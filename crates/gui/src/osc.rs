@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 use crate::{AppWindow, Dispatcher, DisplayedOscApp, Message, util::MIB};
-use slint::{ComponentHandle, Image, ToSharedString, Weak};
+use slint::{ComponentHandle, Image, SharedString, ToSharedString, Weak};
 use std::fs;
 use time::UtcDateTime;
 use twbm_core::{data_dir::DATA_DIR, osc::OscApp};
@@ -34,11 +34,11 @@ impl From<&OscApp> for DisplayedOscApp {
 pub fn download_icons(apps: &[OscApp], weak: Weak<AppWindow>) {
     let _ = fs::create_dir_all(DATA_DIR.join("osc-icons"));
 
-    for (i, app) in apps.iter().enumerate() {
-        if app.download_icon(&DATA_DIR).is_ok() {
+    for osc_app in apps {
+        if osc_app.download_icon(&DATA_DIR).is_ok() {
             let _ = weak.upgrade_in_event_loop(move |app| {
                 app.global::<Dispatcher<'_>>()
-                    .invoke_dispatch(Message::ReloadOscIcon, i.to_shared_string());
+                    .invoke_dispatch(Message::RefreshDisplayedOscApps, SharedString::new());
             });
         }
     }

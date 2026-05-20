@@ -22,15 +22,7 @@ export component OscTablePage inherits VerticalLayout {
         OscOtherToolbar { }
     }
 
-    if UiState.osc-apps.length == 0: HorizontalLayout {
-        padding-left: 20px;
-
-        Text {
-            text: "Loading...";
-        }
-    }
-
-    if UiState.osc-apps.length > 0: ScrollView {
+    ScrollView {
         width: parent.width;
         viewport-height: v.preferred-height;
 

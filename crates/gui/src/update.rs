@@ -6,7 +6,7 @@ use crate::{
     DisplayedHomebrewApp, DisplayedOscApp, Message, Notification, Page, UiState,
     convert::perform_conversion, covers, dialogs, games, homebrew_apps, osc, state::State, util,
 };
-use slint::{ComponentHandle, Image, Model, SharedString, ToSharedString, Weak};
+use slint::{ComponentHandle, SharedString, ToSharedString, Weak};
 use std::{
     collections::VecDeque,
     ffi::OsStr,
@@ -411,16 +411,6 @@ impl State {
                 message_queue.push_back((Message::RefreshDisplayedOscApps, SharedString::new()));
                 message_queue
                     .push_back((Message::RefreshDisplayedHomebrewApps, SharedString::new()));
-            }
-            Message::ReloadOscIcon => {
-                let i = payload.parse().unwrap();
-                let mut app = self.displayed_osc_apps.row_data(i).unwrap();
-                let icon_path = DATA_DIR.join(format!("osc-icons/{}.png", &app.slug));
-
-                if let Ok(icon) = Image::load_from_path(&icon_path) {
-                    app.icon = icon;
-                    self.displayed_osc_apps.set_row_data(i, app);
-                }
             }
             Message::FilterGames => {
                 self.games_filter = payload.to_lowercase();
