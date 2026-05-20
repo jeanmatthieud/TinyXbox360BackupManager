@@ -2,13 +2,14 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 use anyhow::Result;
+use deunicode::deunicode_char;
 use nod::{
     common::{Compression, Format},
     write::FormatOptions,
 };
 use std::{
-    borrow::Cow,
     ffi::OsStr,
+    fmt::{Display, Write},
     fs::{self, File},
     io,
     num::NonZeroUsize,
@@ -42,17 +43,6 @@ pub static AGENT: LazyLock<ureq::Agent> = LazyLock::new(|| {
         .build()
         .new_agent()
 });
-
-pub fn sanitize(text: &str) -> Cow<'_, str> {
-    const OPTS: sanitize_filename::Options<'static> = sanitize_filename::Options {
-        truncate: true,
-        windows: true,
-        replacement: "",
-    };
-
-    let ascii = deunicode::deunicode_with_tofu_cow(text, "");
-    sanitize_filename::sanitize_with_options(ascii, OPTS)
-}
 
 pub fn get_threads_num() -> (usize, usize) {
     let cpus = num_cpus::get();
@@ -144,4 +134,50 @@ pub fn download_wiitdb_xml(root_dir: &Path) -> Result<()> {
     io::copy(&mut datafile, &mut out_file)?;
 
     Ok(())
+}
+
+fn is_valid_char(c: char) -> bool {
+    c.is_ascii_alphanumeric() || " !#$%&'()+,-.;=@^_`{}~".contains(c)
+}
+
+pub fn sanitize_title(title: &str) -> String {
+    let mut sanitized = String::with_capacity(64);
+
+    let mut actual_title = false;
+    for c in title.chars() {
+        if sanitized.len() >= 64 {
+            break;
+        }
+
+        if let Some(ascii) = deunicode_char(c) {
+            for ac in ascii.chars() {
+                if sanitized.len() >= 64 {
+                    break;
+                }
+
+                if ac.is_ascii_alphanumeric() {
+                    actual_title = true;
+                }
+
+                if actual_title && is_valid_char(ac) {
+                    sanitized.push(ac);
+                }
+            }
+        }
+    }
+
+    if sanitized.is_empty() {
+        sanitized.push_str("game");
+    }
+
+    let trimmed_len = sanitized.trim_end().len();
+    sanitized.truncate(trimmed_len);
+
+    sanitized
+}
+
+pub fn make_game_dir_name(id: impl Display, title: &str) -> String {
+    let mut dir_name = sanitize_title(title);
+    write!(&mut dir_name, " [{id}]").unwrap();
+    dir_name
 }

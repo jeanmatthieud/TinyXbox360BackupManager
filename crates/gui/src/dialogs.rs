@@ -4,6 +4,7 @@
 use rfd::FileDialog;
 use slint::WindowHandle;
 use std::path::PathBuf;
+use twbm_core::util::sanitize_title;
 use walkdir::WalkDir;
 
 const INPUT_DIALOG_FILTER: &[&str] = &[
@@ -69,7 +70,8 @@ pub fn save_game(window_handle: &WindowHandle, game_title: &str) -> Option<PathB
         "Select Destination for {game_title} - Supported extensions: iso, wbfs, wia, rvz, ciso, gcz, tgc, nfs",
     );
 
-    let filename = format!("{}.rvz", twbm_core::util::sanitize(game_title));
+    let mut filename = sanitize_title(game_title);
+    filename.push_str(".rvz");
 
     FileDialog::new()
         .set_parent(window_handle)

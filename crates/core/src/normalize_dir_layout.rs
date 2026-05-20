@@ -8,7 +8,7 @@ use std::{
     path::Path,
 };
 
-use crate::{game::Game, game_id::GameID, id_map, util};
+use crate::{game, game_id::GameID, id_map, util::make_game_dir_name};
 
 fn adopt_orphaned_discs(games_dir: &Path, is_wii: bool) -> Result<()> {
     let all_discs = fs::read_dir(games_dir)?
@@ -49,9 +49,7 @@ fn adopt_orphaned_discs(games_dir: &Path, is_wii: bool) -> Result<()> {
         };
 
         let display_title = id_map::get(game_id).map_or(meta.game_title(), |g| g.title);
-        let sanitized_title = util::sanitize(display_title);
-
-        let new_parent_name = format!("{sanitized_title} [{game_id}]");
+        let new_parent_name = make_game_dir_name(game_id, display_title);
 
         let new_filename = if filename.ends_with(".part0.iso") {
             format!("{game_id}.part0.iso")
@@ -100,17 +98,14 @@ fn adopt_orphaned_discs(games_dir: &Path, is_wii: bool) -> Result<()> {
 }
 
 fn readopt_parented_discs(games_dir: &Path) -> Result<()> {
-    let all_games = fs::read_dir(games_dir)?.filter_map(|entry| {
-        let path = entry.ok()?.path();
-        Game::from_path(path)
-    });
+    let all_games = game::scan_dir(games_dir);
 
     for game in all_games {
         let Some(disc_path) = game.get_disc_path() else {
             continue;
         };
 
-        // fix for a mistake i did in a previuous version
+        // fix for an eventual wrong extension
         {
             let Ok(mut f) = File::open(&disc_path) else {
                 continue;
@@ -129,7 +124,7 @@ fn readopt_parented_discs(games_dir: &Path) -> Result<()> {
             }
         }
 
-        let new_filename = format!("{} [{}]", &game.title, game.id);
+        let new_filename = make_game_dir_name(&game.id, &game.title);
         let new_path = games_dir.join(new_filename);
 
         if new_path.exists() {

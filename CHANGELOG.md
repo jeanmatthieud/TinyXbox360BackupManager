@@ -7,11 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v6.0.2] - 2026-05-20
+
+### Fixed
+
+- 🐛 Normalize paths option corrupts some Wii games (<https://github.com/mq1/TinyWiiBackupManager/issues/616>)
+
 ## [v6.0.1] - 2026-05-17
 
 ### Changed
 
-- 💄 UI polishing (https://github.com/mq1/TinyWiiBackupManager/pull/632, [@GABO1423](https://github.com/GABO1423))
+- 💄 UI polishing (<https://github.com/mq1/TinyWiiBackupManager/pull/632>, [@GABO1423](https://github.com/GABO1423))
 
 ### Fixed
 
@@ -47,7 +53,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Open an issue if you need any of these (explaining why you think feature X is important for TWBM), but I consider them out of scope for TinyWiiBackupManager.
 
 - 📝 Removed gametdb info from the game info modal. A gametdb page link is still available with more complete/up to date info.
-- 📝 Removed nkit metadata from the game info modal. https://github.com/encounter/nod is the recommended tool for this.
+- 📝 Removed nkit metadata from the game info modal. <https://github.com/encounter/nod> is the recommended tool for this.
 - ⚡️ Removed x86_64-vX builds: zstd should already enable modern CPU features with runtime dispatch, so there should be no need for separate builds.
 - 📦 Removed macos-x86_64 and macos-arm64 builds: the universal binary works on both architectures and is only slightly larger.
 - 📝 Removed suggested downloads in the releases page now that we have way less - and easier to navigate - assets
@@ -384,7 +390,8 @@ Open an issue if you need any of these (explaining why you think feature X is im
 
 - 🖼️ TinyWiiBackupManager icon now shows up again on the windows exe
 
-[Unreleased]: https://github.com/mq1/TinyWiiBackupManager/compare/v6.0.1...HEAD
+[Unreleased]: https://github.com/mq1/TinyWiiBackupManager/compare/v6.0.2...HEAD
+[v6.0.2]: https://github.com/mq1/TinyWiiBackupManager/compare/v6.0.1...v6.0.2
 [v6.0.1]: https://github.com/mq1/TinyWiiBackupManager/compare/v6.0.0...v6.0.1
 [v6.0.0]: https://github.com/mq1/TinyWiiBackupManager/compare/v5.2.1...v6.0.0
 [v5.2.1]: https://github.com/mq1/TinyWiiBackupManager/compare/v5.2.0...v5.2.1

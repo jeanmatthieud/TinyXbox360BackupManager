@@ -26,7 +26,7 @@ impl Game {
             return None;
         }
 
-        let (title, id) = file_name.split_once('[')?;
+        let (title, id) = file_name.rsplit_once('[')?;
         let is_wii = matches!(id.chars().next(), Some('R' | 'S'));
         let id = GameID::new(&id[..id.len() - 1])?;
 

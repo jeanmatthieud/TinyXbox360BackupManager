@@ -4,7 +4,7 @@ members = ["crates/core", "crates/gui"]
 default-members = ["crates/gui"]
 
 [workspace.package]
-version = "6.0.1"
+version = "6.0.2"
 rust-version = "1.95"
 edition = "2024"
 authors = ["Manuel Quarneti <mq1@ik.me>"]
@@ -16,7 +16,7 @@ description = "A tiny game backup and homebrew app manager for the Wii"
 anyhow = "1.0"
 wii-disc-info = "0.6"
 zip = { version = "8.6", default-features = false, features = [
-    "deflate-flate2",
+  "deflate-flate2",
 ] }
 
 [profile.release]

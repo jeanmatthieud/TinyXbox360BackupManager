@@ -6,7 +6,7 @@ use crate::{
     drive_info::DriveInfo,
     game_id::GameID,
     id_map,
-    util::{self, BUF_SIZE, HEADER_SIZE, SPLIT_SIZE, get_threads_num},
+    util::{BUF_SIZE, HEADER_SIZE, SPLIT_SIZE, get_threads_num, make_game_dir_name},
 };
 use anyhow::{Result, anyhow, bail};
 use crc32fast::Hasher;
@@ -49,12 +49,11 @@ pub fn perform(
         is_wii && (config.contents.always_split || (drive_info.fs_kind == FsKind::Fat32));
 
     let game_id =
-        GameID::from_byte_string(disc_header.game_id).ok_or(anyhow!("Invalid game ID"))?;
+        GameID::from_byte_string(disc_header.game_id).ok_or_else(|| anyhow!("Invalid game ID"))?;
     let display_title = id_map::get(game_id).map_or(disc_header.game_title_str(), |e| e.title);
 
-    let sanitized_title = util::sanitize(display_title);
     let parent_dir_name = if is_wii { "wbfs" } else { "games" };
-    let game_dir_name = format!("{} [{}]", sanitized_title, game_id);
+    let game_dir_name = make_game_dir_name(game_id, display_title);
     let game_dir = config
         .contents
         .mount_point
