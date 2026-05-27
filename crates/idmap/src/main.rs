@@ -3,10 +3,9 @@
 
 #![warn(clippy::all, rust_2018_idioms)]
 
-#[cfg(feature = "cli")]
-fn main() {
-    const USAGE: &str = "Usage: idmap <GAMEID>";
+const USAGE: &str = "Usage: idmap <GAMEID>";
 
+fn main() {
     let Some(game_id) = std::env::args().nth(1) else {
         eprintln!("{USAGE}");
         std::process::exit(1);
@@ -22,9 +21,4 @@ fn main() {
 
     println!("Title: {title:?}");
     println!("GameHacking ID: {ghid:?}");
-}
-
-#[cfg(not(feature = "cli"))]
-fn main() {
-    println!("Please add the `cli` feature to enable the CLI");
 }

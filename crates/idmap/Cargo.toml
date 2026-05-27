@@ -8,10 +8,6 @@ license.workspace = true
 repository.workspace = true
 description.workspace = true
 
-[features]
-default = []
-cli = []
-
 [dependencies]
 rkyv = { version = "0.8", default-features = false, features = ["std"] }
 
