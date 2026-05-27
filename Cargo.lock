@@ -5681,12 +5681,12 @@ dependencies = [
  "num_cpus",
  "quick-xml 0.40.1",
  "radix_fmt",
- "rkyv",
  "semver",
  "serde",
  "serde_json",
  "split-write",
  "sys-locale",
+ "twbm-idmap",
  "ureq",
  "which-fs",
  "wii-disc-info",
@@ -5711,6 +5711,13 @@ dependencies = [
  "winresource",
  "winsafe",
  "zip",
+]
+
+[[package]]
+name = "twbm-idmap"
+version = "6.0.5"
+dependencies = [
+ "rkyv",
 ]
 
 [[package]]

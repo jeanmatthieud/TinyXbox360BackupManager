@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Manuel Quarneti <mq1@ik.me>
 // SPDX-License-Identifier: GPL-3.0-only
 
-use crate::{config::SortBy, game_id::GameID, id_map};
+use crate::{config::SortBy, game_id::GameID};
 use std::{
     cmp::Ordering,
     fs,
@@ -30,10 +30,9 @@ impl Game {
         let is_wii = matches!(id.chars().next(), Some('R' | 'S'));
         let id = GameID::new(&id[..id.len() - 1])?;
 
-        let title = match id_map::get(id) {
-            Some(entry) => entry.title.to_string(),
-            None => title.trim().to_string(),
-        };
+        let title = twbm_idmap::get_title(id)
+            .unwrap_or_else(|| title.trim())
+            .to_string();
 
         let size = fs_extra::dir::get_size(&path).ok()?;
 

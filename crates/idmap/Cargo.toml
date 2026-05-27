@@ -1,0 +1,19 @@
+[package]
+name = "twbm-idmap"
+version.workspace = true
+rust-version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description.workspace = true
+
+[features]
+default = []
+cli = []
+
+[dependencies]
+rkyv = { version = "0.8", default-features = false, features = ["std"] }
+
+[build-dependencies]
+rkyv = { version = "0.8", default-features = false, features = ["std"] }

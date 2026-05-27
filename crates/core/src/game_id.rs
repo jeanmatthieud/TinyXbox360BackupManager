@@ -20,14 +20,6 @@ impl GameID {
         }
     }
 
-    pub const fn from_u32(id: u32) -> Self {
-        Self(id)
-    }
-
-    pub const fn to_u32(self) -> u32 {
-        self.0
-    }
-
     pub fn from_byte_string(b: [u8; 6]) -> Option<Self> {
         let s = str::from_utf8(&b).ok()?;
         Self::new(s)
@@ -43,5 +35,11 @@ impl GameID {
 impl fmt::Display for GameID {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{:#}", Radix::new(self.0, 36))
+    }
+}
+
+impl Into<u32> for GameID {
+    fn into(self) -> u32 {
+        self.0
     }
 }

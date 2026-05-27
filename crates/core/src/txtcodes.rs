@@ -4,7 +4,6 @@
 use crate::{
     config::{Config, TxtCodesSource},
     game_id::GameID,
-    id_map,
     util::AGENT,
 };
 use anyhow::{Result, bail};
@@ -20,10 +19,7 @@ pub fn download_cheats(game_id: GameID, config: &Config) -> Result<()> {
             AGENT.get(url).call()?.body_mut().read_to_string()?
         }
         TxtCodesSource::GameHacking => {
-            let Some(ghid) = id_map::get(game_id)
-                .and_then(|entry| entry.ghid.as_ref())
-                .map(|ghid| ghid.get())
-            else {
+            let Some(ghid) = twbm_idmap::get_ghid(game_id) else {
                 bail!("Could not find gamehacking id");
             };
 
