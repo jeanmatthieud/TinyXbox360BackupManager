@@ -124,7 +124,7 @@ fn readopt_parented_discs(games_dir: &Path) -> Result<()> {
             }
         }
 
-        let new_filename = make_game_dir_name(&game.id, &game.title);
+        let new_filename = make_game_dir_name(game.id, &game.title);
         let new_path = games_dir.join(new_filename);
 
         if new_path.exists() {

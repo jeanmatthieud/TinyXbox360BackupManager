@@ -9,7 +9,7 @@ use std::num::NonZeroU32;
 const BYTES: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/id_map.bin"));
 
 #[derive(Archive, Deserialize)]
-pub struct GameEntry {
+struct GameEntry {
     id: u32,
     pub ghid: Option<NonZeroU32>,
     pub title: String,

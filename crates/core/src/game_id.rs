@@ -38,8 +38,8 @@ impl fmt::Display for GameID {
     }
 }
 
-impl Into<u32> for GameID {
-    fn into(self) -> u32 {
-        self.0
+impl From<GameID> for u32 {
+    fn from(val: GameID) -> Self {
+        val.0
     }
 }
