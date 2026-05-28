@@ -18,7 +18,7 @@ impl From<&DiscInfo> for DisplayedDiscInfo {
             is_wii: disc_info.meta.is_wii(),
             is_gc: disc_info.meta.is_gc(),
             is_worth_scrubbing: disc_info.is_worth_scrubbing,
-            crc32: format!("{:08x}", disc_info.crc32).to_shared_string(),
+            crc32: slint::format!("{:08x}", disc_info.crc32),
         }
     }
 }
