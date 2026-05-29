@@ -1,16 +1,13 @@
 // SPDX-FileCopyrightText: 2026 Manuel Quarneti <mq1@ik.me>
 // SPDX-License-Identifier: GPL-3.0-only
 
-use rkyv::rancor::Error;
-use rkyv::{Archive, Serialize};
-use std::num::NonZeroU32;
+use std::io::Write;
 use std::path::Path;
 use std::{env, fs};
 
-#[derive(Archive, Serialize)]
 struct GameEntry {
     id: u32,
-    ghid: Option<NonZeroU32>,
+    ghid: u32,
     title: String,
 }
 
@@ -28,7 +25,7 @@ fn make_id_map() -> Vec<GameEntry> {
 
             GameEntry {
                 id,
-                ghid: None,
+                ghid: 0,
                 title: title.to_string(),
             }
         })
@@ -53,7 +50,7 @@ fn parse_gamehacking_ids(entries: &mut [GameEntry]) {
 
             let quote_pos = current_slice.find('"').unwrap();
             let ghid_str = &current_slice[..quote_pos];
-            let ghid = NonZeroU32::new(ghid_str.parse().unwrap());
+            let ghid = ghid_str.parse().unwrap();
 
             let gameid_pos = current_slice.find(GAMEID_ANCHOR).unwrap();
             current_slice = &current_slice[gameid_pos + GAMEID_ANCHOR.len()..];
@@ -79,7 +76,46 @@ fn main() {
     let mut entries = make_id_map();
     parse_gamehacking_ids(&mut entries);
 
-    let bytes = rkyv::to_bytes::<Error>(&entries).unwrap();
+    let mut bytes = Vec::new();
+
+    // first the ids
+    for entry in &entries {
+        bytes.write_all(&entry.id.to_ne_bytes()).unwrap();
+    }
+
+    // then the ghids
+    for entry in &entries {
+        bytes.write_all(&entry.ghid.to_ne_bytes()).unwrap();
+    }
+
+    // then the title offsets
+    let mut cursor = 0u32;
+    for entry in &entries {
+        bytes.write_all(&cursor.to_ne_bytes()).unwrap();
+        let len = u8::try_from(entry.title.len()).unwrap();
+        cursor = cursor.checked_add(len as u32).unwrap();
+    }
+
+    // then the title lengths
+    for entry in &entries {
+        let len = u8::try_from(entry.title.len()).unwrap();
+        bytes.write_all(&[len]).unwrap();
+    }
+
+    // then the titles
+    for entry in &entries {
+        bytes.write_all(entry.title.as_bytes()).unwrap();
+    }
+
+    let meta = format!(
+        "const COUNT: usize = {}; const BIN_LEN: usize = {};",
+        entries.len(),
+        bytes.len()
+    );
+
     let out_path = Path::new(&env::var("OUT_DIR").unwrap()).join("id_map.bin");
     fs::write(out_path, bytes).unwrap();
+
+    let out_path = Path::new(&env::var("OUT_DIR").unwrap()).join("id_map_meta.rs");
+    fs::write(out_path, meta).unwrap();
 }

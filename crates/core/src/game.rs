@@ -30,7 +30,7 @@ impl Game {
         let is_wii = matches!(id.chars().next(), Some('R' | 'S'));
         let id = GameID::new(&id[..id.len() - 1])?;
 
-        let title = twbm_idmap::get_title(id)
+        let title = twbm_idmap::get_title(id.into())
             .unwrap_or_else(|| title.trim())
             .to_string();
 

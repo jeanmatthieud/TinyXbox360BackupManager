@@ -50,7 +50,7 @@ pub fn perform(
     let game_id =
         GameID::from_byte_string(disc_header.game_id).ok_or_else(|| anyhow!("Invalid game ID"))?;
     let display_title =
-        twbm_idmap::get_title(game_id).unwrap_or_else(|| disc_header.game_title_str());
+        twbm_idmap::get_title(game_id.into()).unwrap_or_else(|| disc_header.game_title_str());
 
     let parent_dir_name = if is_wii { "wbfs" } else { "games" };
     let game_dir_name = make_game_dir_name(game_id, display_title);

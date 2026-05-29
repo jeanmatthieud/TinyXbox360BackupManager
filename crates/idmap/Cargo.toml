@@ -7,9 +7,3 @@ authors.workspace = true
 license.workspace = true
 repository.workspace = true
 description.workspace = true
-
-[dependencies]
-rkyv = { version = "0.8", default-features = false, features = ["std"] }
-
-[build-dependencies]
-rkyv = { version = "0.8", default-features = false, features = ["std"] }

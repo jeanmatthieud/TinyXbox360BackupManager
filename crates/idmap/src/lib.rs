@@ -3,39 +3,47 @@
 
 #![warn(clippy::all, rust_2018_idioms)]
 
-use rkyv::{Archive, Deserialize, primitive::ArchivedU32, vec::ArchivedVec};
+include!(concat!(env!("OUT_DIR"), "/id_map_meta.rs"));
+
 use std::num::NonZeroU32;
 
 #[repr(align(4))]
 struct AlignedBytes<const N: usize>([u8; N]);
 
-static ALIGNED_BYTES: &AlignedBytes<
-    { include_bytes!(concat!(env!("OUT_DIR"), "/id_map.bin")).len() },
-> = &AlignedBytes(*include_bytes!(concat!(env!("OUT_DIR"), "/id_map.bin")));
+static ALIGNED_BYTES: AlignedBytes<BIN_LEN> =
+    AlignedBytes(*include_bytes!(concat!(env!("OUT_DIR"), "/id_map.bin")));
 
-#[derive(Archive, Deserialize)]
-struct GameEntry {
-    id: u32,
-    pub ghid: Option<NonZeroU32>,
-    pub title: String,
+fn find(id: u32) -> Option<usize> {
+    let ptr = ALIGNED_BYTES.0.as_ptr().cast::<u32>();
+    let game_ids = unsafe { std::slice::from_raw_parts(ptr, COUNT) };
+    game_ids.binary_search(&id).ok()
 }
 
-fn get(id: ArchivedU32) -> Option<&'static ArchivedGameEntry> {
-    let archived =
-        unsafe { rkyv::access_unchecked::<ArchivedVec<ArchivedGameEntry>>(&ALIGNED_BYTES.0) };
+pub fn get_ghid(id: u32) -> Option<NonZeroU32> {
+    let idx = find(id)?;
 
-    match archived.binary_search_by_key(&id, |e| e.id) {
-        Ok(i) => Some(&archived[i]),
-        Err(_) => None,
-    }
+    let offset = COUNT * 4 + idx * 4;
+    let ghid = u32::from_ne_bytes(ALIGNED_BYTES.0[offset..offset + 4].try_into().unwrap());
+
+    NonZeroU32::new(ghid)
 }
 
-pub fn get_title(id: impl Into<u32>) -> Option<&'static str> {
-    get(id.into().into()).map(|e| e.title.as_str())
-}
+pub fn get_title(id: u32) -> Option<&'static str> {
+    let idx = find(id)?;
 
-pub fn get_ghid(id: impl Into<u32>) -> Option<u32> {
-    get(id.into().into())
-        .and_then(|e| e.ghid.as_ref())
-        .map(|ghid| ghid.get())
+    let relative_title_offset = {
+        let offset = COUNT * 8 + idx * 4;
+        u32::from_ne_bytes(ALIGNED_BYTES.0[offset..offset + 4].try_into().unwrap())
+    };
+
+    let title_len = {
+        let offset = COUNT * 12 + idx;
+        ALIGNED_BYTES.0[offset] as usize
+    };
+
+    let title_offset = relative_title_offset as usize + COUNT * 13;
+    let title_slice = &ALIGNED_BYTES.0[title_offset..title_offset + title_len];
+    let title = unsafe { std::str::from_utf8_unchecked(title_slice) };
+
+    Some(title)
 }
