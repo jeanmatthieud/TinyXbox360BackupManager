@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v6.0.6] - 2026-05-29
+
+## Changed
+
+- 🍎 macOS builds didn't work on macOS < 10.14. The readme now reflects this. This issue should remain open until this is resolved <https://github.com/mq1/TinyWiiBackupManager/issues/639>
+
+## Fixed
+
+- 🐛 GCZ files not being read correctly
+
 ## [v6.0.5] - 2026-05-26
 
 ### Fixed
@@ -409,7 +419,8 @@ Open an issue if you need any of these (explaining why you think feature X is im
 
 - 🖼️ TinyWiiBackupManager icon now shows up again on the windows exe
 
-[Unreleased]: https://github.com/mq1/TinyWiiBackupManager/compare/v6.0.5...HEAD
+[Unreleased]: https://github.com/mq1/TinyWiiBackupManager/compare/v6.0.6...HEAD
+[v6.0.6]: https://github.com/mq1/TinyWiiBackupManager/compare/v6.0.5...v6.0.6
 [v6.0.5]: https://github.com/mq1/TinyWiiBackupManager/compare/v6.0.4...v6.0.5
 [v6.0.4]: https://github.com/mq1/TinyWiiBackupManager/compare/v6.0.3...v6.0.4
 [v6.0.3]: https://github.com/mq1/TinyWiiBackupManager/compare/v6.0.2...v6.0.3

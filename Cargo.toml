@@ -4,7 +4,7 @@ members = ["crates/core", "crates/gui", "crates/idmap"]
 default-members = ["crates/gui"]
 
 [workspace.package]
-version = "6.0.5"
+version = "6.0.6"
 rust-version = "1.95"
 edition = "2024"
 authors = ["Manuel Quarneti <mq1@ik.me>"]
@@ -14,7 +14,8 @@ description = "A tiny game backup and homebrew app manager for the Wii"
 
 [workspace.dependencies]
 anyhow = "1.0"
-wii-disc-info = "0.7"
+wii-disc-info = "0.8"
+bitflags = "=2.11.1" # 2.12 crashes as of 2026-05-29
 zip = { version = "8.6", default-features = false, features = [
   "deflate-flate2",
 ] }
