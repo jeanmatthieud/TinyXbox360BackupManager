@@ -15,30 +15,33 @@ static ALIGNED_BYTES: AlignedBytes<BIN_LEN> =
 
 #[inline(always)]
 fn game_ids() -> &'static [u32] {
-    unsafe { std::slice::from_raw_parts(ALIGNED_BYTES.0.as_ptr().cast::<u32>(), COUNT) }
+    let ptr = ALIGNED_BYTES.0.as_ptr().cast::<u32>();
+    unsafe { std::slice::from_raw_parts(ptr, COUNT) }
 }
 
 #[inline(always)]
 fn ghids() -> &'static [u32] {
-    unsafe { std::slice::from_raw_parts(ALIGNED_BYTES.0.as_ptr().cast::<u32>().add(COUNT), COUNT) }
+    let ptr = unsafe { ALIGNED_BYTES.0.as_ptr().add(COUNT * 4).cast::<u32>() };
+    unsafe { std::slice::from_raw_parts(ptr, COUNT) }
 }
 
 #[inline(always)]
 fn title_offsets() -> &'static [u32] {
-    unsafe {
-        std::slice::from_raw_parts(ALIGNED_BYTES.0.as_ptr().cast::<u32>().add(COUNT * 2), COUNT)
-    }
+    let ptr = unsafe { ALIGNED_BYTES.0.as_ptr().add(COUNT * 8).cast::<u32>() };
+    unsafe { std::slice::from_raw_parts(ptr, COUNT) }
 }
 
 #[inline(always)]
 fn title_lengths() -> &'static [u8] {
-    unsafe { std::slice::from_raw_parts(ALIGNED_BYTES.0.as_ptr().add(COUNT * 12), COUNT) }
+    let ptr = unsafe { ALIGNED_BYTES.0.as_ptr().add(COUNT * 12) };
+    unsafe { std::slice::from_raw_parts(ptr, COUNT) }
 }
 
 #[inline(always)]
-fn titles() -> &'static [u8] {
-    const TITLES_LEN: usize = BIN_LEN - COUNT * 13;
-    unsafe { std::slice::from_raw_parts(ALIGNED_BYTES.0.as_ptr().add(COUNT * 13), TITLES_LEN) }
+fn titles() -> &'static str {
+    let ptr = unsafe { ALIGNED_BYTES.0.as_ptr().add(COUNT * 13) };
+    let slice = unsafe { std::slice::from_raw_parts(ptr, BIN_LEN - COUNT * 13) };
+    unsafe { std::str::from_utf8_unchecked(slice) }
 }
 
 fn find(id: u32) -> Option<usize> {
@@ -56,9 +59,7 @@ pub fn get_title(id: u32) -> Option<&'static str> {
 
     let title_offset = unsafe { *title_offsets().get_unchecked(idx) } as usize;
     let title_len = unsafe { *title_lengths().get_unchecked(idx) } as usize;
-
-    let title_slice = unsafe { titles().get_unchecked(title_offset..title_offset + title_len) };
-    let title = unsafe { std::str::from_utf8_unchecked(title_slice) };
+    let title = unsafe { titles().get_unchecked(title_offset..title_offset + title_len) };
 
     Some(title)
 }
