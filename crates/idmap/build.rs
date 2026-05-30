@@ -108,7 +108,7 @@ fn main() {
     }
 
     let meta = format!(
-        "const COUNT: usize = {}; const BIN_LEN: usize = {};",
+        "const COUNT: usize = {}; const DATA_LEN: usize = {};",
         entries.len(),
         bytes.len()
     );
