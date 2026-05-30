@@ -92,15 +92,10 @@ fn main() {
     let mut cursor = 0u32;
     for entry in &entries {
         bytes.write_all(&cursor.to_ne_bytes()).unwrap();
-        let len = u8::try_from(entry.title.len()).unwrap();
-        cursor = cursor.checked_add(len as u32).unwrap();
+        let len = u32::try_from(entry.title.len()).unwrap();
+        cursor = cursor.checked_add(len).unwrap();
     }
-
-    // then the title lengths
-    for entry in &entries {
-        let len = u8::try_from(entry.title.len()).unwrap();
-        bytes.write_all(&[len]).unwrap();
-    }
+    bytes.write_all(&cursor.to_ne_bytes()).unwrap();
 
     // then the titles
     for entry in &entries {

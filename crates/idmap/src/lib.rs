@@ -26,17 +26,12 @@ impl Data {
     #[inline]
     fn title_offsets(&self) -> &[u32] {
         let ptr = self.0.as_ptr().cast::<u32>();
-        unsafe { std::slice::from_raw_parts(ptr.add(COUNT * 2), COUNT) }
-    }
-
-    #[inline]
-    fn title_lengths(&self) -> &[u8] {
-        &self.0[COUNT * 12..COUNT * 13]
+        unsafe { std::slice::from_raw_parts(ptr.add(COUNT * 2), COUNT + 1) }
     }
 
     #[inline]
     fn titles(&self) -> &str {
-        let slice = &self.0[COUNT * 13..];
+        let slice = &self.0[COUNT * 12 + 4..];
         unsafe { std::str::from_utf8_unchecked(slice) }
     }
 }
@@ -56,9 +51,9 @@ pub fn get_ghid(id: u32) -> Option<NonZeroU32> {
 pub fn get_title(id: u32) -> Option<&'static str> {
     let idx = find(id)?;
 
-    let title_offset = DATA.title_offsets()[idx] as usize;
-    let title_len = DATA.title_lengths()[idx] as usize;
+    let start = DATA.title_offsets()[idx] as usize;
+    let end = DATA.title_offsets()[idx + 1] as usize;
 
-    let title = &DATA.titles()[title_offset..title_offset + title_len];
+    let title = &DATA.titles()[start..end];
     Some(title)
 }
