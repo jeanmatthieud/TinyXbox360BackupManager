@@ -33,12 +33,12 @@ fn title_offsets() -> &'static [u32] {
 
 #[inline(always)]
 fn title_lengths() -> &'static [u8] {
-    &ALIGNED_BYTES.0[COUNT * 12..COUNT * 13]
+    unsafe { ALIGNED_BYTES.0.get_unchecked(COUNT * 12..COUNT * 13) }
 }
 
 #[inline(always)]
 fn titles() -> &'static str {
-    let slice = &ALIGNED_BYTES.0[COUNT * 13..];
+    let slice = unsafe { ALIGNED_BYTES.0.get_unchecked(COUNT * 13..BIN_LEN) };
     unsafe { std::str::from_utf8_unchecked(slice) }
 }
 
