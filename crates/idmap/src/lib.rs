@@ -21,26 +21,24 @@ fn game_ids() -> &'static [u32] {
 
 #[inline(always)]
 fn ghids() -> &'static [u32] {
-    let ptr = unsafe { ALIGNED_BYTES.0.as_ptr().add(COUNT * 4).cast::<u32>() };
-    unsafe { std::slice::from_raw_parts(ptr, COUNT) }
+    let ptr = ALIGNED_BYTES.0.as_ptr().cast::<u32>();
+    unsafe { std::slice::from_raw_parts(ptr.add(COUNT), COUNT) }
 }
 
 #[inline(always)]
 fn title_offsets() -> &'static [u32] {
-    let ptr = unsafe { ALIGNED_BYTES.0.as_ptr().add(COUNT * 8).cast::<u32>() };
-    unsafe { std::slice::from_raw_parts(ptr, COUNT) }
+    let ptr = ALIGNED_BYTES.0.as_ptr().cast::<u32>();
+    unsafe { std::slice::from_raw_parts(ptr.add(COUNT * 2), COUNT) }
 }
 
 #[inline(always)]
 fn title_lengths() -> &'static [u8] {
-    let ptr = unsafe { ALIGNED_BYTES.0.as_ptr().add(COUNT * 12) };
-    unsafe { std::slice::from_raw_parts(ptr, COUNT) }
+    &ALIGNED_BYTES.0[COUNT * 12..COUNT * 13]
 }
 
 #[inline(always)]
 fn titles() -> &'static str {
-    let ptr = unsafe { ALIGNED_BYTES.0.as_ptr().add(COUNT * 13) };
-    let slice = unsafe { std::slice::from_raw_parts(ptr, BIN_LEN - COUNT * 13) };
+    let slice = &ALIGNED_BYTES.0[COUNT * 13..];
     unsafe { std::str::from_utf8_unchecked(slice) }
 }
 
