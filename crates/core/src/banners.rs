@@ -23,7 +23,7 @@ fn download_banner_for_game(mount_point: &Path, game_id: GameID) -> Result<()> {
     let bytes = match get(&url) {
         Ok(bytes) => bytes,
         Err(_) => {
-            let url = format!("https://banner.rc24.xyz/{}.bnr", game_id.partial());
+            let url = format!("https://banner.rc24.xyz/{}.bnr", game_id.as_partial());
             get(&url)?
         }
     };

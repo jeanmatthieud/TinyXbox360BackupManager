@@ -49,7 +49,7 @@ fn adopt_orphaned_discs(games_dir: &Path, is_wii: bool) -> Result<()> {
             _ => continue,
         };
 
-        let display_title = GameEntry::lookup(game_id.into())
+        let display_title = GameEntry::lookup(game_id)
             .map(|entry| entry.title())
             .unwrap_or_else(|| meta.game_title());
 

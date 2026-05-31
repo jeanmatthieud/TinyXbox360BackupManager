@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/core", "crates/gui", "crates/idmap"]
+members = ["crates/core", "crates/gui"]
 default-members = ["crates/gui"]
 
 [workspace.package]

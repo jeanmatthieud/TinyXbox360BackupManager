@@ -48,7 +48,7 @@ pub fn perform(
     let should_split =
         is_wii && (config.contents.always_split || (drive_info.fs_kind == FsKind::Fat32));
 
-    let display_title = GameEntry::lookup_str(game_id)
+    let display_title = GameEntry::lookup(game_id)
         .map(|entry| entry.title())
         .unwrap_or_else(|| disc_header.game_title_str());
 

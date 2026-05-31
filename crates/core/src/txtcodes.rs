@@ -20,7 +20,7 @@ pub fn download_cheats(game_id: GameID, config: &Config) -> Result<()> {
             AGENT.get(url).call()?.body_mut().read_to_string()?
         }
         TxtCodesSource::GameHacking => {
-            let Some(entry) = GameEntry::lookup(game_id.into()) else {
+            let Some(entry) = GameEntry::lookup(game_id) else {
                 bail!("Unknown game");
             };
 
