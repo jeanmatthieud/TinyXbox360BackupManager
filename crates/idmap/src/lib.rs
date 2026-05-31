@@ -44,7 +44,9 @@ fn find(id: u32) -> Option<usize> {
 
 pub fn get_ghid(id: u32) -> Option<NonZeroU32> {
     let idx = find(id)?;
-    let ghid = DATA.ghids()[idx];
+
+    let ghid = unsafe { *DATA.ghids().get_unchecked(idx) };
+
     NonZeroU32::new(ghid)
 }
 
