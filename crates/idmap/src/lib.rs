@@ -31,7 +31,7 @@ impl Data {
 
     #[inline]
     fn titles(&self) -> &str {
-        let slice = &self.0[COUNT * 12 + 4..];
+        let slice = unsafe { self.0.get_unchecked(COUNT * 12 + 4..DATA_LEN) };
         unsafe { std::str::from_utf8_unchecked(slice) }
     }
 }
@@ -51,9 +51,9 @@ pub fn get_ghid(id: u32) -> Option<NonZeroU32> {
 pub fn get_title(id: u32) -> Option<&'static str> {
     let idx = find(id)?;
 
-    let start = DATA.title_offsets()[idx] as usize;
-    let end = DATA.title_offsets()[idx + 1] as usize;
+    let start = unsafe { *DATA.title_offsets().get_unchecked(idx) } as usize;
+    let end = unsafe { *DATA.title_offsets().get_unchecked(idx + 1) } as usize;
+    let title = unsafe { DATA.titles().get_unchecked(start..end) };
 
-    let title = &DATA.titles()[start..end];
     Some(title)
 }
