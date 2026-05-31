@@ -20,11 +20,6 @@ impl GameID {
         }
     }
 
-    pub fn from_byte_string(b: [u8; 6]) -> Option<Self> {
-        let s = str::from_utf8(&b).ok()?;
-        Self::new(s)
-    }
-
     pub fn partial(self) -> String {
         let mut s = self.to_string();
         s.truncate(3);

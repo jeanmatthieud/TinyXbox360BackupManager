@@ -38,24 +38,29 @@ impl Data {
 
 static DATA: Data = Data(*include_bytes!(concat!(env!("OUT_DIR"), "/id_map.bin")));
 
-fn find(id: u32) -> Option<usize> {
-    DATA.game_ids().binary_search(&id).ok()
-}
+#[derive(Debug, Clone, Copy)]
+#[repr(transparent)]
+pub struct GameEntry(usize);
 
-pub fn get_ghid(id: u32) -> Option<NonZeroU32> {
-    let idx = find(id)?;
+impl GameEntry {
+    pub fn lookup_str(id: impl AsRef<str>) -> Option<Self> {
+        let id = u32::from_str_radix(id.as_ref(), 36).ok()?;
+        Self::lookup(id)
+    }
 
-    let ghid = unsafe { *DATA.ghids().get_unchecked(idx) };
+    pub fn lookup(id: u32) -> Option<Self> {
+        let idx = DATA.game_ids().binary_search(&id).ok()?;
+        Some(GameEntry(idx))
+    }
 
-    NonZeroU32::new(ghid)
-}
+    pub fn ghid(&self) -> Option<NonZeroU32> {
+        let ghid = unsafe { *DATA.ghids().get_unchecked(self.0) };
+        NonZeroU32::new(ghid)
+    }
 
-pub fn get_title(id: u32) -> Option<&'static str> {
-    let idx = find(id)?;
-
-    let start = unsafe { *DATA.title_offsets().get_unchecked(idx) } as usize;
-    let end = unsafe { *DATA.title_offsets().get_unchecked(idx + 1) } as usize;
-    let title = unsafe { DATA.titles().get_unchecked(start..end) };
-
-    Some(title)
+    pub fn title(&self) -> &'static str {
+        let start = unsafe { *DATA.title_offsets().get_unchecked(self.0) } as usize;
+        let end = unsafe { *DATA.title_offsets().get_unchecked(self.0 + 1) } as usize;
+        unsafe { DATA.titles().get_unchecked(start..end) }
+    }
 }

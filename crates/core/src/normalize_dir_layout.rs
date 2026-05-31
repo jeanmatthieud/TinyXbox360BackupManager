@@ -7,6 +7,7 @@ use std::{
     fs::{self, File},
     path::Path,
 };
+use twbm_idmap::GameEntry;
 
 use crate::{game, game_id::GameID, util::make_game_dir_name};
 
@@ -48,8 +49,10 @@ fn adopt_orphaned_discs(games_dir: &Path, is_wii: bool) -> Result<()> {
             _ => continue,
         };
 
-        let display_title =
-            twbm_idmap::get_title(game_id.into()).unwrap_or_else(|| meta.game_title());
+        let display_title = GameEntry::lookup(game_id.into())
+            .map(|entry| entry.title())
+            .unwrap_or_else(|| meta.game_title());
+
         let new_parent_name = make_game_dir_name(game_id, display_title);
 
         let new_filename = if filename.ends_with(".part0.iso") {

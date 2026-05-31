@@ -8,6 +8,7 @@ use crate::{
 };
 use anyhow::{Result, bail};
 use std::fs;
+use twbm_idmap::GameEntry;
 
 pub fn download_cheats(game_id: GameID, config: &Config) -> Result<()> {
     let code = match config.contents.txt_codes_source {
@@ -19,7 +20,11 @@ pub fn download_cheats(game_id: GameID, config: &Config) -> Result<()> {
             AGENT.get(url).call()?.body_mut().read_to_string()?
         }
         TxtCodesSource::GameHacking => {
-            let Some(ghid) = twbm_idmap::get_ghid(game_id.into()) else {
+            let Some(entry) = GameEntry::lookup(game_id.into()) else {
+                bail!("Unknown game");
+            };
+
+            let Some(ghid) = entry.ghid() else {
                 bail!("Could not find gamehacking id");
             };
 

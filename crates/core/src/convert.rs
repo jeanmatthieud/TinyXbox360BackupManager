@@ -4,7 +4,6 @@
 use crate::{
     config::{Config, GcOutputFormat, WiiOutputFormat},
     drive_info::DriveInfo,
-    game_id::GameID,
     util::{BUF_SIZE, HEADER_SIZE, SPLIT_SIZE, get_threads_num, make_game_dir_name},
 };
 use anyhow::{Result, anyhow, bail};
@@ -20,6 +19,7 @@ use std::{
     io::{BufWriter, Read, Write},
     path::PathBuf,
 };
+use twbm_idmap::GameEntry;
 use which_fs::FsKind;
 use zip::ZipArchive;
 
@@ -42,15 +42,15 @@ pub fn perform(
 
     let disc_reader = DiscReader::new(&in_path, &disc_opts)?;
     let disc_header = disc_reader.header().clone();
+    let game_id = disc_header.game_id_str();
     let is_wii = disc_header.is_wii();
 
     let should_split =
         is_wii && (config.contents.always_split || (drive_info.fs_kind == FsKind::Fat32));
 
-    let game_id =
-        GameID::from_byte_string(disc_header.game_id).ok_or_else(|| anyhow!("Invalid game ID"))?;
-    let display_title =
-        twbm_idmap::get_title(game_id.into()).unwrap_or_else(|| disc_header.game_title_str());
+    let display_title = GameEntry::lookup_str(game_id)
+        .map(|entry| entry.title())
+        .unwrap_or_else(|| disc_header.game_title_str());
 
     let parent_dir_name = if is_wii { "wbfs" } else { "games" };
     let game_dir_name = make_game_dir_name(game_id, display_title);

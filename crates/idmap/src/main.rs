@@ -3,6 +3,8 @@
 
 #![warn(clippy::all, rust_2018_idioms)]
 
+use twbm_idmap::GameEntry;
+
 const USAGE: &str = "Usage: idmap <GAMEID>";
 
 fn main() {
@@ -11,14 +13,11 @@ fn main() {
         std::process::exit(1);
     };
 
-    let Ok(game_id) = u32::from_str_radix(&game_id, 36) else {
-        eprintln!("{USAGE}");
+    let Some(entry) = GameEntry::lookup_str(&game_id) else {
+        eprintln!("GameID {game_id} not found");
         std::process::exit(1);
     };
 
-    let title = twbm_idmap::get_title(game_id);
-    let ghid = twbm_idmap::get_ghid(game_id);
-
-    println!("Title: {title:?}");
-    println!("GameHacking ID: {ghid:?}");
+    println!("Title: {}", entry.title());
+    println!("GameHacking ID: {:?}", entry.ghid());
 }
