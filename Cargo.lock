@@ -5630,9 +5630,9 @@ dependencies = [
 
 [[package]]
 name = "twbm-idmap"
-version = "0.2.1"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ed68ff25757bd525e45abad68ae03fb52bb7341a6c2aef58acf00e3116abadde"
+checksum = "658b1093c4fae7fe717ce6ddcff9525c1dbdd43461923b55c5d408a6b540fbdc"
 
 [[package]]
 name = "typed-index-collections"
