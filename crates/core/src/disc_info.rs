@@ -101,8 +101,8 @@ pub fn is_worth_scrubbing<R: Read + Seek>(disc_reader: &mut R) -> Result<bool> {
         return Ok(false);
     }
 
-    // too small to bother
-    if data_size < 1024 * 1024 * 8 {
+    // too small to bother (less than 10 MB)
+    if data_size < 1024 * 1024 * 10 {
         return Ok(false);
     }
 
