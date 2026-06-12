@@ -31,7 +31,7 @@ impl From<&OscApp> for DisplayedOscApp {
     }
 }
 
-pub fn download_icons(apps: &[OscApp], weak: Weak<AppWindow>) {
+pub fn download_icons(apps: &[OscApp], weak: &Weak<AppWindow>) {
     let _ = fs::create_dir_all(DATA_DIR.join("osc-icons"));
 
     for osc_app in apps {

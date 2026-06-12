@@ -7,9 +7,9 @@ use twbm_core::{config::Config, conversion_queue::QueuedConversion, drive_info::
 
 pub fn perform_conversion(
     conv: QueuedConversion,
-    config: Config,
-    drive_info: DriveInfo,
-    weak: Weak<AppWindow>,
+    config: &Config,
+    drive_info: &DriveInfo,
+    weak: &Weak<AppWindow>,
 ) {
     let res = match conv {
         QueuedConversion::Standard(in_path) => {
@@ -28,7 +28,7 @@ pub fn perform_conversion(
                 });
             };
 
-            twbm_core::convert::perform(in_path, &config, &drive_info, &update_progress)
+            twbm_core::convert::perform(in_path, config, drive_info, &update_progress)
         }
         QueuedConversion::Archive(in_path, out_path) => {
             let filename = out_path
@@ -59,7 +59,7 @@ pub fn perform_conversion(
                 });
             };
 
-            twbm_core::scrub::perform(&game, &config, &drive_info, &update_progress)
+            twbm_core::scrub::perform(&game, config, drive_info, &update_progress)
         }
     };
 

@@ -3,10 +3,7 @@
 
 pub mod meta;
 
-use crate::{
-    config::{SortBy, TxtCodesSource::Rc24},
-    homebrew::meta::HomebrewAppMeta,
-};
+use crate::{config::SortBy, homebrew::meta::HomebrewAppMeta};
 use std::{
     cmp::Ordering,
     fs,

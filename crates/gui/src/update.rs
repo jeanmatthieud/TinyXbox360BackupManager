@@ -347,7 +347,7 @@ impl State {
                     let apps = self.osc_apps.clone();
 
                     let _ = std::thread::spawn(move || {
-                        osc::download_icons(&apps, weak);
+                        osc::download_icons(&apps, &weak);
                     });
                 }
             }
@@ -522,7 +522,7 @@ impl State {
                 let config = self.config.clone();
 
                 let _ = std::thread::spawn(move || {
-                    perform_conversion(conv, config, drive_info, weak);
+                    perform_conversion(conv, &config, &drive_info, &weak);
                 });
             }
             Message::ClearGamesToAdd => {
