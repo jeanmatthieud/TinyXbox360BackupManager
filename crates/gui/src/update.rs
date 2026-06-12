@@ -4,7 +4,7 @@
 use crate::{
     AppWindow, Dispatcher, DisplayedConfig, DisplayedDiscInfo, DisplayedDriveInfo, DisplayedGame,
     DisplayedHomebrewApp, DisplayedOscApp, Message, Notification, Page, UiState,
-    convert::perform_conversion, covers, dialogs, games, homebrew_apps, osc, state::State, util,
+    convert::perform_conversion, covers, dialogs, games, homebrew, osc, state::State, util,
 };
 use slint::{ComponentHandle, SharedString, ToSharedString, Weak};
 use std::{
@@ -193,7 +193,7 @@ impl State {
                 self.games.sort_by(compare_games);
 
                 let compare_homebrew_apps =
-                    twbm_core::homebrew_app::get_compare_fn(self.config.contents.sort_by);
+                    twbm_core::homebrew::get_compare_fn(self.config.contents.sort_by);
                 self.homebrew_apps.sort_by(compare_homebrew_apps);
 
                 message_queue.push_back((Message::RefreshDisplayedGames, SharedString::new()));
@@ -291,7 +291,7 @@ impl State {
                 let root_path = &self.config.contents.mount_point;
 
                 self.games = games::scan_drive(root_path);
-                self.homebrew_apps = homebrew_apps::scan_drive(root_path);
+                self.homebrew_apps = homebrew::scan_drive(root_path);
                 self.drive_info = DriveInfo::from_path(root_path).unwrap_or_default();
 
                 let new_displayed_drive_info = DisplayedDriveInfo::from(&self.drive_info);

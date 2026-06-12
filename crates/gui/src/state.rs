@@ -6,7 +6,7 @@ use slint::{SharedString, VecModel};
 use std::{collections::VecDeque, path::PathBuf, rc::Rc};
 use twbm_core::{
     config::Config, conversion_queue::QueuedConversion, drive_info::DriveInfo, game::Game,
-    homebrew_app::HomebrewApp, osc::OscApp,
+    homebrew::HomebrewApp, osc::OscApp,
 };
 
 pub struct State {

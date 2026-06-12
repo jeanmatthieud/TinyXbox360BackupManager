@@ -13,7 +13,7 @@ mod disc_info;
 mod drive_info;
 mod file_drop;
 mod games;
-mod homebrew_apps;
+mod homebrew;
 mod notification;
 mod osc;
 mod state;

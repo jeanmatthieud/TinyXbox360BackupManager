@@ -15,7 +15,7 @@ pub mod disc_info;
 pub mod drive_info;
 pub mod game;
 pub mod game_id;
-pub mod homebrew_app;
+pub mod homebrew;
 pub mod normalize_dir_layout;
 pub mod osc;
 pub mod scrub;
