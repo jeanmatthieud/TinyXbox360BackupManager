@@ -43,5 +43,5 @@ impl DisplayedHomebrewApp {
 
 pub fn scan_drive(root_path: &Path) -> Vec<HomebrewApp> {
     let apps_dir = root_path.join("apps");
-    twbm_core::homebrew::scan_dir(&apps_dir)
+    twbm_core::homebrew::scan_dir(apps_dir).collect()
 }

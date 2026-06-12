@@ -3,7 +3,10 @@
 
 pub mod meta;
 
-use crate::{config::SortBy, homebrew::meta::HomebrewAppMeta};
+use crate::{
+    config::{SortBy, TxtCodesSource::Rc24},
+    homebrew::meta::HomebrewAppMeta,
+};
 use std::{
     cmp::Ordering,
     fs,
@@ -40,17 +43,13 @@ impl HomebrewApp {
     }
 }
 
-pub fn scan_dir(path: &Path) -> Vec<HomebrewApp> {
-    let Ok(entries) = fs::read_dir(path) else {
-        return Vec::new();
-    };
-
-    entries
-        .filter_map(|entry| {
-            let entry = entry.ok()?;
-            HomebrewApp::from_path(entry.path())
-        })
-        .collect()
+pub fn scan_dir(path: impl AsRef<Path>) -> impl Iterator<Item = HomebrewApp> {
+    fs::read_dir(path)
+        .into_iter()
+        .flatten()
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .filter_map(HomebrewApp::from_path)
 }
 
 pub fn get_compare_fn(sort_by: SortBy) -> impl FnMut(&HomebrewApp, &HomebrewApp) -> Ordering {
