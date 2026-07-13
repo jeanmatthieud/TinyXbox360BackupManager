@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - 🐛 Block handling fixes by @wiidev (https://github.com/encounter/nod/compare/main...wiidev:nod:fix-block-handling)
 - 🐛 Crash when there are no apps with thumbnail (https://gbatemp.net/threads/personal-project-i-made-a-simple-backup-manager-for-wii-supporting-direct-rvz-conversion.674406/post-10880960)
+- 🐛 Create USB Loader GX cover dirs (https://github.com/mq1/TinyWiiBackupManager/pull/659) by @yisraeldov
 
 ## [v6.0.7] - 2026-06-05
 
