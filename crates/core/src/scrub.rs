@@ -51,8 +51,8 @@ pub fn perform(
         scrub: ScrubLevel::UpdatePartition,
         digest_crc32: true,
         digest_md5: false,
-        digest_sha1: false,
-        digest_xxh64: false,
+        digest_sha1: true,
+        digest_xxh64: true,
     };
 
     let get_file_name = |i| match i {

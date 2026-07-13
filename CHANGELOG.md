@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v6.0.8] - 2026-07-13
+
+## Fixed
+
+- 🐛 Block handling fixes by @wiidev (https://github.com/encounter/nod/compare/main...wiidev:nod:fix-block-handling)
+- 🐛 Crash when there are no apps with thumbnail (https://gbatemp.net/threads/personal-project-i-made-a-simple-backup-manager-for-wii-supporting-direct-rvz-conversion.674406/post-10880960)
+
 ## [v6.0.7] - 2026-06-05
 
 ## Fixed
@@ -426,7 +433,8 @@ Open an issue if you need any of these (explaining why you think feature X is im
 
 - 🖼️ TinyWiiBackupManager icon now shows up again on the windows exe
 
-[Unreleased]: https://github.com/mq1/TinyWiiBackupManager/compare/v6.0.7...HEAD
+[Unreleased]: https://github.com/mq1/TinyWiiBackupManager/compare/v6.0.8...HEAD
+[v6.0.8]: https://github.com/mq1/TinyWiiBackupManager/compare/v6.0.7...v6.0.8
 [v6.0.7]: https://github.com/mq1/TinyWiiBackupManager/compare/v6.0.6...v6.0.7
 [v6.0.6]: https://github.com/mq1/TinyWiiBackupManager/compare/v6.0.5...v6.0.6
 [v6.0.5]: https://github.com/mq1/TinyWiiBackupManager/compare/v6.0.4...v6.0.5

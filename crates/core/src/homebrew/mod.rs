@@ -15,7 +15,7 @@ pub struct HomebrewApp {
     pub path: PathBuf,
     pub meta: HomebrewAppMeta,
     pub size: u64,
-    pub icon_bytes: Box<[u8]>,
+    pub icon_bytes: Option<Vec<u8>>,
     pub search_term: String,
 }
 
@@ -25,9 +25,7 @@ impl HomebrewApp {
 
         let meta = HomebrewAppMeta::parse(&path).ok()?;
         let size = fs_extra::dir::get_size(&path).ok()?;
-        let icon_bytes = fs::read(path.join("icon.png"))
-            .unwrap_or_default()
-            .into_boxed_slice();
+        let icon_bytes = fs::read(path.join("icon.png")).ok();
         let search_term = format!("{}\0{}", &meta.name, &meta.coder).to_lowercase();
 
         Some(Self {

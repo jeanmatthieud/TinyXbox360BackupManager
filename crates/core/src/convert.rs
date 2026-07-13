@@ -109,8 +109,8 @@ pub fn perform(
         scrub,
         digest_crc32: true,
         digest_md5: false,
-        digest_sha1: false,
-        digest_xxh64: false,
+        digest_sha1: true,
+        digest_xxh64: true,
     };
 
     let split_size = if should_split { Some(SPLIT_SIZE) } else { None };
