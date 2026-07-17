@@ -1,16 +1,12 @@
-// SPDX-FileCopyrightText: 2026 Manuel Quarneti <mq1@ik.me>
+// SPDX-FileCopyrightText: 2026 Manuel Quarneti <mq1@ik.me> (TinyWiiBackupManager)
+// SPDX-FileContributor: Modified by Jean-Matthieu Dechriste (TinyXbox360BackupManager)
 // SPDX-License-Identifier: GPL-3.0-only
 
 use crate::{AppWindow, Dispatcher, Message, UiState};
 use slint::{ComponentHandle, SharedString, Weak};
-use twbm_core::{config::Config, conversion_queue::QueuedConversion, drive_info::DriveInfo};
+use txbm_core::{config::Config, conversion_queue::QueuedConversion};
 
-pub fn perform_conversion(
-    conv: QueuedConversion,
-    config: &Config,
-    drive_info: &DriveInfo,
-    weak: &Weak<AppWindow>,
-) {
+pub fn perform_conversion(conv: QueuedConversion, config: &Config, weak: &Weak<AppWindow>) {
     let res = match conv {
         QueuedConversion::Standard(in_path) => {
             let filename = in_path
@@ -20,46 +16,20 @@ pub fn perform_conversion(
                 .to_string();
 
             let weak2 = weak.clone();
-            let update_progress = move |percentage| {
-                let status = slint::format!("↑  Converting  {filename}  {percentage}%");
+            let update_progress = move |percentage, speed: Option<f64>| {
+                let status = match speed {
+                    Some(mbps) => {
+                        slint::format!("↑  Adding  {filename}  {percentage}%  ({mbps:.1} MB/s)")
+                    }
+                    None => slint::format!("↑  Adding  {filename}  {percentage}%"),
+                };
 
                 let _ = weak2.upgrade_in_event_loop(move |app| {
                     app.global::<UiState<'_>>().set_status(status);
                 });
             };
 
-            twbm_core::convert::perform(in_path, config, drive_info, &update_progress)
-        }
-        QueuedConversion::Archive(in_path, out_path) => {
-            let filename = out_path
-                .file_name()
-                .unwrap_or_default()
-                .to_string_lossy()
-                .to_string();
-
-            let weak2 = weak.clone();
-            let update_progress = move |percentage| {
-                let status = slint::format!("↓  Archiving  {filename}  {percentage}%");
-
-                let _ = weak2.upgrade_in_event_loop(move |app| {
-                    app.global::<UiState<'_>>().set_status(status);
-                });
-            };
-
-            twbm_core::archive::perform(&in_path, &out_path, &update_progress)
-        }
-        QueuedConversion::Scrub(game) => {
-            let weak2 = weak.clone();
-            let game_title = game.title.clone();
-            let update_progress = move |percentage| {
-                let status = slint::format!("↔  Scrubbing  {game_title}  {percentage}%");
-
-                let _ = weak2.upgrade_in_event_loop(move |app| {
-                    app.global::<UiState<'_>>().set_status(status);
-                });
-            };
-
-            twbm_core::scrub::perform(&game, config, drive_info, &update_progress)
+            txbm_core::convert::perform(in_path, config, &update_progress)
         }
     };
 
@@ -69,11 +39,13 @@ pub fn perform_conversion(
         dispatcher.invoke_dispatch(Message::SetStatus, SharedString::new());
 
         if let Err(e) = res {
-            let text = slint::format!("Conversion failed: {e}");
+            let text = slint::format!("Conversion failed: {e:#}");
             dispatcher.invoke_dispatch(Message::NotifyError, text);
-        } else {
-            dispatcher.invoke_dispatch(Message::TriggerConversion, SharedString::new());
         }
+
+        // Drop the finished conversion and move on to the next one (even on
+        // failure, so the queue doesn't stall).
+        dispatcher.invoke_dispatch(Message::ConversionFinished, SharedString::new());
 
         dispatcher.invoke_dispatch(Message::RefreshAll, SharedString::new());
     });

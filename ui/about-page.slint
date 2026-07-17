@@ -1,4 +1,5 @@
-// SPDX-FileCopyrightText: 2026 Manuel Quarneti <mq1@ik.me>
+// SPDX-FileCopyrightText: 2026 Manuel Quarneti <mq1@ik.me> (TinyWiiBackupManager)
+// SPDX-FileContributor: Modified by Jean-Matthieu Dechriste (TinyXbox360BackupManager)
 // SPDX-License-Identifier: GPL-3.0-only
 
 import { MyPalette } from "styling.slint";
@@ -25,7 +26,7 @@ export component AboutPage inherits Rectangle {
                 spacing: 10px;
 
                 Image {
-                    source: @image-url("../assets/TinyWiiBackupManager-256x256.png");
+                    source: @image-url("../assets/TinyXbox360BackupManager-256x256.png");
                     width: 128px;
                     height: 128px;
                 }
@@ -36,22 +37,18 @@ export component AboutPage inherits Rectangle {
                     alignment: center;
 
                     Text {
-                        text: "TinyWiiBackupManager v\{UiState.app-version}";
+                        text: "TinyXbox360BackupManager v\{UiState.app-version}";
                         font-size: 18px;
                         font-weight: 700;
                     }
 
-                    HorizontalLayout {
-                        spacing: 50px;
+                    Text {
+                        text: "Copyright © 2026 Jean-Matthieu";
+                    }
 
-                        Text {
-                            text: "Copyright © 2026 Manuel Quarneti";
-                        }
-
-                        Link {
-                            label: "github/mq1";
-                            uri: "https://github.com/mq1";
-                        }
+                    Link {
+                        label: "github/jeanmatthieud";
+                        uri: "https://github.com/jeanmatthieud";
                     }
 
                     Link {
@@ -75,7 +72,7 @@ export component AboutPage inherits Rectangle {
                 }
 
                 Text {
-                    text: "TinyWiiBackupManager is intended strictly for legal homebrew use and is not affiliated with or endorsed by Nintendo. Use of TinyWiiBackupManager for pirated or unauthorized copies of games is strictly prohibited.";
+                    text: "TinyXbox360BackupManager is intended strictly for legal backup use and is not affiliated with or endorsed by Microsoft. Use of TinyXbox360BackupManager for pirated or unauthorized copies of games is strictly prohibited.";
                     wrap: word-wrap;
                 }
             }
@@ -83,6 +80,8 @@ export component AboutPage inherits Rectangle {
             HorizontalLine { }
 
             HorizontalLayout {
+                cross-axis-alignment: CrossAxisAlignment.center;
+                
                 IconDisplay {
                     icon: IconSet.Heart;
                     stroke: MyPalette.foreground;
@@ -97,25 +96,49 @@ export component AboutPage inherits Rectangle {
 
             HorizontalLayout {
                 Link {
-                    label: "Luke Street";
-                    uri: "https://github.com/encounter";
-                    icon: IconSet.Triangle;
+                    label: "Manuel Quarneti";
+                    uri: "https://github.com/mq1";
+                    icon: IconSet.Pointer;
                 }
 
                 Text {
-                    text: " for developing nod and helping TWBM leverage it effectively.";
+                    text: " for TinyWiiBackupManager, which this app is based on.";
                 }
             }
 
             HorizontalLayout {
                 Link {
-                    label: "blackb0x";
-                    uri: "https://github.com/wiidev";
-                    icon: IconSet.WandSparkles;
+                    label: "iliazeus";
+                    uri: "https://github.com/iliazeus/iso2god-rs";
+                    icon: IconSet.Disc3;
                 }
 
                 Text {
-                    text: " for invaluable feedback and advice during TWBM's development.";
+                    text: " for iso2god-rs (ISO to GOD conversion).";
+                }
+            }
+
+            HorizontalLayout {
+                Link {
+                    label: "antangelo";
+                    uri: "https://github.com/antangelo/xdvdfs";
+                    icon: IconSet.Box;
+                }
+
+                Text {
+                    text: " for xdvdfs (XISO extraction).";
+                }
+            }
+
+            HorizontalLayout {
+                Link {
+                    label: "XboxUnity";
+                    uri: "https://www.xboxunity.net";
+                    icon: IconSet.Image;
+                }
+
+                Text {
+                    text: " for the covers and title updates database.";
                 }
             }
         }
@@ -138,12 +161,7 @@ export component AboutPage inherits Rectangle {
 
         Link {
             label: "Source code";
-            uri: "https://github.com/mq1/TinyWiiBackupManager";
-        }
-
-        Link {
-            label: "Wiki";
-            uri: "https://github.com/mq1/TinyWiiBackupManager/wiki";
+            uri: "https://github.com/jeanmatthieud/TinyXbox360BackupManager";
         }
     }
 }

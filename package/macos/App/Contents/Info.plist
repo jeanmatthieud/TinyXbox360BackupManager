@@ -5,17 +5,17 @@
     <key>CFBundleDevelopmentRegion</key>
     <string>English</string>
     <key>CFBundleDisplayName</key>
-    <string>TinyWiiBackupManager</string>
+    <string>TinyXbox360BackupManager</string>
     <key>CFBundleExecutable</key>
-    <string>TinyWiiBackupManager</string>
+    <string>TinyXbox360BackupManager</string>
     <key>CFBundleIconFile</key>
-    <string>TinyWiiBackupManager.icns</string>
+    <string>TinyXbox360BackupManager.icns</string>
     <key>CFBundleIdentifier</key>
-    <string>it.mq1.TinyWiiBackupManager</string>
+    <string>fr.dechriste.TinyXbox360BackupManager</string>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleName</key>
-    <string>TinyWiiBackupManager</string>
+    <string>TinyXbox360BackupManager</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleVersion</key>
@@ -31,6 +31,6 @@
     <key>NSHighResolutionCapable</key>
     <true/>
     <key>NSHumanReadableCopyright</key>
-    <string>Copyright © 2026 Manuel Quarneti. Licensed under GPL-3.0-only.</string>
+    <string>Copyright © 2026 Manuel Quarneti and Jean-Matthieu Dechriste. Licensed under GPL-3.0-only.</string>
 </dict>
 </plist>

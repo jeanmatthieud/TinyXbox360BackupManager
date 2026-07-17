@@ -36,6 +36,9 @@ export component ConversionQueuePage inherits VerticalLayout {
                     for conv[i] in UiState.conversion-queue: VerticalLayout {
                         ConversionRow {
                             label: conv;
+                            // The item being converted (index 0 while
+                            // converting) can't be cancelled mid-flight.
+                            cancellable: !(i == 0 && UiState.converting);
                             cancel() => Dispatcher.dispatch(Message.CancelConversion, i);
                         }
 

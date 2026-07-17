@@ -11,7 +11,7 @@ import { Message, Dispatcher } from "../messages.slint";
 export component SettingCard inherits Card {
     in property <string> label;
     in property <Icon> icon;
-    in property <[{ value: string, label: string}]> items;
+    in property <[{ value: string, label: string }]> items;
     in property <string> active-item;
     in property <Message> set-property;
 
@@ -25,6 +25,7 @@ export component SettingCard inherits Card {
 
         HorizontalLayout {
             spacing: 5px;
+            cross-axis-alignment: CrossAxisAlignment.center;
 
             IconDisplay {
                 icon: icon;
@@ -42,6 +43,7 @@ export component SettingCard inherits Card {
         for item in items: Rectangle {
             HorizontalLayout {
                 spacing: 5px;
+                cross-axis-alignment: CrossAxisAlignment.center;
 
                 IconDisplay {
                     icon: item.value == active-item ? IconSet.Disc : IconSet.Circle;

@@ -1,4 +1,5 @@
-// SPDX-FileCopyrightText: 2026 Manuel Quarneti <mq1@ik.me>
+// SPDX-FileCopyrightText: 2026 Manuel Quarneti <mq1@ik.me> (TinyWiiBackupManager)
+// SPDX-FileContributor: Modified by Jean-Matthieu Dechriste (TinyXbox360BackupManager)
 // SPDX-License-Identifier: GPL-3.0-only
 
 import { Palette } from "std-widgets.slint";
@@ -6,30 +7,22 @@ import { Navbar } from "components/navbar.slint";
 import { GameGridPage } from "game-grid-page.slint";
 import { SettingsPage } from "settings-page.slint";
 import { AboutPage } from "about-page.slint";
-import {
-    Page,
-    DisplayedGame,
-    DisplayedHomebrewApp,
-    DisplayedOscApp,
-} from "types.slint";
+import { Page, DisplayedGame } from "types.slint";
 import { Message, Dispatcher } from "messages.slint";
 import { MyPalette } from "styling.slint";
 import { VerticalLine } from "components/vertical-line.slint";
 import { Card } from "components/card.slint";
+import { IconButton } from "components/icon-button.slint";
+import { IconSet } from "@lucide";
 import { GameTablePage } from "game-table-page.slint";
 import { Notifications } from "components/notifications.slint";
 import { GameInfoModal } from "components/game-info-modal.slint";
-import { HomebrewAppsGridPage } from "homebrew-apps-grid-page.slint";
-import { HomebrewAppInfoModal } from "components/homebrew-app-info-modal.slint";
-import { HomebrewAppsTablePage } from "homebrew-apps-table-page.slint";
-import { OscGridPage } from "osc-grid-page.slint";
-import { OscTablePage } from "osc-table-page.slint";
-import { OscAppInfoModal } from "components/osc-app-info-modal.slint";
 import { ConfirmationModal } from "components/confirmation-modal.slint";
 import { Tooltip } from "tooltip.slint";
 import { ToolboxPage } from "toolbox-page.slint";
 import { ConversionQueuePage } from "conversion-queue.slint";
-import { WiiloadOscAppModal } from "components/wiiload-osc-app-modal.slint";
+import { SelectTargetModal } from "components/select-target-modal.slint";
+import { FtpTargetModal } from "components/ftp-target-modal.slint";
 import { UiState } from "ui-state.slint";
 
 export * from "types.slint";
@@ -39,9 +32,8 @@ export component AppWindow inherits Window {
     min-width: 800px;
     min-height: 600px;
     background: MyPalette.background;
-    title: UiState.drive-info.label.is-empty ? "TinyWiiBackupManager  ›  No drive selected" : "TinyWiiBackupManager  ›  \{UiState.drive-info.label}  (\{UiState.drive-info.used-gib.to-fixed(2)}/\{UiState.drive-info.total-gib.to-fixed(2)} GiB)";
+    title: UiState.drive-info.label.is-empty ? "TinyXbox360BackupManager  ›  No target selected" : (UiState.drive-info.total-gib > 0 ? "TinyXbox360BackupManager  ›  \{UiState.drive-info.label}  (\{UiState.drive-info.used-gib.to-fixed(2)}/\{UiState.drive-info.total-gib.to-fixed(2)} GiB)" : "TinyXbox360BackupManager  ›  \{UiState.drive-info.label}");
     default-font-size: 14px;
-    icon: @image-url("../package/windows/TinyWiiBackupManager-64x64.png");
 
     // Initialize
     Timer {
@@ -60,7 +52,6 @@ export component AppWindow inherits Window {
                 Dispatcher.dispatch(Message.SetWindowColorLight, "");
             }
 
-            Dispatcher.dispatch(Message.CacheOscContents, "false");
             Dispatcher.dispatch(Message.CheckForUpdates, "");
             Dispatcher.dispatch(Message.CheckMountPoint, "");
 
@@ -80,10 +71,6 @@ export component AppWindow inherits Window {
 
                 if UiState.current-page == Page.Games && UiState.config.view-as == "Grid": GameGridPage { }
                 if UiState.current-page == Page.Games && UiState.config.view-as == "Table": GameTablePage { }
-                if UiState.current-page == Page.HomebrewApps && UiState.config.view-as == "Grid": HomebrewAppsGridPage { }
-                if UiState.current-page == Page.HomebrewApps && UiState.config.view-as == "Table": HomebrewAppsTablePage { }
-                if UiState.current-page == Page.Osc && UiState.config.view-as == "Grid": OscGridPage { }
-                if UiState.current-page == Page.Osc && UiState.config.view-as == "Table": OscTablePage { }
                 if UiState.current-page == Page.Toolbox: ToolboxPage { }
                 if UiState.current-page == Page.ConversionQueue: ConversionQueuePage { }
                 if UiState.current-page == Page.Settings: SettingsPage { }
@@ -94,10 +81,21 @@ export component AppWindow inherits Window {
                 VerticalLine { }
 
                 HorizontalLayout {
+                    alignment: space-between;
                     padding: 10px;
 
                     Text {
+                        vertical-alignment: center;
                         text: UiState.status;
+                    }
+
+                    if UiState.scanning: IconButton {
+                        icon: IconSet.X;
+                        tooltip: "Cancel the scan";
+                        height: 24px;
+                        width: 24px;
+                        squared: true;
+                        clicked => Dispatcher.dispatch(Message.CancelScan, "");
                     }
                 }
             }
@@ -105,9 +103,9 @@ export component AppWindow inherits Window {
     }
 
     if !UiState.current-game.path.is-empty: GameInfoModal { }
-    if !UiState.current-homebrew-app.path.is-empty: HomebrewAppInfoModal { }
-    if !UiState.current-osc-app.slug.is-empty: OscAppInfoModal { }
-    if !UiState.wiiloading-osc-app.slug.is-empty: WiiloadOscAppModal { }
+
+    if UiState.selecting-target: SelectTargetModal { }
+    if UiState.editing-ftp-target: FtpTargetModal { }
 
     if !UiState.game-to-delete.path.is-empty: ConfirmationModal {
         Text {
@@ -123,20 +121,6 @@ export component AppWindow inherits Window {
         }
     }
 
-    if !UiState.homebrew-app-to-delete.name.is-empty: ConfirmationModal {
-        Text {
-            text: "Are you sure you want to delete \{UiState.homebrew-app-to-delete.name}?\nThis action cannot be undone.";
-        }
-
-        cancelled => {
-            UiState.homebrew-app-to-delete = { };
-        }
-        confirmed => {
-            Dispatcher.dispatch(Message.DeleteHomebrewApp, UiState.homebrew-app-to-delete.path);
-            UiState.homebrew-app-to-delete = { };
-        }
-    }
-
     if UiState.games-to-add.length > 0: ConfirmationModal {
         Text {
             text: "Are you sure you want to add \{UiState.games-to-add.length} conversions to the queue?";
@@ -148,37 +132,6 @@ export component AppWindow inherits Window {
 
         cancelled => Dispatcher.dispatch(Message.ClearGamesToAdd, "");
         confirmed => Dispatcher.dispatch(Message.ConfirmGamesToAdd, "");
-    }
-
-    if UiState.scrubbing-current-game: ConfirmationModal {
-        Text {
-            text: "Are you sure you want to scrub \{UiState.current-game.title}?\nThis action cannot be undone.";
-        }
-
-        cancelled => {
-            UiState.scrubbing-current-game = false;
-        }
-        confirmed => {
-            Dispatcher.dispatch(Message.ScrubGame, UiState.current-game.path);
-            UiState.scrubbing-current-game = false;
-            UiState.current-game = { };
-            UiState.crc32-status = "";
-            UiState.current-disc-info = { };
-        }
-    }
-
-    if UiState.scrubbing-all-games: ConfirmationModal {
-        Text {
-            text: "Are you sure you want to scrub all games?\nThis action cannot be undone.";
-        }
-
-        cancelled => {
-            UiState.scrubbing-all-games = false;
-        }
-        confirmed => {
-            Dispatcher.dispatch(Message.ScrubAllGames, "");
-            UiState.scrubbing-all-games = false;
-        }
     }
 
     if UiState.notifications.length > 0: Notifications {

@@ -1,19 +1,13 @@
-// SPDX-FileCopyrightText: 2026 Manuel Quarneti <mq1@ik.me>
+// SPDX-FileCopyrightText: 2026 Manuel Quarneti <mq1@ik.me> (TinyWiiBackupManager)
+// SPDX-FileContributor: Modified by Jean-Matthieu Dechriste (TinyXbox360BackupManager)
 // SPDX-License-Identifier: GPL-3.0-only
 
 use rfd::FileDialog;
 use slint::WindowHandle;
 use std::path::PathBuf;
-use twbm_core::util::sanitize_title;
 use walkdir::WalkDir;
 
-const INPUT_DIALOG_FILTER: &[&str] = &[
-    "gcm", "iso", "wbfs", "wia", "rvz", "ciso", "gcz", "tgc", "nfs", "zip",
-];
-
-const OUTPUT_DIALOG_FILTER: &[&str] = &[
-    "gcm", "iso", "wbfs", "wia", "rvz", "ciso", "gcz", "tgc", "nfs",
-];
+const INPUT_DIALOG_FILTER: &[&str] = &["iso"];
 
 pub fn pick_mount_point(window_handle: &WindowHandle) -> Option<PathBuf> {
     FileDialog::new()
@@ -22,19 +16,11 @@ pub fn pick_mount_point(window_handle: &WindowHandle) -> Option<PathBuf> {
         .pick_folder()
 }
 
-pub fn pick_game(window_handle: &WindowHandle) -> Option<PathBuf> {
-    FileDialog::new()
-        .set_parent(window_handle)
-        .set_title("Select Game")
-        .add_filter("Nintendo Optical Disc", INPUT_DIALOG_FILTER)
-        .pick_file()
-}
-
 pub fn pick_games(window_handle: &WindowHandle) -> Vec<PathBuf> {
     FileDialog::new()
         .set_parent(window_handle)
         .set_title("Select Games")
-        .add_filter("Nintendo Optical Disc", INPUT_DIALOG_FILTER)
+        .add_filter("Xbox Optical Disc Image", INPUT_DIALOG_FILTER)
         .pick_files()
         .unwrap_or_default()
 }
@@ -63,37 +49,4 @@ pub fn pick_games_r(window_handle: &WindowHandle) -> Vec<PathBuf> {
     }
 
     paths
-}
-
-pub fn save_game(window_handle: &WindowHandle, game_title: &str) -> Option<PathBuf> {
-    let title = format!(
-        "Select Destination for {game_title} - Supported extensions: iso, wbfs, wia, rvz, ciso, gcz, tgc, nfs",
-    );
-
-    let mut filename = sanitize_title(game_title);
-    filename.push_str(".rvz");
-
-    FileDialog::new()
-        .set_parent(window_handle)
-        .set_title(title)
-        .set_file_name(filename)
-        .add_filter("Nintendo Optical Disc", OUTPUT_DIALOG_FILTER)
-        .save_file()
-}
-
-pub fn pick_homebrew_apps(window_handle: &WindowHandle) -> Vec<PathBuf> {
-    FileDialog::new()
-        .set_parent(window_handle)
-        .set_title("Select Homebrew apps")
-        .add_filter("ZIP", &["zip"])
-        .pick_files()
-        .unwrap_or_default()
-}
-
-pub fn pick_wiiload(window_handle: &WindowHandle) -> Option<PathBuf> {
-    FileDialog::new()
-        .set_parent(window_handle)
-        .set_title("Select Homebrew apps")
-        .add_filter("ZIP/DOL/ELF", &["zip", "dol", "elf"])
-        .pick_file()
 }

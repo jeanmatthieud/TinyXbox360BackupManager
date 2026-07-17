@@ -1,4 +1,5 @@
-// SPDX-FileCopyrightText: 2026 Manuel Quarneti <mq1@ik.me>
+// SPDX-FileCopyrightText: 2026 Manuel Quarneti <mq1@ik.me> (TinyWiiBackupManager)
+// SPDX-FileContributor: Modified by Jean-Matthieu Dechriste (TinyXbox360BackupManager)
 // SPDX-License-Identifier: GPL-3.0-only
 
 import { IconSet } from "@lucide";
@@ -20,27 +21,6 @@ export component Navbar inherits VerticalLayout {
             tooltip: "Games";
             clicked => {
                 UiState.current-page = Page.Games;
-            }
-        }
-
-        NavbarButton {
-            active: UiState.current-page == Page.HomebrewApps;
-            icon: IconSet.WavesHorizontal;
-            icon2: IconSet.Bubbles;
-            tooltip: "Homebrew apps";
-            clicked => {
-                UiState.current-page = Page.HomebrewApps;
-            }
-        }
-
-        NavbarButton {
-            active: UiState.current-page == Page.Osc;
-            icon: IconSet.WavesHorizontal;
-            icon2: IconSet.ArrowBigDown;
-            tooltip: "Open Shop Channel";
-            clicked => {
-                UiState.current-page = Page.Osc;
-                Dispatcher.dispatch(Message.DownloadOscIcons, "");
             }
         }
 
@@ -79,20 +59,28 @@ export component Navbar inherits VerticalLayout {
 
         if !UiState.latest-version.is-empty: NavbarButton {
             icon: IconSet.BellPlus;
-            tooltip: "New TinyWiiBackupManager version available: \{UiState.latest-version}";
-            clicked => Dispatcher.dispatch(Message.OpenThat, "https://github.com/mq1/TinyWiiBackupManager/releases/latest");
+            tooltip: "New TinyXbox360BackupManager version available: \{UiState.latest-version}";
+            clicked => Dispatcher.dispatch(Message.OpenThat, "https://github.com/jeanmatthieud/TinyXbox360BackupManager/releases/latest");
         }
 
-        NavbarButton {
+        if UiState.config.target.is-empty: NavbarButton {
             icon: IconSet.HardDrive;
-            tooltip: "Select a drive";
-            clicked => Dispatcher.dispatch(Message.PickMountPoint, "");
+            tooltip: "Select a drive or console";
+            clicked => {
+                UiState.selecting-target = true;
+            }
+        }
+
+        if !UiState.config.target.is-empty: NavbarButton {
+            icon: IconSet.Unplug;
+            tooltip: "Disconnect from \{UiState.config.target}";
+            clicked => Dispatcher.dispatch(Message.Disconnect, "");
         }
 
         NavbarButton {
             active: UiState.current-page == Page.About;
             icon: IconSet.Info;
-            tooltip: "About TinyWiiBackupManager";
+            tooltip: "About TinyXbox360BackupManager";
             clicked => {
                 UiState.current-page = Page.About;
             }

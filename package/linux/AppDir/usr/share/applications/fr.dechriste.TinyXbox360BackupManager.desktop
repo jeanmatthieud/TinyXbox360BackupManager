@@ -1,0 +1,9 @@
+[Desktop Entry]
+Categories=Game;Utility;
+Comment=A tiny game backup manager for the Xbox360
+Exec=TinyXbox360BackupManager
+Icon=fr.dechriste.TinyXbox360BackupManager
+Name=TinyXbox360BackupManager
+Terminal=false
+Type=Application
+StartupWMClass=fr.dechriste.TinyXbox360BackupManager

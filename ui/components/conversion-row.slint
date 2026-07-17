@@ -8,6 +8,7 @@ import { UiState } from "../ui-state.slint";
 
 export component ConversionRow inherits Rectangle {
     in property <string> label;
+    in property <bool> cancellable: true;
 
     callback cancel();
 
@@ -21,6 +22,7 @@ export component ConversionRow inherits Rectangle {
     }
 
     IconButton {
+        visible: cancellable;
         x: parent.width - 24px;
         y: 0px;
         icon: IconSet.X;

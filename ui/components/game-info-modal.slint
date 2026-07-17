@@ -1,4 +1,5 @@
-// SPDX-FileCopyrightText: 2026 Manuel Quarneti <mq1@ik.me>
+// SPDX-FileCopyrightText: 2026 Manuel Quarneti <mq1@ik.me> (TinyWiiBackupManager)
+// SPDX-FileContributor: Modified by Jean-Matthieu Dechriste (TinyXbox360BackupManager)
 // SPDX-License-Identifier: GPL-3.0-only
 
 import { ScrollView, Palette } from "std-widgets.slint";
@@ -37,22 +38,7 @@ export component GameInfoModal inherits Modal {
                 }
             }
 
-            if UiState.current-disc-info.path.is-empty: HorizontalLayout {
-                spacing: 5px;
-                alignment: center;
-
-                IconDisplay {
-                    icon: IconSet.TriangleAlert;
-                    stroke: MyPalette.foreground;
-                    size: 14px;
-                }
-
-                Text {
-                    text: "Could not read disc info";
-                }
-            }
-
-            if !UiState.current-disc-info.path.is-empty: HorizontalLayout {
+            HorizontalLayout {
                 alignment: space-between;
                 padding-right: 10px;
                 padding-left: 20px;
@@ -72,7 +58,7 @@ export component GameInfoModal inherits Modal {
                         }
 
                         Text {
-                            text: "Format: \{UiState.current-disc-info.format}";
+                            text: "Format: \{UiState.current-game.format}";
                         }
                     }
 
@@ -86,35 +72,7 @@ export component GameInfoModal inherits Modal {
                         }
 
                         Text {
-                            text: "Game ID: \{UiState.current-disc-info.game-id}";
-                        }
-                    }
-
-                    HorizontalLayout {
-                        spacing: 5px;
-
-                        IconDisplay {
-                            icon: IconSet.NotebookPen;
-                            stroke: MyPalette.foreground;
-                            size: 14px;
-                        }
-
-                        Text {
-                            text: "Game title: \{UiState.current-disc-info.game-title}";
-                        }
-                    }
-
-                    HorizontalLayout {
-                        spacing: 5px;
-
-                        IconDisplay {
-                            icon: IconSet.Globe;
-                            stroke: MyPalette.foreground;
-                            size: 14px;
-                        }
-
-                        Text {
-                            text: "Region: \{UiState.current-disc-info.region}";
+                            text: "Title ID: \{(UiState.current-game.id.is-empty ? "N/A" : UiState.current-game.id)}";
                         }
                     }
 
@@ -127,26 +85,12 @@ export component GameInfoModal inherits Modal {
                             size: 14px;
                         }
 
-                        if UiState.current-disc-info.is-gc : Text {
-                            text: "System: GameCube";
+                        if UiState.current-game.is-x360: Text {
+                            text: "System: Xbox 360";
                         }
 
-                        if UiState.current-disc-info.is-wii : Text {
-                            text: "System: Wii";
-                        }
-                    }
-
-                    HorizontalLayout {
-                        spacing: 5px;
-
-                        IconDisplay {
-                            icon: IconSet.Pin;
-                            stroke: MyPalette.foreground;
-                            size: 14px;
-                        }
-
-                        Text {
-                            text: "Disc version: \{UiState.current-disc-info.disc-version}";
+                        if !UiState.current-game.is-x360: Text {
+                            text: "System: Original Xbox";
                         }
                     }
 
@@ -154,13 +98,13 @@ export component GameInfoModal inherits Modal {
                         spacing: 5px;
 
                         IconDisplay {
-                            icon: IconSet.FingerprintPattern;
+                            icon: IconSet.HardDrive;
                             stroke: MyPalette.foreground;
                             size: 14px;
                         }
 
                         Text {
-                            text: "CRC32: \{(UiState.current-disc-info.crc32.is-empty ? "N/A" : UiState.current-disc-info.crc32)}";
+                            text: "Size: \{UiState.current-game.size-gib.to-fixed(2)} GiB";
                         }
                     }
                 }
@@ -190,9 +134,9 @@ export component GameInfoModal inherits Modal {
                     alignment: center;
                     padding-left: 15px;
 
-                    Link {
-                        uri: "https://www.gametdb.com/Wii/\{UiState.current-game.id}";
-                        label: "GameTDB page";
+                    if !UiState.current-game.id.is-empty: Link {
+                        uri: "https://www.xboxunity.net/#/search/\{UiState.current-game.id}";
+                        label: "XboxUnity page";
                     }
                 }
 
@@ -201,38 +145,10 @@ export component GameInfoModal inherits Modal {
                     spacing: 10px;
 
                     IconButton {
-                        label: "Get cheats";
-                        tooltip: "Download txtcodes (change the source in settings)";
-                        icon: IconSet.Skull;
-                        clicked => Dispatcher.dispatch(Message.DownloadTxtCodes, UiState.current-game.path);
-                    }
-
-                    if UiState.current-disc-info.is-worth-scrubbing: IconButton {
-                        label: "Scrub";
-                        tooltip: "Remove update partition to save space";
-                        icon: IconSet.Shredder;
-                        clicked => {
-                            UiState.scrubbing-current-game = true;
-                        }
-                    }
-
-                    if !UiState.current-disc-info.path.is-empty: IconButton {
-                        label: UiState.crc32-status.is-empty ? "CRC32" : UiState.crc32-status;
-                        icon: IconSet.FingerprintPattern;
-                        clicked => {
-                            if UiState.crc32-status.is-empty {
-                                Dispatcher.dispatch(Message.Checksum, UiState.current-game.path);
-                            }
-                        };
-                    }
-
-                    IconButton {
                         label: "Close";
                         kind: IconButtonKind.Primary;
                         clicked => {
                             UiState.current-game = { };
-                            UiState.crc32-status = "";
-                            UiState.current-disc-info = { };
                         }
                     }
                 }
