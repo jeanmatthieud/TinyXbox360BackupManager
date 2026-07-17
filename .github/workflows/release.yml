@@ -78,6 +78,16 @@ jobs:
           wget "https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-${{ matrix.arch }}.AppImage"
           chmod +x appimagetool-${{ matrix.arch }}.AppImage
 
+      - name: Install yq
+        run: |
+          case "${{ matrix.arch }}" in
+            x86_64) YQ_ARCH=amd64 ;;
+            aarch64) YQ_ARCH=arm64 ;;
+            i686) YQ_ARCH=386 ;;
+          esac
+          wget -O /usr/local/bin/yq "https://github.com/mikefarah/yq/releases/latest/download/yq_linux_${YQ_ARCH}"
+          chmod +x /usr/local/bin/yq
+
       - name: Build binary
         run: |
           cargo build -Z build-std=std,panic_abort --release --target ${{ matrix.target }} --no-default-features --features rustls
@@ -159,6 +169,7 @@ jobs:
           CC: clang-cl
           AR: llvm-lib
           CFLAGS: /clang:-O3 /clang:-flto /clang:-fuse-ld=lld-link
+          CFLAGS_aarch64_pc_windows_msvc: -O3 -flto=thin -fuse-ld=lld-link
           CARGO_TARGET_X86_64_WIN7_WINDOWS_MSVC_RUSTFLAGS: -C target-feature=+crt-static -C linker-plugin-lto -C link-arg=/FORCE:MULTIPLE -l dylib=ole32
           CARGO_TARGET_I686_WIN7_WINDOWS_MSVC_RUSTFLAGS: -C target-feature=+crt-static -C linker-plugin-lto -C link-arg=/FORCE:MULTIPLE -l dylib=ole32
           CARGO_TARGET_AARCH64_PC_WINDOWS_MSVC_RUSTFLAGS: -C target-feature=+crt-static -C linker-plugin-lto
