@@ -27,7 +27,7 @@ pub struct State {
     pub is_converting: bool,
     pub is_downloading_covers: bool,
     pub is_scanning: bool,
-    /// Drapeau partagé avec le thread de scan pour l'annuler.
+    /// Flag shared with the scan thread to cancel it.
     pub scan_cancel: Arc<AtomicBool>,
     pub games_filter: String,
 }

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
-//! Pipeline haut niveau : à partir d'une ISO, fait ce qu'il faut sur la cible
-//! (disque local ou console FTP).
+//! High-level pipeline: from an ISO, does what is needed on the target
+//! (local drive or FTP console).
 
 use crate::config::Config;
 use crate::data_dir::DATA_DIR;
@@ -13,8 +13,8 @@ use crate::{CONTENT_DIR, GAMES_DIR, extract, god, unity};
 use anyhow::{Context, Result, bail};
 use std::path::{Path, PathBuf};
 
-/// Convertit/extrait `in_path` sur la cible, selon le type d'image.
-/// `update_progress` reçoit un pourcentage (0-100).
+/// Converts/extracts `in_path` on the target, depending on the image type.
+/// `update_progress` receives a percentage (0-100).
 pub fn perform(in_path: PathBuf, config: &Config, update_progress: &dyn Fn(u32)) -> Result<()> {
     let target =
         Target::from_config(&config.contents).context("no target selected")?;
@@ -37,11 +37,11 @@ pub fn perform(in_path: PathBuf, config: &Config, update_progress: &dyn Fn(u32))
             std::fs::create_dir_all(&staging)?;
 
             let result = (|| -> Result<()> {
-                // Conversion locale dans le dossier de staging : 0-70 %.
+                // Local conversion in staging folder: 0-70%.
                 convert_into(&in_path, &staging, &|p| update_progress(p * 70 / 100))?;
 
-                // Envoi direct sur la console, vers les emplacements
-                // scannés par Aurora : 70-100 %.
+                // Direct upload to the console, to locations
+                // scanned by Aurora: 70-100%.
                 let mut session = FtpSession::connect(ftp)?;
                 let hdd = ftp_hdd_root(&mut session);
                 let paths =
@@ -51,8 +51,8 @@ pub fn perform(in_path: PathBuf, config: &Config, update_progress: &dyn Fn(u32))
                     let total = crate::util::dir_size(&staging);
                     let mut sent_before: u64 = 0;
 
-                    // GOD / contenu : staging/Content/0000000000000000/* →
-                    // premier chemin Content d'Aurora.
+                    // GOD / content: staging/Content/0000000000000000/* →
+                    // first Content path of Aurora.
                     let staging_content = staging.join(CONTENT_DIR);
                     if staging_content.is_dir() {
                         let remote = paths.install_content_dir(&hdd);
@@ -72,8 +72,8 @@ pub fn perform(in_path: PathBuf, config: &Config, update_progress: &dyn Fn(u32))
                         }
                     }
 
-                    // Jeux extraits : staging/Games/* → premier chemin
-                    // « extraits » d'Aurora (ex. \XBox OG).
+                    // Extracted games: staging/Games/* → first
+                    // "extracted" path of Aurora (e.g. \XBox OG).
                     let staging_games = staging.join(GAMES_DIR);
                     if staging_games.is_dir() {
                         let remote = paths.install_extracted_dir(&hdd);
@@ -111,8 +111,8 @@ pub fn perform(in_path: PathBuf, config: &Config, update_progress: &dyn Fn(u32))
     Ok(())
 }
 
-/// Convertit/extrait `in_path` dans `root`, un dossier local organisé comme
-/// un disque Xbox (Content/0000000000000000 + Games).
+/// Converts/extracts `in_path` to `root`, a local folder organized like
+/// an Xbox drive (Content/0000000000000000 + Games).
 fn convert_into(in_path: &Path, root: &Path, update_progress: &dyn Fn(u32)) -> Result<()> {
     let info = iso_info::inspect(in_path)?;
 
@@ -166,7 +166,7 @@ fn convert_into(in_path: &Path, root: &Path, update_progress: &dyn Fn(u32)) -> R
                     update_progress((done * 100 / total.max(1)) as u32);
                 })?;
 
-                // Structure attendue : Content/0000000000000000/<TitleID>/…
+                // Expected structure: Content/0000000000000000/<TitleID>/...
                 let extracted_content = find_dir_ci(&tmp, "Content")
                     .and_then(|c| find_dir_ci(&c, "0000000000000000"))
                     .context(
@@ -191,13 +191,13 @@ fn convert_into(in_path: &Path, root: &Path, update_progress: &dyn Fn(u32)) -> R
     Ok(())
 }
 
-/// Déplace `src` vers `dst` en fusionnant avec l'existant.
+/// Moves `src` to `dst`, merging with existing content.
 fn merge_move(src: &Path, dst: &Path) -> Result<()> {
     if !dst.exists() {
         if std::fs::rename(src, dst).is_ok() {
             return Ok(());
         }
-        // Autre système de fichiers : copie puis suppression.
+        // Different file system: copy then delete.
         std::fs::create_dir_all(dst.parent().unwrap_or(dst))?;
         let options = fs_extra::dir::CopyOptions::new().copy_inside(true);
         fs_extra::dir::move_dir(src, dst, &options)
@@ -211,7 +211,7 @@ fn merge_move(src: &Path, dst: &Path) -> Result<()> {
         let _ = std::fs::remove_dir(src);
         Ok(())
     } else {
-        // Fichier déjà présent : on remplace.
+        // File already present: replace.
         std::fs::remove_file(dst).ok();
         std::fs::rename(src, dst).or_else(|_| {
             std::fs::copy(src, dst)

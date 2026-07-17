@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
-//! Client pour l'API XboxUnity (https://www.xboxunity.net).
-//! Endpoints observés dans doc/www.xboxunity.net.har, documentés dans doc/assets-url.md.
+//! Client for the XboxUnity API (https://www.xboxunity.net).
+//! Endpoints observed in doc/www.xboxunity.net.har, documented in doc/assets-url.md.
 
 use anyhow::{Context, Result, bail};
 use serde::Deserialize;
@@ -14,11 +14,11 @@ const USER_AGENT: &str = concat!(
     env!("CARGO_PKG_VERSION")
 );
 
-/// Limite de téléchargement (certains title updates dépassent 100 Mio).
+/// Download limit (some title updates exceed 100 MiB).
 const DOWNLOAD_LIMIT: u64 = 1024 * 1024 * 1024;
 
-/// Agent HTTP partagé, avec timeouts (le serveur laisse parfois
-/// une connexion réutilisée sans réponse indéfiniment).
+/// Shared HTTP agent, with timeouts (the server sometimes leaves
+/// a reused connection without response indefinitely).
 static AGENT: LazyLock<ureq::Agent> = LazyLock::new(|| {
     ureq::Agent::config_builder()
         .timeout_connect(Some(Duration::from_secs(15)))
@@ -48,7 +48,7 @@ struct TitleListResponse {
     items: Vec<TitleListItem>,
 }
 
-/// Recherche de titres (par nom ou par TitleID hexadécimal).
+/// Search for titles (by name or hexadecimal TitleID).
 pub fn search_titles(query: &str) -> Result<Vec<TitleListItem>> {
     let response: TitleListResponse = AGENT.get(format!("{BASE}/TitleList.php"))
         .query("page", "0")
@@ -59,10 +59,10 @@ pub fn search_titles(query: &str) -> Result<Vec<TitleListItem>> {
         .query("category", "0")
         .query("filter", "0")
         .call()
-        .context("requête TitleList")?
+        .context("TitleList request")?
         .body_mut()
         .read_json()
-        .context("réponse TitleList invalide")?;
+        .context("invalid TitleList response")?;
     Ok(response.items)
 }
 
@@ -70,7 +70,7 @@ pub fn search_titles(query: &str) -> Result<Vec<TitleListItem>> {
 pub struct CoverEntry {
     #[serde(rename = "CoverID")]
     pub cover_id: String,
-    /// Certains champs de l'API valent parfois `null`.
+    /// Some API fields are sometimes `null`.
     #[serde(rename = "Rating")]
     pub rating: Option<String>,
     #[serde(rename = "Official")]
@@ -83,30 +83,30 @@ struct CoverInfoResponse {
     covers: Vec<CoverEntry>,
 }
 
-/// Liste des jaquettes disponibles pour un TitleID.
+/// List of available covers for a TitleID.
 pub fn cover_info(title_id: &str) -> Result<Vec<CoverEntry>> {
     let response: CoverInfoResponse = AGENT.get(format!("{BASE}/CoverInfo.php"))
         .query("titleid", title_id)
         .call()
-        .context("requête CoverInfo")?
+        .context("CoverInfo request")?
         .body_mut()
         .read_json()
-        .context("réponse CoverInfo invalide")?;
+        .context("invalid CoverInfo response")?;
     Ok(response.covers)
 }
 
-/// URL d'une jaquette (sans le flag `dl` pour un affichage direct).
+/// URL of a cover (without the `dl` flag for direct display).
 pub fn cover_url(cover_id: &str, large: bool) -> String {
     let size = if large { "large" } else { "small" };
     format!("{BASE}/Cover.php?cid={cover_id}&size={size}")
 }
 
-/// Télécharge la meilleure jaquette d'un titre
-/// (officielle d'abord, puis meilleure note).
+/// Downloads the best cover of a title
+/// (official first, then best rating).
 pub fn download_best_cover(title_id: &str) -> Result<Vec<u8>> {
     let mut covers = cover_info(title_id)?;
     if covers.is_empty() {
-        bail!("aucune jaquette pour le titre {title_id}");
+        bail!("no cover for title {title_id}");
     }
     covers.sort_by_key(|c| {
         let official = c.official.as_deref() == Some("1");
@@ -120,12 +120,12 @@ pub fn download_best_cover(title_id: &str) -> Result<Vec<u8>> {
 
     let bytes = AGENT.get(cover_url(&covers[0].cover_id, true))
         .call()
-        .context("téléchargement de la jaquette")?
+        .context("downloading cover")?
         .body_mut()
         .with_config()
         .limit(DOWNLOAD_LIMIT)
         .read_to_vec()
-        .context("lecture de la jaquette")?;
+        .context("reading cover")?;
     Ok(bytes)
 }
 
@@ -139,7 +139,7 @@ pub struct TitleUpdateEntry {
     pub name: Option<String>,
     #[serde(rename = "Size")]
     pub size: Option<String>,
-    /// MediaID auquel cette mise à jour s'applique.
+    /// MediaID this update applies to.
     #[serde(skip)]
     pub media_id: String,
 }
@@ -158,15 +158,15 @@ struct TitleUpdateInfoResponse {
     media_ids: Vec<MediaIdUpdates>,
 }
 
-/// Liste des title updates d'un titre, tous MediaID confondus.
+/// List of title updates for a title, all MediaIDs combined.
 pub fn title_updates(title_id: &str) -> Result<Vec<TitleUpdateEntry>> {
     let response: TitleUpdateInfoResponse = AGENT.get(format!("{BASE}/TitleUpdateInfo.php"))
         .query("titleid", title_id)
         .call()
-        .context("requête TitleUpdateInfo")?
+        .context("TitleUpdateInfo request")?
         .body_mut()
         .read_json()
-        .context("réponse TitleUpdateInfo invalide")?;
+        .context("invalid TitleUpdateInfo response")?;
 
     let mut updates = Vec::new();
     for group in response.media_ids {
@@ -178,13 +178,13 @@ pub fn title_updates(title_id: &str) -> Result<Vec<TitleUpdateEntry>> {
     Ok(updates)
 }
 
-/// Télécharge un title update. Retourne (nom de fichier, données).
-/// Le nom de fichier (issu de Content-Disposition) doit être conservé tel quel.
+/// Downloads a title update. Returns (filename, data).
+/// The filename (from Content-Disposition) must be kept as is.
 pub fn download_title_update(title_update_id: &str) -> Result<(String, Vec<u8>)> {
     let mut response = AGENT.get(format!("{BASE}/TitleUpdate.php"))
         .query("tuid", title_update_id)
         .call()
-        .context("téléchargement du title update")?;
+        .context("downloading title update")?;
 
     let filename = response
         .headers()
@@ -198,7 +198,7 @@ pub fn download_title_update(title_update_id: &str) -> Result<(String, Vec<u8>)>
         .with_config()
         .limit(DOWNLOAD_LIMIT)
         .read_to_vec()
-        .context("lecture du title update")?;
+        .context("reading title update")?;
     Ok((filename, bytes))
 }
 

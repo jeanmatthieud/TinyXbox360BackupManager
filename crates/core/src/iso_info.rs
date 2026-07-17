@@ -10,20 +10,20 @@ use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum IsoKind {
-    /// Jeu Xbox 360 (default.xex) : à convertir en GOD.
+    /// Xbox 360 game (default.xex): to convert to GOD.
     Xbox360Game,
-    /// Jeu Xbox originale (default.xbe) : à extraire.
+    /// Original Xbox game (default.xbe): to extract.
     XboxOriginal,
-    /// Disque d'installation / DLC (aucun exécutable) : extraire son dossier Content.
+    /// Installation disc / DLC (no executable): extract its Content folder.
     ContentDisc,
 }
 
 impl IsoKind {
     pub fn label(&self) -> &'static str {
         match self {
-            IsoKind::Xbox360Game => "Jeu Xbox 360",
-            IsoKind::XboxOriginal => "Jeu Xbox originale",
-            IsoKind::ContentDisc => "Disque d'installation / DLC",
+            IsoKind::Xbox360Game => "Xbox 360 Game",
+            IsoKind::XboxOriginal => "Original Xbox Game",
+            IsoKind::ContentDisc => "Installation disc / DLC",
         }
     }
 }
@@ -39,12 +39,12 @@ pub struct IsoInfo {
     pub disc_count: Option<u8>,
 }
 
-/// Analyse une image ISO et détermine son type et ses métadonnées.
+/// Analyzes an ISO image and determines its type and metadata.
 pub fn inspect(path: &Path) -> Result<IsoInfo> {
     let file =
-        File::open(path).with_context(|| format!("ouverture de {}", path.display()))?;
+        File::open(path).with_context(|| format!("opening {}", path.display()))?;
     let mut reader = iso::IsoReader::read(BufReader::new(file))
-        .context("lecture de l'image (format XDVDFS invalide ?)")?;
+        .context("reading image (invalid XDVDFS format?)")?;
 
     let has_xex = reader.get_entry(&"\\default.xex".into())?.is_some();
     let has_xbe = reader.get_entry(&"\\default.xbe".into())?.is_some();
@@ -62,7 +62,7 @@ pub fn inspect(path: &Path) -> Result<IsoInfo> {
     }
 
     let title_info =
-        TitleInfo::from_image(&mut reader).context("lecture de l'exécutable du jeu")?;
+        TitleInfo::from_image(&mut reader).context("reading game executable")?;
     let exe = &title_info.execution_info;
 
     let kind = match title_info.content_type {

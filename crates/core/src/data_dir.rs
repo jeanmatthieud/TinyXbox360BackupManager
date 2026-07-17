@@ -4,7 +4,7 @@ use directories::ProjectDirs;
 use std::path::PathBuf;
 use std::sync::LazyLock;
 
-/// Dossier de données de l'application (config, cache des jaquettes).
+/// Application data folder (config, covers cache).
 pub static DATA_DIR: LazyLock<PathBuf> = LazyLock::new(|| {
     ProjectDirs::from("net", "jeanm", "TinyXbox360BackupManager")
         .map(|dirs| dirs.data_dir().to_path_buf())

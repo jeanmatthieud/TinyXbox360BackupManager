@@ -2,7 +2,7 @@
 
 use std::path::Path;
 
-/// Taille totale d'un dossier (récursif), en octets.
+/// Total size of a directory (recursive), in bytes.
 pub fn dir_size(path: &Path) -> u64 {
     let mut total = 0;
     if let Ok(entries) = std::fs::read_dir(path) {
@@ -18,7 +18,7 @@ pub fn dir_size(path: &Path) -> u64 {
     total
 }
 
-/// Formatage lisible d'une taille en octets.
+/// Readable formatting of a size in bytes.
 pub fn human_size(bytes: u64) -> String {
     const UNITS: [&str; 5] = ["o", "Kio", "Mio", "Gio", "Tio"];
     let mut value = bytes as f64;
@@ -34,7 +34,7 @@ pub fn human_size(bytes: u64) -> String {
     }
 }
 
-/// Nettoie un nom pour en faire un nom de dossier FAT32 valide.
+/// Sanitizes a name to make it a valid FAT32 directory name.
 pub fn sanitize_name(name: &str) -> String {
     let cleaned: String = name
         .chars()
@@ -46,7 +46,7 @@ pub fn sanitize_name(name: &str) -> String {
         .collect();
     let cleaned = cleaned.trim().trim_end_matches('.').to_string();
     if cleaned.is_empty() {
-        "Sans nom".to_string()
+        "Unnamed".to_string()
     } else {
         cleaned
     }

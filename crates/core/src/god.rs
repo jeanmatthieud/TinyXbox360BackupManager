@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// Pipeline de conversion adapté du binaire iso2god (https://github.com/iliazeus/iso2god-rs).
+// Conversion pipeline adapted from the iso2god binary (https://github.com/iliazeus/iso2god-rs).
 
 use anyhow::{Context, Result};
 use iso2god::executable::TitleInfo;
@@ -8,11 +8,11 @@ use std::fs::{self, File};
 use std::io::{Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 
-/// Convertit une ISO de jeu Xbox 360 en GOD dans `content_dir`
-/// (le dossier `Content/0000000000000000` de la cible).
-/// Retourne le dossier du titre créé (`content_dir/<TitleID>`).
+/// Converts an Xbox 360 game ISO to GOD in `content_dir`
+/// (the `Content/0000000000000000` folder of the target).
+/// Returns the created title folder (`content_dir/<TitleID>`).
 ///
-/// `progress(fait, total)` est appelé à chaque part écrite.
+/// `progress(done, total)` is called at each written part.
 pub fn convert_to_god(
     source_iso: &Path,
     content_dir: &Path,
@@ -20,19 +20,19 @@ pub fn convert_to_god(
     progress: &mut dyn FnMut(u64, u64),
 ) -> Result<PathBuf> {
     let source_iso_file =
-        File::open(source_iso).context("ouverture de l'ISO source")?;
+        File::open(source_iso).context("opening source ISO")?;
     let source_iso_file_meta =
-        fs::metadata(source_iso).context("lecture des métadonnées de l'ISO")?;
+        fs::metadata(source_iso).context("reading ISO metadata")?;
 
     let mut iso_reader =
-        iso::IsoReader::read(source_iso_file).context("lecture de l'ISO source")?;
+        iso::IsoReader::read(source_iso_file).context("reading source ISO")?;
 
     let title_info =
-        TitleInfo::from_image(&mut iso_reader).context("lecture de l'exécutable du jeu")?;
+        TitleInfo::from_image(&mut iso_reader).context("reading game executable")?;
     let exe_info = title_info.execution_info;
     let content_type = title_info.content_type;
 
-    // On retire l'espace inutilisé en fin d'image (équivalent de --trim=from-end).
+    // Remove unused space at the end of the image (equivalent to --trim=from-end).
     let data_size = iso_reader
         .get_max_used_prefix_size()
         .min(source_iso_file_meta.len() - iso_reader.volume_descriptor.root_offset);
@@ -46,7 +46,7 @@ pub fn convert_to_god(
     if fs::exists(&data_dir)? {
         fs::remove_dir_all(&data_dir)?;
     }
-    fs::create_dir_all(&data_dir).context("création du dossier de données GOD")?;
+    fs::create_dir_all(&data_dir).context("creating GOD data folder")?;
 
     progress(0, part_count);
 
@@ -59,30 +59,30 @@ pub fn convert_to_god(
             .create(true)
             .truncate(true)
             .open(file_layout.part_file_path(part_index))
-            .context("création d'un fichier de part GOD")?;
+            .context("creating GOD part file")?;
 
         god::write_part(iso_data_volume, part_index, part_file)
-            .context("écriture d'un fichier de part GOD")?;
+            .context("writing GOD part file")?;
 
         progress(part_index + 1, part_count);
     }
 
-    // Chaîne de hachage MHT, de la dernière part vers la première.
+    // MHT hash chain, from the last part to the first.
     let mut mht =
-        read_part_mht(&file_layout, part_count - 1).context("lecture du MHT d'une part")?;
+        read_part_mht(&file_layout, part_count - 1).context("reading a part's MHT")?;
 
     for prev_part_index in (0..part_count - 1).rev() {
         let mut prev_mht = read_part_mht(&file_layout, prev_part_index)
-            .context("lecture du MHT d'une part")?;
+            .context("reading a part's MHT")?;
         prev_mht.add_hash(&mht.digest());
         write_part_mht(&file_layout, prev_part_index, &prev_mht)
-            .context("écriture du MHT d'une part")?;
+            .context("writing a part's MHT")?;
         mht = prev_mht;
     }
 
     let last_part_size = fs::metadata(file_layout.part_file_path(part_count - 1))
         .map(|m| m.len())
-        .context("lecture de la dernière part")?;
+        .context("reading the last part")?;
 
     let mut con_header = god::ConHeaderBuilder::new()
         .with_execution_info(&exe_info)
@@ -108,10 +108,10 @@ pub fn convert_to_god(
         .create(true)
         .truncate(true)
         .open(file_layout.con_header_file_path())
-        .context("création du fichier d'en-tête CON")?;
+        .context("creating CON header file")?;
     con_header_file
         .write_all(&con_header)
-        .context("écriture de l'en-tête CON")?;
+        .context("writing CON header")?;
 
     Ok(content_dir.join(format!("{:08X}", exe_info.title_id)))
 }

@@ -1,12 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
-//! Cible de la bibliothèque : disque local (USB) ou console distante (FTP).
-//! Toutes les opérations (scan, suppression, installation) s'appliquent
-//! directement à la cible.
+//! Target of the library: local drive (USB) or remote console (FTP).
+//! All operations (scan, deletion, installation) apply directly to the target.
 //!
-//! En FTP, les emplacements scannés par Aurora sont lus depuis ses bases
-//! SQLite (`Aurora/Data/Databases/settings.db` + `content.db`), avec repli
-//! sur les chemins par défaut si Aurora est introuvable.
+//! Over FTP, locations scanned by Aurora are read from its SQLite databases
+//! (`Aurora/Data/Databases/settings.db` + `content.db`), with fallback to
+//! default paths if Aurora cannot be found.
 
 use crate::config::{ConfigContents, TargetKind};
 use crate::data_dir::DATA_DIR;
@@ -18,7 +17,7 @@ use anyhow::{Context, Result, bail};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-/// Message d'erreur utilisé quand un scan est annulé par l'utilisateur.
+/// Error message used when a scan is cancelled by the user.
 pub const SCAN_CANCELLED: &str = "scan cancelled";
 
 #[derive(Debug, Clone)]
@@ -48,7 +47,7 @@ impl Target {
         }
     }
 
-    /// Libellé affiché (chemin local ou ftp://ip).
+    /// Displayed label (local path or ftp://ip).
     pub fn display(&self) -> String {
         match self {
             Target::Local(path) => path.to_string_lossy().to_string(),
@@ -56,9 +55,9 @@ impl Target {
         }
     }
 
-    /// Liste les jeux et les informations du disque de la cible.
-    /// `cancel` peut être levé depuis un autre thread pour interrompre
-    /// un scan FTP entre deux commandes.
+    /// Lists games and drive information of the target.
+    /// `cancel` can be raised from another thread to interrupt
+    /// an FTP scan between two commands.
     pub fn scan(&self, cancel: &AtomicBool) -> Result<(Vec<Game>, DriveInfo)> {
         match self {
             Target::Local(path) => {
@@ -70,7 +69,7 @@ impl Target {
         }
     }
 
-    /// Supprime un jeu de la cible.
+    /// Deletes a game from the target.
     pub fn delete_game(&self, game: &Game) -> Result<()> {
         match self {
             Target::Local(_) => {
@@ -88,10 +87,10 @@ impl Target {
     }
 }
 
-/// Types de contenu STFS considérés comme des jeux installés.
+/// STFS content types considered as installed games.
 const GOD_CONTENT_TYPES: [(&str, bool); 2] = [("00007000", true), ("00005000", false)];
 
-/// Trouve la racine du disque interne de la console (Hdd1).
+/// Finds the root of the console's internal hard drive (Hdd1).
 pub fn ftp_hdd_root(session: &mut FtpSession) -> String {
     session
         .list_root()
@@ -102,17 +101,17 @@ pub fn ftp_hdd_root(session: &mut FtpSession) -> String {
         .unwrap_or_else(|| "Hdd1".to_string())
 }
 
-/// Emplacements scannés par Aurora, résolus en chemins FTP absolus.
+/// Locations scanned by Aurora, resolved as absolute FTP paths.
 #[derive(Debug, Clone)]
 pub struct AuroraPaths {
-    /// Dossiers de type Content/0000000000000000 (jeux GOD).
+    /// Folders of type Content/0000000000000000 (GOD games).
     pub content_dirs: Vec<String>,
-    /// Autres dossiers (jeux extraits), avec la profondeur de scan d'Aurora.
+    /// Other folders (extracted games), with Aurora's scan depth.
     pub extracted_dirs: Vec<(String, u32)>,
 }
 
 impl AuroraPaths {
-    /// Chemins par défaut si les bases d'Aurora sont introuvables.
+    /// Default paths if Aurora's databases are not found.
     pub fn defaults(hdd: &str) -> Self {
         Self {
             content_dirs: vec![format!("/{hdd}/{CONTENT_DIR}")],
@@ -120,7 +119,7 @@ impl AuroraPaths {
         }
     }
 
-    /// Destination des installations GOD.
+    /// Destination for GOD installations.
     pub fn install_content_dir(&self, hdd: &str) -> String {
         self.content_dirs
             .first()
@@ -128,7 +127,7 @@ impl AuroraPaths {
             .unwrap_or_else(|| format!("/{hdd}/{CONTENT_DIR}"))
     }
 
-    /// Destination des jeux extraits.
+    /// Destination for extracted games.
     pub fn install_extracted_dir(&self, hdd: &str) -> String {
         self.extracted_dirs
             .first()
@@ -137,8 +136,8 @@ impl AuroraPaths {
     }
 }
 
-/// Cherche l'installation d'Aurora sur les lecteurs de la console
-/// et retourne le dossier de ses bases de données.
+/// Looks for Aurora installation on the console's drives
+/// and returns its database folder.
 fn find_aurora_databases(session: &mut FtpSession) -> Option<String> {
     let roots = session.list_root().ok()?;
     for root in roots {
@@ -162,11 +161,11 @@ fn find_aurora_databases(session: &mut FtpSession) -> Option<String> {
     None
 }
 
-/// Lit les ScanPaths d'Aurora (settings.db) et les résout en chemins FTP
-/// via la table MountedDevices (content.db).
+/// Reads Aurora's ScanPaths (settings.db) and resolves them to FTP paths
+/// via the MountedDevices table (content.db).
 pub fn aurora_paths(session: &mut FtpSession) -> Result<AuroraPaths> {
     let db_dir = find_aurora_databases(session)
-        .context("installation Aurora introuvable sur la console")?;
+        .context("Aurora installation not found on console")?;
 
     let tmp_dir = DATA_DIR.join("tmp");
     std::fs::create_dir_all(&tmp_dir)?;
@@ -191,12 +190,12 @@ fn read_aurora_databases(
     content_path: &std::path::Path,
 ) -> Result<AuroraPaths> {
     let content_db =
-        rusqlite::Connection::open(content_path).context("ouverture de content.db")?;
+        rusqlite::Connection::open(content_path).context("opening content.db")?;
     let mut devices = std::collections::HashMap::new();
     {
         let mut stmt = content_db
             .prepare("SELECT DeviceId, DeviceName FROM MountedDevices")
-            .context("lecture de MountedDevices")?;
+            .context("reading MountedDevices")?;
         let rows = stmt.query_map([], |row| {
             Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
         })?;
@@ -206,10 +205,10 @@ fn read_aurora_databases(
     }
 
     let settings_db =
-        rusqlite::Connection::open(settings_path).context("ouverture de settings.db")?;
+        rusqlite::Connection::open(settings_path).context("opening settings.db")?;
     let mut stmt = settings_db
         .prepare("SELECT Path, DeviceId, Depth FROM ScanPaths")
-        .context("lecture de ScanPaths")?;
+        .context("reading ScanPaths")?;
     let rows = stmt.query_map([], |row| {
         Ok((
             row.get::<_, String>(0)?,
@@ -231,7 +230,7 @@ fn read_aurora_databases(
         let relative = relative.trim_matches('/');
         let remote = format!("/{device}/{relative}");
 
-        // Un chemin Content est identifié par son suffixe 0000000000000000.
+        // A Content path is identified by its 0000000000000000 suffix.
         if relative
             .to_lowercase()
             .ends_with("content/0000000000000000")
@@ -243,7 +242,7 @@ fn read_aurora_databases(
     }
 
     if paths.content_dirs.is_empty() && paths.extracted_dirs.is_empty() {
-        bail!("aucun ScanPath dans les bases d'Aurora");
+        bail!("no ScanPath in Aurora databases");
     }
 
     Ok(paths)
@@ -302,8 +301,8 @@ fn scan_ftp(ftp: &FtpConfig, cancel: &AtomicBool) -> Result<(Vec<Game>, DriveInf
         }
     }
 
-    // Jeux extraits : <dossier>/…/default.xex ou default.xbe,
-    // en respectant la profondeur de scan d'Aurora.
+    // Extracted games: <folder>/.../default.xex or default.xbe,
+    // respecting Aurora's scan depth.
     for (dir, depth) in &paths.extracted_dirs {
         scan_extracted_dir(
             &mut session,
@@ -375,8 +374,8 @@ fn scan_extracted_dir(
                     search_term,
                 });
             }
-            // Pas d'exécutable ici : on descend d'un niveau si Aurora
-            // le ferait aussi.
+            // No executable here: descend one level if Aurora
+            // would do the same.
             None if depth > 1 => {
                 scan_extracted_dir(
                     session,

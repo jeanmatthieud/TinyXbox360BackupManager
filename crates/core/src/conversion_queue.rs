@@ -7,8 +7,8 @@ use std::path::PathBuf;
 
 #[derive(Debug, Clone, Display)]
 pub enum QueuedConversion {
-    /// ISO ajoutée à la cible : conversion GOD ou extraction,
-    /// selon le type d'image détecté.
+    /// ISO added to target: GOD conversion or extraction,
+    /// depending on the detected image type.
     #[display("↑ Add: {}", _0.display())]
     Standard(PathBuf),
 }

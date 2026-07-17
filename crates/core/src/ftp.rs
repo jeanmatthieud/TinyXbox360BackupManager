@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
-//! Transfert FTP vers la console (serveur FTP d'Aurora).
+//! FTP transfer to the console (Aurora FTP server).
 //!
-//! Particularités du serveur de la console :
-//! - une seule connexion à la fois (pas de flux multiples) ;
-//! - les arguments chemin des commandes (LIST, STOR, DELE…) sont mal gérés :
-//!   il faut naviguer avec CWD puis n'utiliser que des noms relatifs ;
-//! - NLST renvoie des lignes LIST complètes.
+//! Specificities of the console server:
+//! - only one connection at a time (no multiple streams);
+//! - path arguments of commands (LIST, STOR, DELE...) are poorly handled:
+//!   must navigate with CWD then only use relative names;
+//! - NLST returns complete LIST lines.
 
 use crate::util::dir_size;
 use anyhow::{Context, Result};
@@ -44,9 +44,9 @@ fn parent_and_name(remote_dir: &str) -> (String, String) {
     }
 }
 
-/// Délai maximal d'établissement de la connexion.
+/// Maximum connection establishment timeout.
 const CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
-/// Délai maximal d'attente d'une réponse sur la connexion de contrôle.
+/// Maximum timeout waiting for a response on the control connection.
 const IO_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
 
 impl FtpSession {
@@ -55,14 +55,14 @@ impl FtpSession {
 
         let addr = (config.host.as_str(), config.port)
             .to_socket_addrs()
-            .with_context(|| format!("adresse invalide : {}:{}", config.host, config.port))?
+            .with_context(|| format!("invalid address: {}:{}", config.host, config.port))?
             .next()
-            .with_context(|| format!("adresse introuvable : {}", config.host))?;
+            .with_context(|| format!("address not found: {}", config.host))?;
 
         let mut stream = FtpStream::connect_timeout(addr, CONNECT_TIMEOUT)
             .with_context(|| {
                 format!(
-                    "connexion à {}:{} (délai de {}s dépassé ?)",
+                    "connection to {}:{} (timeout of {}s exceeded?)",
                     config.host,
                     config.port,
                     CONNECT_TIMEOUT.as_secs()
@@ -73,42 +73,42 @@ impl FtpSession {
 
         stream
             .login(&config.user, &config.password)
-            .context("authentification FTP refusée")?;
+            .context("FTP authentication refused")?;
         stream
             .transfer_type(FileType::Binary)
-            .context("passage en mode binaire")?;
+            .context("switching to binary mode")?;
         Ok(Self { stream })
     }
 
-    /// Se place dans un dossier distant en descendant composant par composant
-    /// (le serveur de la console gère mal les chemins complets).
+    /// Moves to a remote directory by descending component by component
+    /// (the console server poorly handles absolute paths).
     fn cwd(&mut self, remote_dir: &str) -> Result<()> {
         self.stream.cwd("/").context("CWD /")?;
         for part in remote_dir.split('/').filter(|p| !p.is_empty()) {
             self.stream
                 .cwd(part)
-                .with_context(|| format!("CWD {part} (dans {remote_dir})"))?;
+                .with_context(|| format!("CWD {part} (in {remote_dir})"))?;
         }
         Ok(())
     }
 
-    /// Comme `cwd`, mais crée les dossiers manquants.
+    /// Like `cwd`, but creates missing directories.
     fn cwd_create(&mut self, remote_dir: &str) -> Result<()> {
         self.stream.cwd("/").context("CWD /")?;
         for part in remote_dir.split('/').filter(|p| !p.is_empty()) {
             if self.stream.cwd(part).is_err() {
                 self.stream
                     .mkdir(part)
-                    .with_context(|| format!("MKD {part} (dans {remote_dir})"))?;
+                    .with_context(|| format!("MKD {part} (in {remote_dir})"))?;
                 self.stream
                     .cwd(part)
-                    .with_context(|| format!("CWD {part} (dans {remote_dir})"))?;
+                    .with_context(|| format!("CWD {part} (in {remote_dir})"))?;
             }
         }
         Ok(())
     }
 
-    /// Liste le dossier courant.
+    /// Lists the current directory.
     fn list_cwd(&mut self) -> Vec<RemoteEntry> {
         let Ok(lines) = self.stream.list(None) else {
             return Vec::new();
@@ -133,14 +133,14 @@ impl FtpSession {
             .collect()
     }
 
-    /// Liste les entrées à la racine de la console (Hdd1, Usb0, ...).
+    /// Lists entries at the root of the console (Hdd1, Usb0, ...).
     pub fn list_root(&mut self) -> Result<Vec<String>> {
         self.cwd("/")?;
         Ok(self.list_cwd().into_iter().map(|e| e.name).collect())
     }
 
-    /// Liste un dossier distant : (nom, est_un_dossier, taille).
-    /// Retourne une liste vide si le dossier n'existe pas.
+    /// Lists a remote directory: (name, is_dir, size).
+    /// Returns an empty list if the directory does not exist.
     pub fn list_dir(&mut self, remote_dir: &str) -> Vec<RemoteEntry> {
         if self.cwd(remote_dir).is_err() {
             return Vec::new();
@@ -148,7 +148,7 @@ impl FtpSession {
         self.list_cwd()
     }
 
-    /// Taille récursive d'un dossier distant, avec profondeur bornée.
+    /// Recursive size of a remote directory, with bounded depth.
     pub fn dir_size(&mut self, remote_dir: &str, max_depth: u32) -> u64 {
         let mut total = 0;
         for entry in self.list_dir(remote_dir) {
@@ -163,18 +163,18 @@ impl FtpSession {
         total
     }
 
-    /// Télécharge un fichier distant en mémoire.
+    /// Downloads a remote file into memory.
     pub fn download_file(&mut self, remote_path: &str) -> Result<Vec<u8>> {
         let (parent, name) = parent_and_name(remote_path);
         self.cwd(&parent)?;
         Ok(self
             .stream
             .retr_as_buffer(&name)
-            .with_context(|| format!("téléchargement de {remote_path}"))?
+            .with_context(|| format!("downloading {remote_path}"))?
             .into_inner())
     }
 
-    /// Supprime récursivement un dossier distant.
+    /// Recursively removes a remote directory.
     pub fn remove_dir_recursive(&mut self, remote_dir: &str) -> Result<()> {
         for entry in self.list_dir(remote_dir) {
             if entry.is_dir {
@@ -183,7 +183,7 @@ impl FtpSession {
                 self.cwd(remote_dir)?;
                 self.stream
                     .rm(&entry.name)
-                    .with_context(|| format!("suppression de {remote_dir}/{}", entry.name))?;
+                    .with_context(|| format!("removing {remote_dir}/{}", entry.name))?;
             }
         }
 
@@ -191,12 +191,12 @@ impl FtpSession {
         self.cwd(&parent)?;
         self.stream
             .rmdir(&name)
-            .with_context(|| format!("suppression de {remote_dir}"))?;
+            .with_context(|| format!("removing {remote_dir}"))?;
         Ok(())
     }
 
-    /// Envoie récursivement `local_dir` vers `remote_dir` (créé si besoin).
-    /// `progress(octets_envoyés, octets_total)` est appelé après chaque fichier.
+    /// Recursively sends `local_dir` to `remote_dir` (created if needed).
+    /// `progress(sent_bytes, total_bytes)` is called after each file.
     pub fn upload_dir(
         &mut self,
         local_dir: &Path,
@@ -218,10 +218,10 @@ impl FtpSession {
         progress: &mut dyn FnMut(u64, u64),
     ) -> Result<()> {
         self.cwd_create(remote_dir)
-            .with_context(|| format!("création de {remote_dir}"))?;
+            .with_context(|| format!("creating {remote_dir}"))?;
 
         let entries = std::fs::read_dir(local_dir)
-            .with_context(|| format!("lecture de {}", local_dir.display()))?;
+            .with_context(|| format!("reading {}", local_dir.display()))?;
         for entry in entries.flatten() {
             let local_path = entry.path();
             let name = entry.file_name().to_string_lossy().to_string();
@@ -229,15 +229,15 @@ impl FtpSession {
             if local_path.is_dir() {
                 let remote_path = format!("{}/{}", remote_dir.trim_end_matches('/'), name);
                 self.upload_dir_inner(&local_path, &remote_path, sent, total, progress)?;
-                // Les envois récursifs ont changé de dossier courant.
+                // Recursive uploads changed the current directory.
                 self.cwd(remote_dir)?;
             } else {
                 let file = File::open(&local_path)
-                    .with_context(|| format!("ouverture de {}", local_path.display()))?;
+                    .with_context(|| format!("opening {}", local_path.display()))?;
                 let size = file.metadata().map(|m| m.len()).unwrap_or(0);
                 self.stream
                     .put_file(&name, &mut BufReader::new(file))
-                    .with_context(|| format!("envoi de {remote_dir}/{name}"))?;
+                    .with_context(|| format!("sending {remote_dir}/{name}"))?;
                 *sent += size;
                 progress(*sent, total);
             }

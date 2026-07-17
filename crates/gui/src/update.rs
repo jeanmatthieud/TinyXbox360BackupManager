@@ -20,8 +20,8 @@ use txbm_core::{
 
 const NEW_DRIVE_TEXT: &str = "New drive detected\nOnce the games are on the console, remember to add the content paths in Aurora\n(Settings > Content Paths: Hdd1:\\Content\\0000000000000000 and Hdd1:\\Games, Scan Depth 3+)";
 
-/// Résultat du scan asynchrone de la cible, déposé par le thread de scan
-/// puis récupéré dans le handler de ScanFinished.
+/// Result of the asynchronous scan of the target, deposited by the scan thread
+/// then retrieved in the ScanFinished handler.
 static SCAN_RESULT: Mutex<Option<anyhow::Result<(Vec<Game>, DriveInfo)>>> = Mutex::new(None);
 
 impl State {
@@ -233,8 +233,8 @@ impl State {
                 message_queue.push_back((Message::RefreshAll, SharedString::new()));
             }
             Message::Disconnect => {
-                // On oublie la cible mais on garde les identifiants FTP
-                // pour la prochaine connexion.
+                // We forget the target but keep the FTP credentials
+                // for the next connection.
                 self.config.contents.target_kind = TargetKind::Local;
                 self.config.contents.mount_point = PathBuf::new();
 
@@ -277,7 +277,7 @@ impl State {
                 let app = weak.upgrade().unwrap();
                 app.global::<UiState<'_>>().set_downloading_covers(false);
 
-                // Transforme les spinners restants en icône « pas de jaquette ».
+                // Turns the remaining spinners into "no cover" icons.
                 message_queue.push_back((Message::RefreshDisplayedGames, SharedString::new()));
             }
             Message::RedownloadAllCovers => {

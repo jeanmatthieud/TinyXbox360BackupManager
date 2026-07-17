@@ -51,7 +51,7 @@ export component GameCard inherits Card {
             height: 93px;
         }
 
-        // Jaquette en cours de téléchargement : indicateur circulaire.
+        // Cover currently downloading: circular indicator.
         if game.cover.width == 0 && !game.id.is-empty && UiState.downloading-covers: VerticalLayout {
             height: 93px;
             alignment: center;
@@ -67,7 +67,7 @@ export component GameCard inherits Card {
             }
         }
 
-        // Pas de jaquette disponible : icône neutre.
+        // No cover available: neutral icon.
         if game.cover.width == 0 && (game.id.is-empty || !UiState.downloading-covers): VerticalLayout {
             height: 93px;
             alignment: center;

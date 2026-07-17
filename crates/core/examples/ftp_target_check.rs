@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
-//! Vérification manuelle de la cible FTP contre un serveur local :
-//! `cargo run -p txbm-core --example ftp_target_check -- <host:port> <iso à ajouter>`
+//! Manual verification of the FTP target against a local server:
+//! `cargo run -p txbm-core --example ftp_target_check -- <host:port> <iso to add>`
 
 use txbm_core::config::{Config, TargetKind};
 use txbm_core::target::Target;
@@ -28,16 +28,16 @@ fn main() -> anyhow::Result<()> {
         let mut session = txbm_core::ftp::FtpSession::connect(&config.contents.ftp_config())?;
         match txbm_core::target::aurora_paths(&mut session) {
             Ok(paths) => println!("aurora paths: {paths:?}"),
-            Err(e) => println!("aurora paths ERREUR: {e:#}"),
+            Err(e) => println!("aurora paths ERROR: {e:#}"),
         }
         session.quit();
     }
 
     let (games, info) = target.scan(&NO_CANCEL)?;
-    println!("drive: {} — games: {} octets", info.label, info.games_bytes);
+    println!("drive: {} — games: {} bytes", info.label, info.games_bytes);
     for game in &games {
         println!(
-            "- [{}] {} ({}, {} octets) @ {}",
+            "- [{}] {} ({}, {} bytes) @ {}",
             game.id,
             game.title,
             game.format.label(),
@@ -47,28 +47,28 @@ fn main() -> anyhow::Result<()> {
     }
 
     if let Some(iso) = args.next() {
-        println!("ajout de {iso}…");
+        println!("adding {iso}…");
         txbm_core::convert::perform(iso.into(), &config, &|p| println!("  {p}%"))?;
 
-        // L'ISO de test est un disque d'installation : vérifie que son contenu
-        // a bien été poussé dans Content/0000000000000000/AAAA0001/00000002.
+        // The test ISO is an installation disc: verify that its content
+        // has been pushed to Content/0000000000000000/AAAA0001/00000002.
         let mut session = txbm_core::ftp::FtpSession::connect(&config.contents.ftp_config())?;
         let entries =
             session.list_dir("/Hdd1/Content/0000000000000000/AAAA0001/00000002");
-        println!("contenu distant AAAA0001/00000002 :");
+        println!("remote content AAAA0001/00000002 :");
         for entry in &entries {
-            println!("  - {} ({} octets)", entry.name, entry.size);
+            println!("  - {} ({} bytes)", entry.name, entry.size);
         }
         session.quit();
-        assert!(!entries.is_empty(), "le contenu n'a pas été envoyé !");
+        assert!(!entries.is_empty(), "the content was not sent!");
 
-        // Test de suppression distante sur le premier jeu GOD trouvé.
+        // Remote deletion test on the first GOD game found.
         let (games, _) = target.scan(&NO_CANCEL)?;
         if let Some(game) = games.iter().find(|g| !g.id.is_empty()) {
-            println!("suppression de {}…", game.title);
+            println!("deleting {}…", game.title);
             target.delete_game(game)?;
             let (games, _) = target.scan(&NO_CANCEL)?;
-            println!("après suppression : {} jeu(x)", games.len());
+            println!("after deletion: {} game(s)", games.len());
             for game in &games {
                 println!("- {}", game.title);
             }
