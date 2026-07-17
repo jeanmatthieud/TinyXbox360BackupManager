@@ -31,4 +31,12 @@ export global UiState {
     in-out property <bool> downloading-covers: false;
     // True during target scan (cancellable).
     in-out property <bool> scanning: false;
+    // True while a conversion is running (the item at index 0 of
+    // conversion-queue is the one currently being converted).
+    in-out property <bool> converting: false;
+    // Locations currently scanned by Aurora on the console, as displayed
+    // lines (fetched from its databases over FTP).
+    in-out property <[string]> aurora-scan-paths;
+    // True while fetching aurora-scan-paths over FTP.
+    in-out property <bool> fetching-aurora-paths: false;
 }

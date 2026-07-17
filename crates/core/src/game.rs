@@ -26,7 +26,7 @@ impl GameFormat {
         match self {
             GameFormat::God => "GOD",
             GameFormat::ExtractedXex => "Extracted (360)",
-            GameFormat::ExtractedXbe => "Extracted (Xbox OG)",
+            GameFormat::ExtractedXbe => "Xbox OG",
         }
     }
 }

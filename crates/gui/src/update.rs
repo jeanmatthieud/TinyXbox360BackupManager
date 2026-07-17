@@ -374,14 +374,21 @@ impl State {
                 }
             }
             Message::TriggerConversion => {
-                let Some(conv) = self.conversion_queue.pop_front() else {
+                // Keep the item being converted at index 0 of both queues so
+                // it stays visible (and the navbar icon stays shown) until the
+                // conversion actually finishes. It is removed on
+                // `ConversionFinished`.
+                let Some(conv) = self.conversion_queue.front().cloned() else {
                     self.is_converting = false;
+                    let app = weak.upgrade().unwrap();
+                    app.global::<UiState<'_>>().set_converting(false);
                     let text = "Conversion queue empty";
                     self.notifications.push(Notification::info(text));
                     return;
                 };
 
-                let _ = self.displayed_conversion_queue.remove(0);
+                let app = weak.upgrade().unwrap();
+                app.global::<UiState<'_>>().set_converting(true);
 
                 let weak = weak.clone();
                 let config = self.config.clone();
@@ -389,6 +396,13 @@ impl State {
                 let _ = std::thread::spawn(move || {
                     perform_conversion(conv, &config, &weak);
                 });
+            }
+            Message::ConversionFinished => {
+                // Drop the conversion that just finished (in progress or failed)
+                // and move on to the next one.
+                let _ = self.conversion_queue.pop_front();
+                let _ = self.displayed_conversion_queue.remove(0);
+                message_queue.push_back((Message::TriggerConversion, SharedString::new()));
             }
             Message::ClearGamesToAdd => {
                 self.games_to_add.clear();
@@ -433,6 +447,50 @@ impl State {
                     });
                 });
             }
+            Message::FetchAuroraPaths => {
+                let ftp_config = self.config.contents.ftp_config();
+
+                if ftp_config.host.is_empty() {
+                    let text = "No console IP configured";
+                    self.notifications.push(Notification::error(text));
+                    return;
+                }
+
+                let app = weak.upgrade().unwrap();
+                app.global::<UiState<'_>>().set_fetching_aurora_paths(true);
+
+                let weak = weak.clone();
+                std::thread::spawn(move || {
+                    let res = FtpSession::connect(&ftp_config).and_then(|mut session| {
+                        let lines = txbm_core::target::aurora_paths(&mut session)?.display_lines();
+                        session.quit();
+                        Ok(lines)
+                    });
+
+                    let _ = weak.upgrade_in_event_loop(move |app| {
+                        let ui_state = app.global::<UiState<'_>>();
+                        ui_state.set_fetching_aurora_paths(false);
+
+                        match res {
+                            Ok(lines) => {
+                                ui_state.set_aurora_scan_paths(slint::ModelRc::from(
+                                    std::rc::Rc::new(slint::VecModel::from(
+                                        lines
+                                            .into_iter()
+                                            .map(SharedString::from)
+                                            .collect::<Vec<_>>(),
+                                    )),
+                                ));
+                            }
+                            Err(e) => {
+                                let text = slint::format!("Failed to read Aurora paths: {e:#}");
+                                app.global::<Dispatcher<'_>>()
+                                    .invoke_dispatch(Message::NotifyError, text);
+                            }
+                        }
+                    });
+                });
+            }
             Message::DeleteGame => {
                 let path = Path::new(&payload);
                 let Some(game) = self.games.iter().find(|g| g.path == path).cloned() else {
@@ -442,16 +500,40 @@ impl State {
                     return;
                 };
 
+                // Deleting over FTP can take a while: show progress in the
+                // status bar until the background thread finishes.
+                message_queue.push_back((
+                    Message::SetStatus,
+                    slint::format!("✕  Deleting  {}…", game.title),
+                ));
+
                 let weak = weak.clone();
                 std::thread::spawn(move || {
-                    let res = target.delete_game(&game);
+                    let weak2 = weak.clone();
+                    let game_title = game.title.clone();
+                    let update_progress = move |percentage| {
+                        let status = slint::format!("✕  Deleting  {game_title}  {percentage}%");
+                        let _ = weak2.upgrade_in_event_loop(move |app| {
+                            app.global::<UiState<'_>>().set_status(status);
+                        });
+                    };
+
+                    let res = target.delete_game(&game, &update_progress);
 
                     let _ = weak.upgrade_in_event_loop(move |app| {
                         let dispatcher = app.global::<Dispatcher<'_>>();
 
-                        if let Err(e) = res {
-                            let text = slint::format!("Failed to delete game: {e:#}");
-                            dispatcher.invoke_dispatch(Message::NotifyError, text);
+                        dispatcher.invoke_dispatch(Message::SetStatus, SharedString::new());
+
+                        match res {
+                            Ok(()) => {
+                                let text = slint::format!("{} deleted", game.title);
+                                dispatcher.invoke_dispatch(Message::NotifyInfo, text);
+                            }
+                            Err(e) => {
+                                let text = slint::format!("Failed to delete game: {e:#}");
+                                dispatcher.invoke_dispatch(Message::NotifyError, text);
+                            }
                         }
 
                         dispatcher.invoke_dispatch(Message::RefreshAll, SharedString::new());
@@ -460,12 +542,22 @@ impl State {
             }
             Message::CancelConversion => {
                 let i = payload.parse().unwrap();
+                // Index 0 is the conversion currently running, which can't be
+                // interrupted mid-flight; ignore a cancel request on it.
+                if self.is_converting && i == 0 {
+                    return;
+                }
                 let _ = self.conversion_queue.remove(i);
                 let _ = self.displayed_conversion_queue.remove(i);
             }
             Message::CancelAllConversions => {
-                self.conversion_queue.clear();
-                self.displayed_conversion_queue.clear();
+                // Keep the running conversion (index 0) in place; it will be
+                // removed when it finishes. Only drop the pending items.
+                let pending_start = if self.is_converting { 1 } else { 0 };
+                while self.conversion_queue.len() > pending_start {
+                    let _ = self.conversion_queue.remove(pending_start);
+                    let _ = self.displayed_conversion_queue.remove(pending_start);
+                }
             }
             Message::SetLatestVersion => {
                 let app = weak.upgrade().unwrap();

@@ -27,8 +27,9 @@ rfd = "0.17"
 winsafe = { version = "0.0.28", features = ["dwm"] }
 
 [build-dependencies]
-slint-build = "1.17"
-lucide-slint = "1.17"
+slint-build = "1.17.1"
+lucide-slint = "1.24.0"
+winresource = "0.1"
 
 [features]
 default = ["rustls"]

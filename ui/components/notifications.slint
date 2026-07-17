@@ -13,21 +13,23 @@ export component Notifications inherits TouchArea {
     height: v.height;
 
     v := VerticalLayout {
-        width: self.preferred-width;
+        width: min(self.preferred-width, 400px);
         height: self.preferred-height;
         padding: 10px;
         spacing: 5px;
 
         for notification[i] in UiState.notifications: Card {
-            height: 40px;
+            min-height: 40px;
 
             h := HorizontalLayout {
                 spacing: 10px;
                 padding-left: 10px;
                 padding-right: 10px;
+                padding-top: 8px;
+                padding-bottom: 8px;
 
                 VerticalLayout {
-                    alignment: center;
+                    alignment: start;
                     width: 14px;
 
                     IconDisplay {
@@ -39,11 +41,12 @@ export component Notifications inherits TouchArea {
 
                 Text {
                     text: notification.text;
-                    vertical-alignment: center;
+                    wrap: word-wrap;
+                    horizontal-stretch: 1;
                 }
 
                 VerticalLayout {
-                    alignment: center;
+                    alignment: start;
 
                     IconButton {
                         icon: IconSet.X;

@@ -42,17 +42,13 @@ export component AboutPage inherits Rectangle {
                         font-weight: 700;
                     }
 
-                    HorizontalLayout {
-                        spacing: 50px;
+                    Text {
+                        text: "Copyright © 2026 Jean-Matthieu";
+                    }
 
-                        Text {
-                            text: "Copyright © 2026 Jean-Matthieu";
-                        }
-
-                        Link {
-                            label: "github/jeanmatthieud";
-                            uri: "https://github.com/jeanmatthieud";
-                        }
+                    Link {
+                        label: "github/jeanmatthieud";
+                        uri: "https://github.com/jeanmatthieud";
                     }
 
                     Link {
@@ -84,6 +80,8 @@ export component AboutPage inherits Rectangle {
             HorizontalLine { }
 
             HorizontalLayout {
+                cross-axis-alignment: CrossAxisAlignment.center;
+                
                 IconDisplay {
                     icon: IconSet.Heart;
                     stroke: MyPalette.foreground;

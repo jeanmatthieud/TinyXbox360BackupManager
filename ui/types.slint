@@ -10,11 +10,16 @@ export enum Page {
     About,
 }
 
+export enum TargetKind {
+    Local,
+    Ftp,
+}
+
 export struct DisplayedConfig {
     path: string,
     // Displayed target: local path or ftp://ip. Empty if no target.
     target: string,
-    target-kind: string,
+    target-kind: TargetKind,
     mount-point: string,
     remove-sources-games: string,
     sort-by: string,

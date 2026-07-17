@@ -11,10 +11,17 @@ import { UiState } from "ui-state.slint";
 import { Link } from "components/link.slint";
 import { IconButton } from "components/icon-button.slint";
 import { Message, Dispatcher } from "messages.slint";
+import { TargetKind } from "types.slint";
 
 export component ToolboxPage inherits VerticalLayout {
     private property <int> optimal-allocation-granularity: (UiState.drive-info.total-gib <= 32) ? 32768 : 65536;
     private property <bool> is-optimal-allocation-granularity: UiState.drive-info.allocation-granularity == optimal-allocation-granularity;
+
+    init => {
+        if UiState.config.target-kind == TargetKind.Ftp && !UiState.config.target.is-empty && !UiState.fetching-aurora-paths {
+            Dispatcher.dispatch(Message.FetchAuroraPaths, "");
+        }
+    }
 
     pure function fs-icon(fs-kind: string) -> Icon {
         if fs-kind == "FAT32" {
@@ -55,6 +62,7 @@ export component ToolboxPage inherits VerticalLayout {
         padding: 20px;
         padding-left: 10px;
         spacing: 5px;
+        cross-axis-alignment: CrossAxisAlignment.center;
 
         IconDisplay {
             icon: IconSet.ChevronRight;
@@ -76,7 +84,7 @@ export component ToolboxPage inherits VerticalLayout {
             spacing: 10px;
             alignment: start;
 
-            if UiState.config.target-kind == "local" && !UiState.config.target.is-empty: Card {
+            if UiState.config.target-kind == TargetKind.Local && !UiState.config.target.is-empty: Card {
                 VerticalLayout {
                     padding: 10px;
                     spacing: 10px;
@@ -127,13 +135,14 @@ export component ToolboxPage inherits VerticalLayout {
                 }
             }
 
-            if UiState.config.target-kind == "ftp" && !UiState.config.target.is-empty: Card {
+            if UiState.config.target-kind == TargetKind.Ftp && !UiState.config.target.is-empty: Card {
                 VerticalLayout {
                     padding: 10px;
                     spacing: 10px;
 
                     HorizontalLayout {
                         spacing: 5px;
+                        cross-axis-alignment: CrossAxisAlignment.center;
 
                         IconDisplay {
                             icon: IconSet.MonitorUp;
@@ -148,8 +157,13 @@ export component ToolboxPage inherits VerticalLayout {
 
                     HorizontalLine { }
 
-                    Text {
-                        text: "The library is managed directly on the console at \{UiState.config.target}.\nGOD games live in Hdd1:\\Content\\0000000000000000, extracted games in Hdd1:\\Games.\nOnce games are added, add these content paths in Aurora (Settings > Content Paths, Scan Depth 3+) and rescan.";
+                    VerticalLayout {
+                        height: self.min-height;
+
+                        Text {
+                            text: "The library is managed directly on the console at \{UiState.config.target}.\nOnce games are added, add the content paths in Aurora (Settings > Content Paths, Scan Depth 3+) and rescan.";
+                            wrap: word-wrap;
+                        }
                     }
 
                     HorizontalLine { }
@@ -172,6 +186,60 @@ export component ToolboxPage inherits VerticalLayout {
                 }
             }
 
+            if UiState.config.target-kind == TargetKind.Ftp && !UiState.config.target.is-empty: Card {
+                VerticalLayout {
+                    padding: 10px;
+                    spacing: 10px;
+
+                    HorizontalLayout {
+                        alignment: LayoutAlignment.space-between;
+                        cross-axis-alignment: CrossAxisAlignment.center;
+
+                        HorizontalLayout {
+                            spacing: 5px;
+                            cross-axis-alignment: CrossAxisAlignment.center;
+
+                            IconDisplay {
+                                icon: IconSet.FolderSearch;
+                                stroke: MyPalette.foreground;
+                                size: 14px;
+                            }
+
+                            Text {
+                                text: "Aurora scan paths";
+                            }
+                        }
+
+                        IconButton {
+                            icon: IconSet.RefreshCcw;
+                            width: self.height;
+                            clicked => {
+                                if !UiState.fetching-aurora-paths {
+                                    Dispatcher.dispatch(Message.FetchAuroraPaths, "");
+                                }
+                            }
+                        }
+                    }
+
+                    HorizontalLine { }
+
+                    Text {
+                        text: UiState.fetching-aurora-paths
+                            ? "Reading Aurora's scan paths…"
+                            : "The following paths are scanned by Aurora :";
+                    }
+
+                    if UiState.aurora-scan-paths.length > 0: VerticalLayout {
+                        spacing: 3px;
+
+                        for path in UiState.aurora-scan-paths: Text {
+                            text: "- " + path;
+                            font-size: 12px;
+                        }
+                    }
+                }
+            }
+
             if !UiState.config.target.is-empty: Card {
                 VerticalLayout {
                     padding: 10px;
@@ -179,6 +247,7 @@ export component ToolboxPage inherits VerticalLayout {
 
                     HorizontalLayout {
                         spacing: 5px;
+                        cross-axis-alignment: CrossAxisAlignment.center;
 
                         IconDisplay {
                             icon: IconSet.Image;
@@ -195,6 +264,7 @@ export component ToolboxPage inherits VerticalLayout {
 
                     HorizontalLayout {
                         spacing: 10px;
+                        cross-axis-alignment: CrossAxisAlignment.center;
 
                         b := IconButton {
                             icon: IconSet.Play;
@@ -211,13 +281,14 @@ export component ToolboxPage inherits VerticalLayout {
                 }
             }
 
-            if Platform.os == OperatingSystemType.macos && UiState.config.target-kind == "local" && !UiState.config.target.is-empty: Card {
+            if Platform.os == OperatingSystemType.macos && UiState.config.target-kind == TargetKind.Local && !UiState.config.target.is-empty: Card {
                 VerticalLayout {
                     padding: 10px;
                     spacing: 10px;
 
                     HorizontalLayout {
                         spacing: 5px;
+                        cross-axis-alignment: CrossAxisAlignment.center;
 
                         IconDisplay {
                             icon: IconSet.Apple;
@@ -234,6 +305,7 @@ export component ToolboxPage inherits VerticalLayout {
 
                     HorizontalLayout {
                         spacing: 10px;
+                        cross-axis-alignment: CrossAxisAlignment.center;
 
                         b2 := IconButton {
                             icon: IconSet.Play;

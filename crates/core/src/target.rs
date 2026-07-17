@@ -70,21 +70,47 @@ impl Target {
     }
 
     /// Deletes a game from the target.
-    pub fn delete_game(&self, game: &Game) -> Result<()> {
+    /// `update_progress` receives a percentage (0-100).
+    pub fn delete_game(&self, game: &Game, update_progress: &dyn Fn(u32)) -> Result<()> {
         match self {
             Target::Local(_) => {
-                std::fs::remove_dir_all(&game.path)?;
-                Ok(())
+                let total = crate::util::file_count(&game.path).max(1);
+                let mut done: u64 = 0;
+                remove_dir_all_with_progress(&game.path, &mut done, total, update_progress)
             }
             Target::Ftp(ftp) => {
                 let mut session = FtpSession::connect(ftp)?;
                 let remote = game.path.to_string_lossy().replace('\\', "/");
-                let result = session.remove_dir_recursive(&remote);
+                let result = session.remove_dir_recursive(&remote, &mut |done, total| {
+                    update_progress((done * 100 / total.max(1)) as u32);
+                });
                 session.quit();
                 result
             }
         }
     }
+}
+
+/// Local equivalent of `fs::remove_dir_all` reporting per-file progress.
+fn remove_dir_all_with_progress(
+    dir: &std::path::Path,
+    done: &mut u64,
+    total: u64,
+    update_progress: &dyn Fn(u32),
+) -> Result<()> {
+    for entry in std::fs::read_dir(dir)?.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            remove_dir_all_with_progress(&path, done, total, update_progress)?;
+        } else {
+            std::fs::remove_file(&path)
+                .with_context(|| format!("removing {}", path.display()))?;
+            *done += 1;
+            update_progress((*done * 100 / total) as u32);
+        }
+    }
+    std::fs::remove_dir(dir).with_context(|| format!("removing {}", dir.display()))?;
+    Ok(())
 }
 
 /// STFS content types considered as installed games.
@@ -133,6 +159,21 @@ impl AuroraPaths {
             .first()
             .map(|(p, _)| p.clone())
             .unwrap_or_else(|| format!("/{hdd}/{GAMES_DIR}"))
+    }
+
+    /// One line per scanned location, for display in the UI.
+    pub fn display_lines(&self) -> Vec<String> {
+        let mut lines: Vec<String> = self
+            .content_dirs
+            .iter()
+            .map(|p| format!("{p}  (GOD games)"))
+            .collect();
+        lines.extend(
+            self.extracted_dirs
+                .iter()
+                .map(|(p, depth)| format!("{p}  (extracted games, depth {depth})")),
+        );
+        lines
     }
 }
 

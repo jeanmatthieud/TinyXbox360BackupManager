@@ -11,6 +11,9 @@
 > TinyXbox360BackupManager is intended strictly for legal homebrew use and is not affiliated with or endorsed by Microsoft.
 > Use of TinyXbox360BackupManager for pirated or unauthorized copies of games is strictly prohibited.
 
+> [!WARNING]
+> This project has just started. The modifications and adaptations from the upstream project are being made via AI.
+
 <img align="center" alt="App Screenshot" src="assets/screenshot.png">
 
 Game backup manager for modified **Xbox 360** (using [Aurora](https://phoenix.xboxunity.net) dashboard), cross-platform (Linux, Windows, macOS), with no dependencies to install: everything is built into the binary.

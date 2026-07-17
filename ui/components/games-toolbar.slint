@@ -12,12 +12,12 @@ import { UiState } from "../ui-state.slint";
 import { Message, Dispatcher } from "../messages.slint";
 
 export component GamesToolbar inherits HorizontalLayout {
-    alignment: space-between;
+    alignment: LayoutAlignment.space-between;
     height: 38px;
 
     HorizontalLayout {
-        padding-top: 10px;
         spacing: 5px;
+        cross-axis-alignment: CrossAxisAlignment.center;
 
         IconDisplay {
             icon: IconSet.ChevronRight;

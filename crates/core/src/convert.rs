@@ -14,14 +14,19 @@ use anyhow::{Context, Result, bail};
 use std::path::{Path, PathBuf};
 
 /// Converts/extracts `in_path` on the target, depending on the image type.
-/// `update_progress` receives a percentage (0-100).
-pub fn perform(in_path: PathBuf, config: &Config, update_progress: &dyn Fn(u32)) -> Result<()> {
+/// `update_progress` receives a percentage (0-100) and, during the FTP upload
+/// phase, the running average upload speed in megabytes per second.
+pub fn perform(
+    in_path: PathBuf,
+    config: &Config,
+    update_progress: &dyn Fn(u32, Option<f64>),
+) -> Result<()> {
     let target =
         Target::from_config(&config.contents).context("no target selected")?;
 
     match &target {
         Target::Local(root) => {
-            convert_into(&in_path, root, update_progress)?;
+            convert_into(&in_path, root, &|p| update_progress(p, None))?;
         }
         Target::Ftp(ftp) => {
             let stem = sanitize_name(
@@ -37,11 +42,11 @@ pub fn perform(in_path: PathBuf, config: &Config, update_progress: &dyn Fn(u32))
             std::fs::create_dir_all(&staging)?;
 
             let result = (|| -> Result<()> {
-                // Local conversion in staging folder: 0-70%.
-                convert_into(&in_path, &staging, &|p| update_progress(p * 70 / 100))?;
+                // Local conversion in staging folder: 0-50%.
+                convert_into(&in_path, &staging, &|p| update_progress(p * 50 / 100, None))?;
 
                 // Direct upload to the console, to locations
-                // scanned by Aurora: 70-100%.
+                // scanned by Aurora: 50-100%.
                 let mut session = FtpSession::connect(ftp)?;
                 let hdd = ftp_hdd_root(&mut session);
                 let paths =
@@ -50,6 +55,14 @@ pub fn perform(in_path: PathBuf, config: &Config, update_progress: &dyn Fn(u32))
                 let upload = (|| -> Result<()> {
                     let total = crate::util::dir_size(&staging);
                     let mut sent_before: u64 = 0;
+
+                    // Maps upload progress to the 50-100% band; the per-file
+                    // average speed (megabytes/s) comes from the FTP layer.
+                    let report = |base: u64, sent: u64, speed: Option<f64>| {
+                        let done = base + sent;
+                        let pct = 50 + (done * 50 / total.max(1)) as u32;
+                        update_progress(pct, speed);
+                    };
 
                     // GOD / content: staging/Content/0000000000000000/* →
                     // first Content path of Aurora.
@@ -62,11 +75,7 @@ pub fn perform(in_path: PathBuf, config: &Config, update_progress: &dyn Fn(u32))
                             session.upload_dir(
                                 &entry.path(),
                                 &format!("{remote}/{name}"),
-                                &mut |sent, _| {
-                                    update_progress(
-                                        70 + ((base + sent) * 30 / total.max(1)) as u32,
-                                    );
-                                },
+                                &mut |sent, _, speed| report(base, sent, speed),
                             )?;
                             sent_before += crate::util::dir_size(&entry.path());
                         }
@@ -83,11 +92,7 @@ pub fn perform(in_path: PathBuf, config: &Config, update_progress: &dyn Fn(u32))
                             session.upload_dir(
                                 &entry.path(),
                                 &format!("{remote}/{name}"),
-                                &mut |sent, _| {
-                                    update_progress(
-                                        70 + ((base + sent) * 30 / total.max(1)) as u32,
-                                    );
-                                },
+                                &mut |sent, _, speed| report(base, sent, speed),
                             )?;
                             sent_before += crate::util::dir_size(&entry.path());
                         }

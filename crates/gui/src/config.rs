@@ -2,9 +2,18 @@
 // SPDX-FileContributor: Modified by Jean-Matthieu Dechriste (TinyXbox360BackupManager)
 // SPDX-License-Identifier: GPL-3.0-only
 
-use crate::DisplayedConfig;
+use crate::{DisplayedConfig, TargetKind};
 use slint::ToSharedString;
 use txbm_core::{config::Config, target::Target};
+
+impl From<txbm_core::config::TargetKind> for TargetKind {
+    fn from(kind: txbm_core::config::TargetKind) -> Self {
+        match kind {
+            txbm_core::config::TargetKind::Local => TargetKind::Local,
+            txbm_core::config::TargetKind::Ftp => TargetKind::Ftp,
+        }
+    }
+}
 
 impl From<&Config> for DisplayedConfig {
     fn from(config: &Config) -> Self {
@@ -15,7 +24,7 @@ impl From<&Config> for DisplayedConfig {
         Self {
             path: config.path.to_string_lossy().to_shared_string(),
             target: target.to_shared_string(),
-            target_kind: config.contents.target_kind.to_shared_string(),
+            target_kind: config.contents.target_kind.into(),
             mount_point: config
                 .contents
                 .mount_point

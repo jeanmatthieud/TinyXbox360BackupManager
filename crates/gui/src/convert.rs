@@ -16,8 +16,13 @@ pub fn perform_conversion(conv: QueuedConversion, config: &Config, weak: &Weak<A
                 .to_string();
 
             let weak2 = weak.clone();
-            let update_progress = move |percentage| {
-                let status = slint::format!("↑  Adding  {filename}  {percentage}%");
+            let update_progress = move |percentage, speed: Option<f64>| {
+                let status = match speed {
+                    Some(mbps) => {
+                        slint::format!("↑  Adding  {filename}  {percentage}%  ({mbps:.1} MB/s)")
+                    }
+                    None => slint::format!("↑  Adding  {filename}  {percentage}%"),
+                };
 
                 let _ = weak2.upgrade_in_event_loop(move |app| {
                     app.global::<UiState<'_>>().set_status(status);
@@ -36,9 +41,11 @@ pub fn perform_conversion(conv: QueuedConversion, config: &Config, weak: &Weak<A
         if let Err(e) = res {
             let text = slint::format!("Conversion failed: {e:#}");
             dispatcher.invoke_dispatch(Message::NotifyError, text);
-        } else {
-            dispatcher.invoke_dispatch(Message::TriggerConversion, SharedString::new());
         }
+
+        // Drop the finished conversion and move on to the next one (even on
+        // failure, so the queue doesn't stall).
+        dispatcher.invoke_dispatch(Message::ConversionFinished, SharedString::new());
 
         dispatcher.invoke_dispatch(Message::RefreshAll, SharedString::new());
     });

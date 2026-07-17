@@ -2,6 +2,22 @@
 
 use std::path::Path;
 
+/// Number of files in a directory (recursive).
+pub fn file_count(path: &Path) -> u64 {
+    let mut total = 0;
+    if let Ok(entries) = std::fs::read_dir(path) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                total += file_count(&path);
+            } else {
+                total += 1;
+            }
+        }
+    }
+    total
+}
+
 /// Total size of a directory (recursive), in bytes.
 pub fn dir_size(path: &Path) -> u64 {
     let mut total = 0;

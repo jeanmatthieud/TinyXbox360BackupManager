@@ -50,7 +50,7 @@ fn main() -> Result<()> {
         .select()?;
 
     #[cfg(target_os = "linux")]
-    let _ = slint::set_xdg_app_id("net.jeanm.TinyXbox360BackupManager");
+    let _ = slint::set_xdg_app_id("fr.dechriste.TinyXbox360BackupManager");
 
     let app = AppWindow::new()?;
     let dispatcher = app.global::<Dispatcher<'_>>();
