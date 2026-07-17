@@ -1,7 +1,9 @@
-// SPDX-FileCopyrightText: 2026 Manuel Quarneti <mq1@ik.me>
+// SPDX-FileCopyrightText: 2026 Manuel Quarneti <mq1@ik.me> (TinyWiiBackupManager)
+// SPDX-FileContributor: Modified by Jean-Matthieu Dechriste (TinyXbox360BackupManager)
 // SPDX-License-Identifier: GPL-3.0-only
 
 import { Card } from "card.slint";
+import { Spinner } from "std-widgets.slint";
 import { DisplayedGame } from "../types.slint";
 import { IconButton } from "icon-button.slint";
 import { IconSet, IconDisplay } from "@lucide";
@@ -32,7 +34,7 @@ export component GameCard inherits Card {
                 }
 
                 Text {
-                    text: game.id;
+                    text: game.id.is-empty ? game.format : game.id;
                     wrap: no-wrap;
                 }
             }
@@ -44,9 +46,41 @@ export component GameCard inherits Card {
             }
         }
 
-        Image {
+        if game.cover.width > 0: Image {
             source: game.cover;
             height: 93px;
+        }
+
+        // Jaquette en cours de téléchargement : indicateur circulaire.
+        if game.cover.width == 0 && !game.id.is-empty && UiState.downloading-covers: VerticalLayout {
+            height: 93px;
+            alignment: center;
+
+            HorizontalLayout {
+                alignment: center;
+
+                Spinner {
+                    width: 48px;
+                    height: 48px;
+                    indeterminate: true;
+                }
+            }
+        }
+
+        // Pas de jaquette disponible : icône neutre.
+        if game.cover.width == 0 && (game.id.is-empty || !UiState.downloading-covers): VerticalLayout {
+            height: 93px;
+            alignment: center;
+
+            HorizontalLayout {
+                alignment: center;
+
+                IconDisplay {
+                    icon: IconSet.Image;
+                    size: 48px;
+                    stroke: MyPalette.foreground.transparentize(0.6);
+                }
+            }
         }
 
         Text {
@@ -63,16 +97,8 @@ export component GameCard inherits Card {
                 label: "Info";
                 icon: IconSet.Info;
                 clicked => {
-                    Dispatcher.dispatch(Message.LoadGameInfo, game.path);
                     UiState.current-game = game;
                 }
-            }
-
-            IconButton {
-                width: self.height + 1px;
-                icon: IconSet.HardDriveDownload;
-                tooltip: "Archive to PC";
-                clicked => Dispatcher.dispatch(Message.ArchiveGame, game.path);
             }
 
             IconButton {

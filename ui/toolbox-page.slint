@@ -1,8 +1,9 @@
-// SPDX-FileCopyrightText: 2026 Manuel Quarneti <mq1@ik.me>
+// SPDX-FileCopyrightText: 2026 Manuel Quarneti <mq1@ik.me> (TinyWiiBackupManager)
+// SPDX-FileContributor: Modified by Jean-Matthieu Dechriste (TinyXbox360BackupManager)
 // SPDX-License-Identifier: GPL-3.0-only
 
 import { IconSet, IconDisplay, Icon } from "@lucide";
-import { ScrollView, LineEdit } from "std-widgets.slint";
+import { ScrollView } from "std-widgets.slint";
 import { MyPalette } from "styling.slint";
 import { Card } from "components/card.slint";
 import { HorizontalLine } from "components/horizontal-line.slint";
@@ -14,7 +15,6 @@ import { Message, Dispatcher } from "messages.slint";
 export component ToolboxPage inherits VerticalLayout {
     private property <int> optimal-allocation-granularity: (UiState.drive-info.total-gib <= 32) ? 32768 : 65536;
     private property <bool> is-optimal-allocation-granularity: UiState.drive-info.allocation-granularity == optimal-allocation-granularity;
-    private property <bool> should-reformat: UiState.drive-info.fs-kind != "FAT32" || !is-optimal-allocation-granularity;
 
     pure function fs-icon(fs-kind: string) -> Icon {
         if fs-kind == "FAT32" {
@@ -26,11 +26,11 @@ export component ToolboxPage inherits VerticalLayout {
 
     pure function fs-comment(fs-kind: string) -> string {
         if fs-kind == "FAT32" {
-            "optimal choice for game backups and homebrew apps"
+            "optimal choice for Xbox 360 USB storage"
         } else if fs-kind == "NTFS" || fs-kind == "exFAT" {
-            "limited support for game backups and homebrew apps"
+            "not readable by the Xbox 360 (fine for a local staging folder)"
         } else {
-            "won't work for game backups and homebrew apps"
+            "fine for a local staging folder, but not readable by the Xbox 360"
         }
     }
 
@@ -76,7 +76,7 @@ export component ToolboxPage inherits VerticalLayout {
             spacing: 10px;
             alignment: start;
 
-            if !UiState.config.mount-point.is-empty: Card {
+            if UiState.config.target-kind == "local" && !UiState.config.target.is-empty: Card {
                 VerticalLayout {
                     padding: 10px;
                     spacing: 10px;
@@ -92,15 +92,6 @@ export component ToolboxPage inherits VerticalLayout {
 
                         Text {
                             text: "Drive info";
-                        }
-
-                        HorizontalLayout {
-                            alignment: end;
-
-                            if should-reformat: Link {
-                                label: "Drive formatting guide";
-                                uri: "https://gbatemp.net/threads/usb-loader-gx-troubleshooting-guide.617564/#fs";
-                            }
                         }
                     }
 
@@ -136,151 +127,7 @@ export component ToolboxPage inherits VerticalLayout {
                 }
             }
 
-            if !UiState.config.mount-point.is-empty: Card {
-                VerticalLayout {
-                    padding: 10px;
-                    spacing: 10px;
-
-                    HorizontalLayout {
-                        spacing: 5px;
-
-                        IconDisplay {
-                            icon: IconSet.Loader;
-                            stroke: MyPalette.foreground;
-                            size: 14px;
-                        }
-
-                        Text {
-                            text: "Game backup loaders";
-                        }
-                    }
-
-                    HorizontalLine { }
-
-                    HorizontalLayout {
-                        spacing: 10px;
-
-                        IconButton {
-                            icon: IconSet.Play;
-                            width: self.height;
-                            clicked => Dispatcher.dispatch(Message.DownloadAllCoversForUsbLoaderGX, "");
-                        }
-
-                        Text {
-                            height: b.height;
-                            vertical-alignment: center;
-                            text: "Download covers for USB Loader GX";
-                        }
-                    }
-
-                    HorizontalLayout {
-                        spacing: 10px;
-
-                        IconButton {
-                            icon: IconSet.Play;
-                            width: self.height;
-                            clicked => Dispatcher.dispatch(Message.DownloadAllBanners, "");
-                        }
-
-                        Text {
-                            height: b.height;
-                            vertical-alignment: center;
-                            text: "Download banners for USB Loader GX (GameCube games)";
-                        }
-                    }
-
-                    HorizontalLayout {
-                        spacing: 10px;
-
-                        IconButton {
-                            icon: IconSet.Play;
-                            width: self.height;
-                            clicked => Dispatcher.dispatch(Message.DownloadWiitdbXml, "");
-                        }
-
-                        Text {
-                            height: b.height;
-                            vertical-alignment: center;
-                            text: "Download wiitdb.xml for USB Loader GX";
-                        }
-                    }
-
-                    HorizontalLayout {
-                        spacing: 10px;
-
-                        IconButton {
-                            icon: IconSet.Play;
-                            width: self.height;
-                            clicked => Dispatcher.dispatch(Message.DownloadAllCoversForWiiFlow, "");
-                        }
-
-                        Text {
-                            height: b.height;
-                            vertical-alignment: center;
-                            text: "Download covers for WiiFlow";
-                        }
-                    }
-                }
-            }
-
-            if !UiState.config.mount-point.is-empty: Card {
-                VerticalLayout {
-                    padding: 10px;
-                    spacing: 10px;
-
-                    HorizontalLayout {
-                        spacing: 5px;
-
-                        IconDisplay {
-                            icon: IconSet.BrushCleaning;
-                            stroke: MyPalette.foreground;
-                            size: 14px;
-                        }
-
-                        Text {
-                            text: "Cleanup";
-                        }
-                    }
-
-                    HorizontalLine { }
-
-                    HorizontalLayout {
-                        spacing: 10px;
-
-                        IconButton {
-                            icon: IconSet.Play;
-                            width: self.height;
-                            clicked => Dispatcher.dispatch(Message.NormalizeDirLayout, "");
-                        }
-
-                        Text {
-                            height: b.height;
-                            vertical-alignment: center;
-                            text: "Normalize paths (makes sure the game directories' layouts are correct)";
-                        }
-                    }
-
-                    HorizontalLayout {
-                        spacing: 10px;
-
-                        IconButton {
-                            icon: IconSet.Play;
-                            width: self.height;
-                            clicked => {
-                                UiState.scrubbing-all-games = true;
-                            }
-                        }
-
-                        Text {
-                            height: b.height;
-                            vertical-alignment: center;
-                            text: "Remove the update partition from all .wbfs files";
-                        }
-                    }
-                }
-            }
-
-            Card {
+            if UiState.config.target-kind == "ftp" && !UiState.config.target.is-empty: Card {
                 VerticalLayout {
                     padding: 10px;
                     spacing: 10px;
@@ -295,52 +142,37 @@ export component ToolboxPage inherits VerticalLayout {
                         }
 
                         Text {
-                            text: "Wiiload";
+                            text: "Console (Aurora FTP)";
                         }
                     }
 
                     HorizontalLine { }
 
                     Text {
-                        text: "Wiiload is a method of loading .dol and .elf files over the network.\nAlso, you can use Wiiload to install homebrew applications directly onto your SD card.\nIf the icon in the very bottom right of the Homebrew Channel is lit up, it should work for you.\nPressing the home button in the Homebrew Channel will reveal your Wii's IP.";
+                        text: "The library is managed directly on the console at \{UiState.config.target}.\nGOD games live in Hdd1:\\Content\\0000000000000000, extracted games in Hdd1:\\Games.\nOnce games are added, add these content paths in Aurora (Settings > Content Paths, Scan Depth 3+) and rescan.";
                     }
 
                     HorizontalLine { }
 
                     HorizontalLayout {
-                        alignment: space-between;
+                        spacing: 10px;
 
-                        VerticalLayout {
-                            alignment: center;
-
-                            IconButton {
-                                icon: IconSet.FileUp;
-                                label: "Choose a zip/dol/elf";
-                                clicked => Dispatcher.dispatch(Message.WiiloadLocalFile, ip.text);
-                            }
+                        b0 := IconButton {
+                            icon: IconSet.Cable;
+                            width: self.height;
+                            clicked => Dispatcher.dispatch(Message.TestFtp, "");
                         }
 
-                        HorizontalLayout {
-                            spacing: 10px;
-
-                            VerticalLayout {
-                                alignment: center;
-
-                                Text {
-                                    text: "Wii IP:";
-                                }
-                            }
-
-                            ip := LineEdit {
-                                width: 200px;
-                                text: UiState.config.wii-ip;
-                            }
+                        Text {
+                            height: b0.height;
+                            vertical-alignment: center;
+                            text: "Test the FTP connection";
                         }
                     }
                 }
             }
 
-            Card {
+            if !UiState.config.target.is-empty: Card {
                 VerticalLayout {
                     padding: 10px;
                     spacing: 10px;
@@ -349,22 +181,13 @@ export component ToolboxPage inherits VerticalLayout {
                         spacing: 5px;
 
                         IconDisplay {
-                            icon: IconSet.Shuffle;
+                            icon: IconSet.Image;
                             stroke: MyPalette.foreground;
                             size: 14px;
                         }
 
                         Text {
-                            text: "Manual conversion (using NOD)";
-                        }
-
-                        HorizontalLayout {
-                            alignment: end;
-
-                            if should-reformat: Link {
-                                label: "https://github.com/encounter/nod";
-                                uri: "https://github.com/encounter/nod";
-                            }
+                            text: "Covers (XboxUnity)";
                         }
                     }
 
@@ -376,19 +199,19 @@ export component ToolboxPage inherits VerticalLayout {
                         b := IconButton {
                             icon: IconSet.Play;
                             width: self.height;
-                            clicked => Dispatcher.dispatch(Message.ArchiveManually, "");
+                            clicked => Dispatcher.dispatch(Message.RedownloadAllCovers, "");
                         }
 
                         Text {
                             height: b.height;
                             vertical-alignment: center;
-                            text: "Select in-path and out-path and run the conversion";
+                            text: "Redownload all covers (clears the local cache first)";
                         }
                     }
                 }
             }
 
-            if Platform.os == OperatingSystemType.macos && !UiState.config.mount-point.is-empty: Card {
+            if Platform.os == OperatingSystemType.macos && UiState.config.target-kind == "local" && !UiState.config.target.is-empty: Card {
                 VerticalLayout {
                     padding: 10px;
                     spacing: 10px;
@@ -412,16 +235,16 @@ export component ToolboxPage inherits VerticalLayout {
                     HorizontalLayout {
                         spacing: 10px;
 
-                        IconButton {
+                        b2 := IconButton {
                             icon: IconSet.Play;
                             width: self.height;
                             clicked => Dispatcher.dispatch(Message.RunDotClean, "");
                         }
 
                         Text {
-                            height: b.height;
+                            height: b2.height;
                             vertical-alignment: center;
-                            text: "Run dot_clean (removes ._ files)";
+                            text: "Run dot_clean (removes ._ files that confuse the console)";
                         }
                     }
                 }

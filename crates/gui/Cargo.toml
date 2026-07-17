@@ -1,5 +1,5 @@
 [package]
-name = "twbm-gui"
+name = "txbm-gui"
 version.workspace = true
 rust-version.workspace = true
 edition.workspace = true
@@ -8,34 +8,29 @@ license.workspace = true
 repository.workspace = true
 description.workspace = true
 
-[package.metadata.winresource]
-OriginalFilename = "TinyWiiBackupManager.exe"
-LegalCopyright = "Copyright © 2026 Manuel Quarneti. Licensed under GPL-3.0-only."
+[[bin]]
+name = "TinyXbox360BackupManager"
+path = "src/main.rs"
 
 [dependencies]
-twbm-core = { path = "../core", default-features = false }
+txbm-core = { path = "../core", default-features = false }
+anyhow = { workspace = true }
 slint = { version = "1.17", features = [
   "raw-window-handle-06",
   "unstable-winit-030",
 ] }
-anyhow = { workspace = true }
-wii-disc-info = { workspace = true }
 open = "5.3"
 walkdir = "2.5"
-time = "0.3"
 rfd = "0.17"
-zip = { workspace = true }
-image = { version = "0.25", default-features = false, features = ["png"] }
 
 [target.'cfg(windows)'.dependencies]
 winsafe = { version = "0.0.28", features = ["dwm"] }
 
 [build-dependencies]
-slint-build = "1.16"
+slint-build = "1.17"
 lucide-slint = "1.17"
-winresource = "0.1"
 
 [features]
-default = ["native-tls"]
-native-tls = ["twbm-core/native-tls"]
-rustls = ["twbm-core/rustls"]
+default = ["rustls"]
+native-tls = ["txbm-core/native-tls"]
+rustls = ["txbm-core/rustls"]

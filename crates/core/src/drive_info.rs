@@ -1,6 +1,8 @@
-// SPDX-FileCopyrightText: 2026 Manuel Quarneti <mq1@ik.me>
+// SPDX-FileCopyrightText: 2026 Manuel Quarneti <mq1@ik.me> (TinyWiiBackupManager)
+// SPDX-FileContributor: Modified by Jean-Matthieu Dechriste (TinyXbox360BackupManager)
 // SPDX-License-Identifier: GPL-3.0-only
 
+use crate::{CONTENT_DIR, GAMES_DIR};
 use anyhow::{Result, bail};
 use std::path::Path;
 use which_fs::FsKind;
@@ -11,7 +13,6 @@ pub struct DriveInfo {
     pub used_bytes: u64,
     pub total_bytes: u64,
     pub games_bytes: u64,
-    pub apps_bytes: u64,
     pub fs_kind: FsKind,
     pub allocation_granularity: u64,
 }
@@ -33,21 +34,17 @@ impl DriveInfo {
 
         let fs_kind = FsKind::try_from_path(path).unwrap_or(FsKind::Unknown);
 
-        let wii_games_dir = path.join("wbfs");
-        let wii_games_bytes = fs_extra::dir::get_size(&wii_games_dir).unwrap_or(0);
-        let gc_games_dir = path.join("games");
-        let gc_games_bytes = fs_extra::dir::get_size(&gc_games_dir).unwrap_or(0);
-        let games_bytes = wii_games_bytes + gc_games_bytes;
-
-        let apps_dir = path.join("apps");
-        let apps_bytes = fs_extra::dir::get_size(&apps_dir).unwrap_or(0);
+        let god_games_dir = path.join(CONTENT_DIR);
+        let god_games_bytes = fs_extra::dir::get_size(&god_games_dir).unwrap_or(0);
+        let extracted_games_dir = path.join(GAMES_DIR);
+        let extracted_games_bytes = fs_extra::dir::get_size(&extracted_games_dir).unwrap_or(0);
+        let games_bytes = god_games_bytes + extracted_games_bytes;
 
         Ok(Self {
             label,
             used_bytes,
             total_bytes,
             games_bytes,
-            apps_bytes,
             fs_kind,
             allocation_granularity,
         })

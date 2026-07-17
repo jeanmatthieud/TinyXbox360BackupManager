@@ -1,54 +1,24 @@
-// SPDX-FileCopyrightText: 2026 Manuel Quarneti <mq1@ik.me>
+// SPDX-FileCopyrightText: 2026 Manuel Quarneti <mq1@ik.me> (TinyWiiBackupManager)
+// SPDX-FileContributor: Modified by Jean-Matthieu Dechriste (TinyXbox360BackupManager)
 // SPDX-License-Identifier: GPL-3.0-only
 
-use slint::SharedString;
-use std::{
-    fmt::{Display, Write},
-    fs::File,
-    path::PathBuf,
-};
-use twbm_core::game_id::GameID;
-use zip::ZipArchive;
+use std::path::PathBuf;
 
 pub const GIB: f32 = 1024. * 1024. * 1024.;
-pub const MIB: f32 = 1024. * 1024.;
 
-pub fn display_list<T>(list: &[T]) -> SharedString
-where
-    T: Display,
-{
-    let mut s = SharedString::new();
-
-    let last_i = list.len() - 1;
-    for (i, value) in list.iter().enumerate() {
-        write!(&mut s, "{value}").unwrap();
-
-        if i != last_i {
-            s.push_str(", ");
-        }
-    }
-
-    s
-}
-
-pub fn should_add_game(path: PathBuf, existing_ids: &[GameID]) -> Option<PathBuf> {
+/// Quickly checks that a picked file looks like a usable ISO.
+/// GOD games already installed for the same TitleID are still accepted:
+/// re-adding overwrites the existing data, which is the common intent.
+pub fn should_add_game(path: PathBuf) -> Option<PathBuf> {
     let _ = path.file_name()?;
     let ext = path.extension()?;
 
-    let meta = if ext.eq_ignore_ascii_case("zip") {
-        let mut f = File::open(&path).ok()?;
-        let mut zip = ZipArchive::new(&mut f).ok()?;
-        let mut disc_file = zip.by_index(0).ok()?;
-        wii_disc_info::Meta::read(&mut disc_file).ok()?
-    } else {
-        let mut f = File::open(&path).ok()?;
-        wii_disc_info::Meta::read(&mut f).ok()?
-    };
-
-    let game_id = GameID::new(meta.game_id())?;
-    if existing_ids.contains(&game_id) {
+    if !ext.eq_ignore_ascii_case("iso") {
         return None;
     }
+
+    // Cheap validity check: XDVDFS magic must be found by the ISO reader.
+    txbm_core::iso_info::inspect(&path).ok()?;
 
     Some(path)
 }

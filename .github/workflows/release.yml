@@ -81,7 +81,7 @@ jobs:
       - name: Build binary
         run: |
           cargo build -Z build-std=std,panic_abort --release --target ${{ matrix.target }} --no-default-features --features rustls
-          cp target/${{ matrix.target }}/release/twbm-gui TinyWiiBackupManager
+          cp target/${{ matrix.target }}/release/txbm-gui TinyXbox360BackupManager
         env:
           RUSTC_BOOTSTRAP: 1
           CC: clang-22
@@ -95,16 +95,16 @@ jobs:
 
       - name: Package AppImage
         run: |
-          cp -rP package/linux/AppDir TinyWiiBackupManager.AppDir
-          install -Dm0755 TinyWiiBackupManager TinyWiiBackupManager.AppDir/usr/bin/TinyWiiBackupManager
+          cp -rP package/linux/AppDir TinyXbox360BackupManager.AppDir
+          install -Dm0755 TinyXbox360BackupManager TinyXbox360BackupManager.AppDir/usr/bin/TinyXbox360BackupManager
           mkdir -p dist
           cd dist
           export VERSION=$(yq '.package.version' Cargo.toml)
           ../appimagetool-${{ matrix.arch }}.AppImage \
             --comp zstd --mksquashfs-opt -Xcompression-level --mksquashfs-opt 19 \
-            -u "gh-releases-zsync|mq1|TinyWiiBackupManager|latest|*${{ matrix.arch }}.AppImage.zsync" \
-            ../TinyWiiBackupManager.AppDir \
-            "TinyWiiBackupManager-${{ env.VERSION_NAME }}-linux-${{ matrix.arch }}.AppImage"
+            -u "gh-releases-zsync|jeanmatthieud|TinyXbox360BackupManager|latest|*${{ matrix.arch }}.AppImage.zsync" \
+            ../TinyXbox360BackupManager.AppDir \
+            "TinyXbox360BackupManager-${{ env.VERSION_NAME }}-linux-${{ matrix.arch }}.AppImage"
         env:
           ARCH: ${{ matrix.arch }}
           APPIMAGE_EXTRACT_AND_RUN: 1
@@ -153,7 +153,7 @@ jobs:
         shell: pwsh
         run: |
           cargo build -Z build-std=std,panic_abort --release --target ${{ matrix.target }}
-          Copy-Item -Path "target\${{ matrix.target }}\release\twbm-gui.exe" -Destination "TinyWiiBackupManager.exe"
+          Copy-Item -Path "target\${{ matrix.target }}\release\txbm-gui.exe" -Destination "TinyXbox360BackupManager.exe"
         env:
           RUSTC_BOOTSTRAP: 1
           CC: clang-cl
@@ -169,13 +169,13 @@ jobs:
       - name: Compress binary (UPX)
         if: matrix.arch == 'x64' || matrix.arch == 'x86'
         shell: pwsh
-        run: upx --best --lzma "TinyWiiBackupManager.exe"
+        run: upx --best --lzma "TinyXbox360BackupManager.exe"
 
       - name: Rename binary
         shell: pwsh
         run: |
           New-Item -Path "dist" -ItemType Directory -Force
-          Copy-Item "TinyWiiBackupManager.exe" "dist\TinyWiiBackupManager-${{ env.VERSION_NAME }}-windows-${{ matrix.arch }}.exe"
+          Copy-Item "TinyXbox360BackupManager.exe" "dist\TinyXbox360BackupManager-${{ env.VERSION_NAME }}-windows-${{ matrix.arch }}.exe"
 
       - name: Upload Windows distributables
         uses: actions/upload-artifact@v7
@@ -212,7 +212,7 @@ jobs:
       - name: Build binary
         run: |
           cargo build -Z build-std=std,panic_abort --release --target ${{ matrix.target }}
-          cp target/${{ matrix.target }}/release/twbm-gui TinyWiiBackupManager
+          cp target/${{ matrix.target }}/release/txbm-gui TinyXbox360BackupManager
         env:
           RUSTC_BOOTSTRAP: 1
           CC: /opt/homebrew/opt/llvm@22/bin/clang
@@ -226,7 +226,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: build-macos-${{ matrix.arch }}
-          path: TinyWiiBackupManager
+          path: TinyXbox360BackupManager
 
   build-macos-universal:
     name: Build for macOS (Universal)
@@ -246,21 +246,21 @@ jobs:
 
       - name: Create the .app bundle
         run: |
-          cp -r package/macos/App TinyWiiBackupManager.app
-          mkdir -p TinyWiiBackupManager.app/Contents/MacOS
+          cp -r package/macos/App TinyXbox360BackupManager.app
+          mkdir -p TinyXbox360BackupManager.app/Contents/MacOS
           VERSION=$(yq '.package.version' Cargo.toml)
-          /usr/libexec/PlistBuddy -c "Add :CFBundleShortVersionString string $VERSION" TinyWiiBackupManager.app/Contents/Info.plist
+          /usr/libexec/PlistBuddy -c "Add :CFBundleShortVersionString string $VERSION" TinyXbox360BackupManager.app/Contents/Info.plist
 
       - name: Build the fat binary
         run: |
           lipo -create \
-            -output TinyWiiBackupManager.app/Contents/MacOS/TinyWiiBackupManager \
-            build-macos-arm64/TinyWiiBackupManager \
-            build-macos-x86_64/TinyWiiBackupManager
-          chmod 755 TinyWiiBackupManager.app/Contents/MacOS/TinyWiiBackupManager
+            -output TinyXbox360BackupManager.app/Contents/MacOS/TinyXbox360BackupManager \
+            build-macos-arm64/TinyXbox360BackupManager \
+            build-macos-x86_64/TinyXbox360BackupManager
+          chmod 755 TinyXbox360BackupManager.app/Contents/MacOS/TinyXbox360BackupManager
 
       - name: Sign the .app bundle
-        run: codesign --force --deep -s - TinyWiiBackupManager.app
+        run: codesign --force --deep -s - TinyXbox360BackupManager.app
 
       - name: Install appdmg
         run: npm i -g appdmg
@@ -268,7 +268,7 @@ jobs:
       - name: Create Universal DMG
         run: |
           mkdir dist
-          appdmg package/macos/appdmg.json "dist/TinyWiiBackupManager-${{ env.VERSION_NAME }}-macos-universal.dmg"
+          appdmg package/macos/appdmg.json "dist/TinyXbox360BackupManager-${{ env.VERSION_NAME }}-macos-universal.dmg"
 
       - name: Upload macOS distributables
         uses: actions/upload-artifact@v7

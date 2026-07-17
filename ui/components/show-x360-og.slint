@@ -1,0 +1,53 @@
+// SPDX-License-Identifier: GPL-3.0-only
+
+import { Card } from "card.slint";
+import { CheckBox } from "std-widgets.slint";
+import { TooltipArea } from "tooltip-area.slint";
+import { VerticalLine } from "vertical-line.slint";
+import { IconDisplay, IconSet } from "@lucide";
+import { UiState } from "../ui-state.slint";
+import { Message, Dispatcher } from "../messages.slint";
+
+export component ShowX360Og inherits Card {
+    height: 38px;
+
+    HorizontalLayout {
+        padding-left: 10px;
+        padding-right: 8px;
+        spacing: 5px;
+
+        CheckBox {
+            checked: UiState.config.show-x360;
+            toggled => Dispatcher.dispatch(Message.ToggleShowX360, "");
+        }
+
+        TooltipArea {
+            tooltip: "Show Xbox 360";
+            width: x360.preferred-width;
+
+            x360 := Text {
+                height: 38px;
+                vertical-alignment: center;
+                text: "360";
+            }
+        }
+
+        VerticalLine { }
+
+        CheckBox {
+            checked: UiState.config.show-og;
+            toggled => Dispatcher.dispatch(Message.ToggleShowOg, "");
+        }
+
+        TooltipArea {
+            tooltip: "Show Original Xbox";
+            width: og.preferred-width;
+
+            og := Text {
+                height: 38px;
+                vertical-alignment: center;
+                text: "OG";
+            }
+        }
+    }
+}

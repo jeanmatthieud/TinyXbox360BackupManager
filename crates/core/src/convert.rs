@@ -1,242 +1,238 @@
-// SPDX-FileCopyrightText: 2026 Manuel Quarneti <mq1@ik.me>
 // SPDX-License-Identifier: GPL-3.0-only
 
-use crate::{
-    config::{Config, GcOutputFormat, WiiOutputFormat},
-    drive_info::DriveInfo,
-    game_id::GameID,
-    util::{BUF_SIZE, HEADER_SIZE, SPLIT_SIZE, get_threads_num, make_game_dir_name},
-};
-use anyhow::{Result, anyhow, bail};
-use crc32fast::Hasher;
-use nod::{
-    common::Format,
-    read::{DiscOptions, DiscReader, PartitionEncryption},
-    write::{DiscWriter, FormatOptions, ProcessOptions, ScrubLevel},
-};
-use split_write::SplitWriter;
-use std::{
-    fs::{self, File},
-    io::{BufWriter, Read, Write},
-    path::PathBuf,
-};
-use which_fs::FsKind;
-use zip::ZipArchive;
+//! Pipeline haut niveau : à partir d'une ISO, fait ce qu'il faut sur la cible
+//! (disque local ou console FTP).
 
-pub fn perform(
-    mut in_path: PathBuf,
-    config: &Config,
-    drive_info: &DriveInfo,
-    update_progress: &impl Fn(u8),
-) -> Result<()> {
-    let mut files_to_remove = Vec::new();
+use crate::config::Config;
+use crate::data_dir::DATA_DIR;
+use crate::ftp::FtpSession;
+use crate::iso_info::{self, IsoKind};
+use crate::target::{AuroraPaths, Target, aurora_paths, ftp_hdd_root};
+use crate::util::sanitize_name;
+use crate::{CONTENT_DIR, GAMES_DIR, extract, god, unity};
+use anyhow::{Context, Result, bail};
+use std::path::{Path, PathBuf};
 
-    let extracted = unzip(&mut in_path, update_progress, &mut files_to_remove)?;
+/// Convertit/extrait `in_path` sur la cible, selon le type d'image.
+/// `update_progress` reçoit un pourcentage (0-100).
+pub fn perform(in_path: PathBuf, config: &Config, update_progress: &dyn Fn(u32)) -> Result<()> {
+    let target =
+        Target::from_config(&config.contents).context("no target selected")?;
 
-    let (processor_threads, preloader_threads) = get_threads_num();
-
-    let disc_opts = DiscOptions {
-        partition_encryption: PartitionEncryption::Original,
-        preloader_threads,
-    };
-
-    let disc_reader = DiscReader::new(&in_path, &disc_opts)?;
-    let disc_header = disc_reader.header();
-    let game_id = GameID::from(disc_header.game_id);
-    let is_wii = disc_header.is_wii();
-    let disc_num = disc_header.disc_num;
-
-    let should_split =
-        is_wii && (config.contents.always_split || (drive_info.fs_kind == FsKind::Fat32));
-
-    let parent_dir_name = if is_wii { "wbfs" } else { "games" };
-    let game_dir_name = make_game_dir_name(game_id, disc_header.game_title_str());
-    let game_dir = config
-        .contents
-        .mount_point
-        .join(parent_dir_name)
-        .join(game_dir_name);
-
-    let get_file_name = |i| {
-        if is_wii {
-            match config.contents.wii_output_format {
-                WiiOutputFormat::Iso => {
-                    if should_split {
-                        format!("{}.part{i}.iso", game_id)
-                    } else {
-                        format!("{}.iso", game_id)
-                    }
-                }
-                WiiOutputFormat::Wbfs => match i {
-                    0 => format!("{}.wbfs", game_id),
-                    n => format!("{}.wbf{n}", game_id),
-                },
-            }
-        } else {
-            match config.contents.gc_output_format {
-                GcOutputFormat::Iso => match disc_num {
-                    0 => "game.iso".to_string(),
-                    n => format!("disc{}.iso", n + 1),
-                },
-
-                GcOutputFormat::Ciso => match disc_num {
-                    0 => "game.ciso".to_string(),
-                    n => format!("disc{}.ciso", n + 1),
-                },
-            }
+    match &target {
+        Target::Local(root) => {
+            convert_into(&in_path, root, update_progress)?;
         }
-    };
-
-    let out_format = match (
-        is_wii,
-        config.contents.wii_output_format,
-        config.contents.gc_output_format,
-    ) {
-        (true, WiiOutputFormat::Iso, _) | (false, _, GcOutputFormat::Iso) => Format::Iso,
-        (true, WiiOutputFormat::Wbfs, _) => Format::Wbfs,
-        (false, _, GcOutputFormat::Ciso) => Format::Ciso,
-    };
-
-    let scrub = if config.contents.scrub_update_partition {
-        ScrubLevel::UpdatePartition
-    } else {
-        ScrubLevel::None
-    };
-
-    let out_opts = FormatOptions::new(out_format);
-    let process_opts = ProcessOptions {
-        processor_threads,
-        scrub,
-        digest_crc32: true,
-        digest_md5: false,
-        digest_sha1: true,
-        digest_xxh64: true,
-    };
-
-    let split_size = if should_split { Some(SPLIT_SIZE) } else { None };
-
-    let hash_path = game_dir.join(format!("{game_id}.crc32"));
-
-    fs::create_dir_all(&game_dir)?;
-    let mut out_writer = BufWriter::with_capacity(
-        BUF_SIZE,
-        SplitWriter::create(&game_dir, get_file_name, split_size)?,
-    );
-
-    let disc_writer = DiscWriter::new(disc_reader, &out_opts)?;
-    let mut head_buffer = Vec::with_capacity(HEADER_SIZE);
-    let mut hasher = Hasher::new();
-    let mut last_percentage = 0;
-
-    let finalization = disc_writer.process(
-        |data, progress, size| {
-            out_writer.write_all(&data)?;
-
-            let remaining_in_head = HEADER_SIZE.saturating_sub(head_buffer.len());
-            if remaining_in_head > 0 {
-                let to_write = remaining_in_head.min(data.len());
-                head_buffer.extend_from_slice(&data[..to_write]);
-                hasher.update(&data[to_write..]);
-            } else {
-                hasher.update(&data);
+        Target::Ftp(ftp) => {
+            let stem = sanitize_name(
+                in_path
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("game"),
+            );
+            let staging = DATA_DIR.join("staging").join(&stem);
+            if staging.exists() {
+                std::fs::remove_dir_all(&staging)?;
             }
+            std::fs::create_dir_all(&staging)?;
 
-            let current_percentage = if extracted {
-                (50 + progress * 50 / size) as u8
-            } else {
-                (progress * 100 / size) as u8
-            };
+            let result = (|| -> Result<()> {
+                // Conversion locale dans le dossier de staging : 0-70 %.
+                convert_into(&in_path, &staging, &|p| update_progress(p * 70 / 100))?;
 
-            if current_percentage != last_percentage {
-                update_progress(current_percentage);
-                last_percentage = current_percentage;
-            }
+                // Envoi direct sur la console, vers les emplacements
+                // scannés par Aurora : 70-100 %.
+                let mut session = FtpSession::connect(ftp)?;
+                let hdd = ftp_hdd_root(&mut session);
+                let paths =
+                    aurora_paths(&mut session).unwrap_or_else(|_| AuroraPaths::defaults(&hdd));
 
-            Ok(())
-        },
-        &process_opts,
-    )?;
+                let upload = (|| -> Result<()> {
+                    let total = crate::util::dir_size(&staging);
+                    let mut sent_before: u64 = 0;
 
-    let mut split_writer = out_writer
-        .into_inner()
-        .map_err(|_| anyhow!("Failed to get inner split writer"))?;
+                    // GOD / contenu : staging/Content/0000000000000000/* →
+                    // premier chemin Content d'Aurora.
+                    let staging_content = staging.join(CONTENT_DIR);
+                    if staging_content.is_dir() {
+                        let remote = paths.install_content_dir(&hdd);
+                        for entry in std::fs::read_dir(&staging_content)?.flatten() {
+                            let name = entry.file_name().to_string_lossy().to_string();
+                            let base = sent_before;
+                            session.upload_dir(
+                                &entry.path(),
+                                &format!("{remote}/{name}"),
+                                &mut |sent, _| {
+                                    update_progress(
+                                        70 + ((base + sent) * 30 / total.max(1)) as u32,
+                                    );
+                                },
+                            )?;
+                            sent_before += crate::util::dir_size(&entry.path());
+                        }
+                    }
 
-    if !finalization.header.is_empty() {
-        split_writer.write_header(&finalization.header)?;
-        head_buffer[..finalization.header.len()].copy_from_slice(&finalization.header);
+                    // Jeux extraits : staging/Games/* → premier chemin
+                    // « extraits » d'Aurora (ex. \XBox OG).
+                    let staging_games = staging.join(GAMES_DIR);
+                    if staging_games.is_dir() {
+                        let remote = paths.install_extracted_dir(&hdd);
+                        for entry in std::fs::read_dir(&staging_games)?.flatten() {
+                            let name = entry.file_name().to_string_lossy().to_string();
+                            let base = sent_before;
+                            session.upload_dir(
+                                &entry.path(),
+                                &format!("{remote}/{name}"),
+                                &mut |sent, _| {
+                                    update_progress(
+                                        70 + ((base + sent) * 30 / total.max(1)) as u32,
+                                    );
+                                },
+                            )?;
+                            sent_before += crate::util::dir_size(&entry.path());
+                        }
+                    }
+
+                    Ok(())
+                })();
+                session.quit();
+                upload
+            })();
+
+            let _ = std::fs::remove_dir_all(DATA_DIR.join("staging"));
+            result?;
+        }
     }
 
-    split_writer.flush()?;
-    drop(split_writer);
-    drop(disc_writer);
-
-    let mut final_hasher = Hasher::new();
-    final_hasher.update(&head_buffer);
-    final_hasher.combine(&hasher);
-    let checksum = final_hasher.finalize();
-    fs::write(hash_path, format!("{checksum:08x}"))?;
-
-    for path in files_to_remove {
-        let _ = fs::remove_file(path);
+    if config.contents.remove_sources_games {
+        std::fs::remove_file(&in_path).ok();
     }
 
     Ok(())
 }
 
-fn unzip(
-    in_path: &mut PathBuf,
-    update_progress: &impl Fn(u8),
-    files_to_remove: &mut Vec<PathBuf>,
-) -> Result<bool> {
-    let mut extracted = false;
+/// Convertit/extrait `in_path` dans `root`, un dossier local organisé comme
+/// un disque Xbox (Content/0000000000000000 + Games).
+fn convert_into(in_path: &Path, root: &Path, update_progress: &dyn Fn(u32)) -> Result<()> {
+    let info = iso_info::inspect(in_path)?;
 
-    let is_zip = in_path
-        .extension()
-        .is_some_and(|ext| ext.eq_ignore_ascii_case("zip"));
+    match info.kind {
+        IsoKind::Xbox360Game => {
+            let title = info.name.clone().or_else(|| {
+                let tid = info.title_id.as_deref()?;
+                unity::search_titles(tid)
+                    .ok()?
+                    .into_iter()
+                    .next()
+                    .map(|t| t.name)
+            });
+            let content_dir = root.join(CONTENT_DIR);
+            std::fs::create_dir_all(&content_dir)?;
 
-    if !is_zip {
-        return Ok(extracted);
-    }
-
-    let mut f = File::open(&in_path)?;
-    let mut archive = ZipArchive::new(&mut f)?;
-    let mut archived_disc = archive.by_index(0)?;
-
-    let Some(parent) = in_path.parent() else {
-        bail!("No parent dir found");
-    };
-
-    let new_in_path = parent.join(archived_disc.name());
-    if !new_in_path.exists() {
-        let size = archived_disc.size();
-        let mut buf = vec![0u8; BUF_SIZE];
-        let mut out = File::create(&new_in_path)?;
-        let mut progress = 0;
-        let mut last_percentage = 0;
-
-        loop {
-            let n = archived_disc.read(&mut buf)?;
-            if n == 0 {
-                break;
-            }
-            out.write_all(&buf[..n])?;
-
-            progress += n as u64;
-
-            let current_percentage = (progress * 100 / size) as u8;
-
-            if current_percentage != last_percentage {
-                update_progress(current_percentage);
-                last_percentage = current_percentage;
-            }
+            god::convert_to_god(in_path, &content_dir, title.as_deref(), &mut |done, total| {
+                update_progress((done * 100 / total.max(1)) as u32);
+            })?;
         }
+        IsoKind::XboxOriginal => {
+            let name = sanitize_name(
+                info.name
+                    .as_deref()
+                    .or(in_path.file_stem().and_then(|s| s.to_str()))
+                    .unwrap_or("Xbox game"),
+            );
+            let dest = root.join(GAMES_DIR).join(&name);
+            if dest.exists() {
+                bail!("the folder {} already exists", dest.display());
+            }
 
-        out.flush()?;
-        files_to_remove.push(new_in_path.clone());
-        extracted = true;
+            extract::extract_iso(in_path, &dest, &mut |done, total| {
+                update_progress((done * 100 / total.max(1)) as u32);
+            })?;
+        }
+        IsoKind::ContentDisc => {
+            let stem = sanitize_name(
+                in_path
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("disc"),
+            );
+            let tmp = root.join(".txbm-tmp").join(&stem);
+            if tmp.exists() {
+                std::fs::remove_dir_all(&tmp)?;
+            }
+
+            let result = (|| -> Result<()> {
+                extract::extract_iso(in_path, &tmp, &mut |done, total| {
+                    update_progress((done * 100 / total.max(1)) as u32);
+                })?;
+
+                // Structure attendue : Content/0000000000000000/<TitleID>/…
+                let extracted_content = find_dir_ci(&tmp, "Content")
+                    .and_then(|c| find_dir_ci(&c, "0000000000000000"))
+                    .context(
+                        "unexpected structure: no Content/0000000000000000 folder \
+                         in this image (is it really an install disc / DLC?)",
+                    )?;
+
+                let content_target = root.join(CONTENT_DIR);
+                std::fs::create_dir_all(&content_target)?;
+                for entry in std::fs::read_dir(&extracted_content)?.flatten() {
+                    let name = entry.file_name().to_string_lossy().to_string();
+                    merge_move(&entry.path(), &content_target.join(&name))?;
+                }
+                Ok(())
+            })();
+
+            let _ = std::fs::remove_dir_all(root.join(".txbm-tmp"));
+            result?;
+        }
     }
 
-    *in_path = new_in_path;
+    Ok(())
+}
 
-    Ok(extracted)
+/// Déplace `src` vers `dst` en fusionnant avec l'existant.
+fn merge_move(src: &Path, dst: &Path) -> Result<()> {
+    if !dst.exists() {
+        if std::fs::rename(src, dst).is_ok() {
+            return Ok(());
+        }
+        // Autre système de fichiers : copie puis suppression.
+        std::fs::create_dir_all(dst.parent().unwrap_or(dst))?;
+        let options = fs_extra::dir::CopyOptions::new().copy_inside(true);
+        fs_extra::dir::move_dir(src, dst, &options)
+            .map_err(|e| anyhow::anyhow!("moving to {}: {e}", dst.display()))?;
+        return Ok(());
+    }
+    if src.is_dir() && dst.is_dir() {
+        for entry in std::fs::read_dir(src)?.flatten() {
+            merge_move(&entry.path(), &dst.join(entry.file_name()))?;
+        }
+        let _ = std::fs::remove_dir(src);
+        Ok(())
+    } else {
+        // Fichier déjà présent : on remplace.
+        std::fs::remove_file(dst).ok();
+        std::fs::rename(src, dst).or_else(|_| {
+            std::fs::copy(src, dst)
+                .map(|_| ())
+                .and_then(|_| std::fs::remove_file(src))
+        })?;
+        Ok(())
+    }
+}
+
+fn find_dir_ci(base: &Path, name: &str) -> Option<PathBuf> {
+    let entries = std::fs::read_dir(base).ok()?;
+    for entry in entries.flatten() {
+        if entry.path().is_dir()
+            && entry
+                .file_name()
+                .to_string_lossy()
+                .eq_ignore_ascii_case(name)
+        {
+            return Some(entry.path());
+        }
+    }
+    None
 }

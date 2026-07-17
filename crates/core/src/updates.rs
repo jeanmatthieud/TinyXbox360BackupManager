@@ -1,12 +1,13 @@
-// SPDX-FileCopyrightText: 2026 Manuel Quarneti <mq1@ik.me>
+// SPDX-FileCopyrightText: 2026 Manuel Quarneti <mq1@ik.me> (TinyWiiBackupManager)
+// SPDX-FileContributor: Modified by Jean-Matthieu Dechriste (TinyXbox360BackupManager)
 // SPDX-License-Identifier: GPL-3.0-only
 
-use crate::util::AGENT;
 use anyhow::Result;
 use semver::Version;
 
 const CURRENT_VERSION: &str = env!("CARGO_PKG_VERSION");
-const URL: &str = "https://api.github.com/repos/mq1/TinyWiiBackupManager/releases/latest";
+const URL: &str =
+    "https://api.github.com/repos/jeanmatthieud/TinyXbox360BackupManager/releases/latest";
 
 #[derive(serde::Deserialize)]
 struct Response {
@@ -14,11 +15,15 @@ struct Response {
 }
 
 pub fn check() -> Result<Option<Version>> {
-    if cfg!(debug_assertions) || std::env::var("TWBM_DISABLE_UPDATES").is_ok_and(|v| v == "1") {
+    if cfg!(debug_assertions) || std::env::var("TXBM_DISABLE_UPDATES").is_ok_and(|v| v == "1") {
         return Ok(None);
     }
 
-    let resp = AGENT.get(URL).call()?.body_mut().read_json::<Response>()?;
+    let resp = ureq::get(URL)
+        .header("User-Agent", concat!("TinyXbox360BackupManager/", env!("CARGO_PKG_VERSION")))
+        .call()?
+        .body_mut()
+        .read_json::<Response>()?;
 
     let version = match resp.tag_name.strip_prefix('v') {
         Some(v) => v,

@@ -1,7 +1,8 @@
-// SPDX-FileCopyrightText: 2026 Manuel Quarneti <mq1@ik.me>
+// SPDX-FileCopyrightText: 2026 Manuel Quarneti <mq1@ik.me> (TinyWiiBackupManager)
+// SPDX-FileContributor: Modified by Jean-Matthieu Dechriste (TinyXbox360BackupManager)
 // SPDX-License-Identifier: GPL-3.0-only
 
-import { ShowWiiGc } from "show-wii-gc.slint";
+import { ShowX360Og } from "show-x360-og.slint";
 import { IconButton, IconButtonKind } from "icon-button.slint";
 import { IconSet, IconDisplay } from "@lucide";
 import { SortGamesAndHomebrewApps } from "sort-games-and-homebrew-apps.slint";
@@ -30,10 +31,10 @@ export component GamesToolbar inherits HorizontalLayout {
         }
     }
 
-    if !UiState.config.mount-point.is-empty: HorizontalLayout {
+    if !UiState.config.target.is-empty: HorizontalLayout {
         spacing: 10px;
 
-        ShowWiiGc { }
+        ShowX360Og { }
 
         SortGamesAndHomebrewApps { }
 
@@ -47,7 +48,7 @@ export component GamesToolbar inherits HorizontalLayout {
 
                 IconButton {
                     icon: IconSet.RotateCw;
-                    tooltip: "Refresh games and apps";
+                    tooltip: "Refresh games";
                     rounded: true;
                     kind: IconButtonKind.Primary;
                     font-size: 18px;
@@ -58,7 +59,7 @@ export component GamesToolbar inherits HorizontalLayout {
 
                 IconButton {
                     icon: IconSet.Plus;
-                    tooltip: "Add new games";
+                    tooltip: "Add new games (ISO)";
                     rounded: true;
                     kind: IconButtonKind.Primary;
                     font-size: 18px;

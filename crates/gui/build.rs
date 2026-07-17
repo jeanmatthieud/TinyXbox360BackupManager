@@ -17,7 +17,7 @@ fn main() {
     if target.contains("-windows-") {
         let mut res = winresource::WindowsResource::new();
         res.set_icon("../../package/windows/icon.ico");
-        res.set_manifest_file("../../package/windows/TinyWiiBackupManager.exe.manifest");
+        res.set_manifest_file("../../package/windows/TinyXbox360BackupManager.exe.manifest");
         res.compile().unwrap();
     }
 }

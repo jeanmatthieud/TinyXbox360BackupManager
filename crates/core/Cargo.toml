@@ -1,5 +1,5 @@
 [package]
-name = "twbm-core"
+name = "txbm-core"
 version.workspace = true
 rust-version.workspace = true
 edition.workspace = true
@@ -9,42 +9,29 @@ repository.workspace = true
 description.workspace = true
 
 [dependencies]
-twbm-idmap = { version = "0.4", features = ["gamehacking", "ascii-titles"] }
-fs_extra = "1.3"
-serde = "1.0"
-serde_json = "1.0"
 anyhow = { workspace = true }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
 ureq = { version = "3.3", default-features = false, features = [
   "gzip",
   "json",
 ] }
-which-fs = "0.2"
-fs4 = { version = "1.1", default-features = false }
-wii-disc-info = { workspace = true }
-crc32fast = "1.5"
-num_cpus = "1.17"
-split-write = "0.2"
-wiiload = "0.3"
-semver = "1.0"
-sys-locale = "0.3"
-derive_more = { version = "2.1", features = ["display", "from_str"] }
 directories = "6.0"
-zip = { workspace = true }
-
-# windows x86 has issues with bzip2 + lld
-[target.'cfg(all(target_os = "windows", target_arch = "x86"))'.dependencies]
-nod = { git = "https://github.com/wiidev/nod", branch = "fix-block-handling", default-features = false, features = [
-  "compress-lzma-vendored",
-  "compress-zlib-vendored",
-  "compress-zstd-vendored",
-  "threading",
+suppaftp = "10.0"
+iso2god = { git = "https://github.com/iliazeus/iso2god-rs", tag = "v1.8.0" }
+xdvdfs = { version = "0.8", default-features = false, features = [
+  "std",
+  "read",
+  "sync",
 ] }
-
-[target.'cfg(not(all(target_os = "windows", target_arch = "x86")))'.dependencies]
-nod = { git = "https://github.com/wiidev/nod", branch = "fix-block-handling" }
-
+fs_extra = "1.3"
+fs4 = { version = "1.1", default-features = false }
+which-fs = "0.2"
+derive_more = { version = "2.1", features = ["display", "from_str"] }
+semver = "1.0"
+rusqlite = { version = "0.32", features = ["bundled"] }
 
 [features]
-default = ["native-tls"]
+default = ["rustls"]
 native-tls = ["ureq/native-tls"]
 rustls = ["ureq/rustls", "ureq/platform-verifier"]

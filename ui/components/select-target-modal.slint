@@ -1,0 +1,62 @@
+// SPDX-License-Identifier: GPL-3.0-only
+
+import { Modal } from "modal.slint";
+import { HorizontalLine } from "horizontal-line.slint";
+import { IconButton, IconButtonKind } from "icon-button.slint";
+import { IconSet, IconDisplay } from "@lucide";
+import { MyPalette } from "../styling.slint";
+import { UiState } from "../ui-state.slint";
+import { Message, Dispatcher } from "../messages.slint";
+
+export component SelectTargetModal inherits Modal {
+    w: 440px;
+    h: 230px;
+
+    VerticalLayout {
+        VerticalLayout {
+            padding: 20px;
+            spacing: 15px;
+
+            Text {
+                text: "Where is your game library?";
+                font-size: 18px;
+            }
+
+            IconButton {
+                icon: IconSet.HardDrive;
+                label: "Local drive / folder (USB FAT32)…";
+                clicked => {
+                    UiState.selecting-target = false;
+                    Dispatcher.dispatch(Message.PickMountPoint, "");
+                }
+            }
+
+            IconButton {
+                icon: IconSet.MonitorUp;
+                label: "Console over FTP (Aurora)…";
+                clicked => {
+                    UiState.selecting-target = false;
+                    UiState.editing-ftp-target = true;
+                }
+            }
+        }
+
+        VerticalLayout {
+            height: self.min-height;
+
+            HorizontalLine { }
+
+            HorizontalLayout {
+                alignment: end;
+                padding: 10px;
+
+                IconButton {
+                    label: "Cancel";
+                    clicked => {
+                        UiState.selecting-target = false;
+                    }
+                }
+            }
+        }
+    }
+}

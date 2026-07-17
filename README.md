@@ -1,92 +1,87 @@
-<img alt="TinyWiiBackupManager Logo" width="128" src="assets/TinyWiiBackupManager-256x256.png" align="left">
+# TinyXbox360BackupManager
 
-### `TinyWiiBackupManager`<br><sub><sup>:star: A tiny game backup and homebrew app manager for the Wii</sup></sub>
+Gestionnaire de sauvegardes de jeux pour **Xbox 360** modifiée (dashboard
+[Aurora](https://phoenix.xboxunity.net)), multi-plateformes (Linux, Windows,
+macOS), sans aucune dépendance à installer : tout est intégré au binaire.
 
-[![release: vX.X.X](https://img.shields.io/github/v/release/mq1/TinyWiiBackupManager)](https://github.com/mq1/TinyWiiBackupManager/releases/latest)
-[![license: GPL-3.0](https://img.shields.io/github/license/mq1/TinyWiiBackupManager)](https://github.com/mq1/TinyWiiBackupManager/blob/main/COPYING)
+Inspiré de [TinyWiiBackupManager](https://github.com/mq1/TinyWiiBackupManager) :
+comme la Wii lit des jeux Wii et GameCube, la Xbox 360 lit des jeux Xbox 360
+et Xbox originale.
 
-<br>
+## Fonctionnalités
 
-> [!CAUTION]
-> TinyWiiBackupManager is intended strictly for legal homebrew use and is not affiliated with or endorsed by Nintendo.
-> Use of TinyWiiBackupManager for pirated or unauthorized copies of games is strictly prohibited.
+Donnez une image **ISO** à l'application, elle fait le reste :
 
-<img align="center" alt="App Screenshot" src="assets/screenshot.png">
+| Type d'image détecté | Traitement | Destination |
+|---|---|---|
+| Jeu Xbox 360 (`default.xex`) | Conversion en **GOD** (Games on Demand) | `Content/0000000000000000/<TitleID>/00007000/` |
+| Jeu Xbox originale (`default.xbe`) | **Extraction** du contenu | `Games/<Nom du jeu>/` |
+| Disque d'installation / DLC (pas d'exécutable) | Extraction et fusion du dossier `Content` | `Content/0000000000000000/<TitleID>/00000002/` |
 
-## :sparkles: Features
+La bibliothèque se gère **directement sur la cible de votre choix** :
 
-- **Lightweight & Fast**: Native app written in Rust and Slint, no Electron!
-- **Cross-Platform**:
-  - :window: Windows 7+ | x86 (32-bit), x64 (64-bit), arm64 (Qualcomm Snapdragon etc.)
-  - :apple: macOS 10.14+ | x86_64 (Intel), arm64 (Apple Silicon/M1+)
-  - :penguin: Linux (glibc 2.31+) | x86 (32-bit), x86_64 (64-bit), arm64 (Raspberry PIs etc.)
+- **Disque USB / dossier local (FAT32)** : les jeux y sont écrits directement
+  au bon format.
+- **Console en FTP (Aurora)** : la liste des jeux est lue depuis la console,
+  les ISO ajoutées sont converties localement puis poussées directement sur
+  `Hdd1`, et la suppression s'effectue à distance (une seule connexion à la
+  fois, comme l'exige le serveur FTP de la console).
+- **Jaquettes** : récupérées automatiquement depuis
+  [XboxUnity](https://www.xboxunity.net) (cache local).
 
-#### :video_game: Game Management
+La gestion des homebrews n'est volontairement pas couverte.
 
-- **Games view**: Manage your Wii and GameCube games
-- **Format Support**: .iso, .rvz and major formats thanks to [NOD](https://github.com/encounter/nod)
-- **Automatic Splitting**: .wbfs file splitting when needed
-- **Partition Stripping**: Remove the update partition to save space
-- **Game Archiving**: Archive games using RVZ+zstd-19
-- **Integrity Checks**: Verify game files for corruption
-- **GameTDB**: Fetch covers and `wiitdb.xml` from GameTDB
-- **TxtCodes**: Download cheat codes from geckocodes.org (web archive), codes.rc24.xyz and gamehacking.org
+## Utilisation
 
-#### :toolbox: Wii Homebrew Management
+L'interface reprend celle de TinyWiiBackupManager : barre latérale (Games,
+Toolbox, Settings, About), vue grille ou table, filtres 360/OG, recherche,
+file de conversion, notifications, glisser-déposer d'ISO.
 
-- **Apps view**: Manage Wii homebrew applications
-- **OSC view**: Download apps from the Open Shop Channel
-- **Wiiload**: Send apps directly to Wii via network
+1. Cliquer sur l'icône **disque dur** (en bas de la barre latérale) puis
+   choisir la cible : **disque USB / dossier local**, ou **console en FTP**
+   (IP + identifiants Aurora, `xbox`/`xbox` port 21 par défaut, avec test de
+   connexion).
+2. Page **Games** : la liste reflète le contenu de la cible (locale ou
+   distante). Bouton **+** (ou glisser-déposer) pour ajouter des ISO ;
+   l'application détecte le type de chaque image et lance conversion GOD ou
+   extraction, directement vers la cible (suivi dans la file de conversion
+   et la barre d'état).
+3. Sur la console : Aurora > Settings > Content Paths, ajouter
+   `Hdd1:\Content\0000000000000000\` (et `Hdd1:\Games\`), Scan Depth 3–4,
+   puis relancer un scan.
 
-<br>
+Pour les jeux **multi-disques avec disque d'installation** (ex. GTA V) : le
+disque « Play » se convertit en GOD, le disque d'installation est détecté comme
+disque de contenu et son dossier `Content` est fusionné au bon endroit —
+donnez simplement les deux ISO à l'application.
 
-## :arrow_down: Downloads
+## Compilation
 
-<table>
-  <tr>
-    <td width="9999px"><strong>:window: Windows</strong></td>
-  </tr>
-  <tr>
-    <td>
-      :arrow_right: <a href="https://github.com/mq1/TinyWiiBackupManager/releases/latest">Download standalone binary</a>
-      <br>
-      <br>
-      :package: <code>winget install -e --id mq1.TinyWiiBackupManager</code>
-    </td>
-  </tr>
-</table>
+```sh
+cargo build --release
+```
 
-<table>
-  <tr>
-    <td width="9999px"><strong>:apple: macOS</strong></td>
-  </tr>
-  <tr>
-    <td>
-      :arrow_right: <a href="https://github.com/mq1/TinyWiiBackupManager/releases/latest">Download universal DMG</a>
-    </td>
-  </tr>
-</table>
+Prérequis de build sous Linux (Debian/Ubuntu/Pop!_OS) :
 
-<table>
-  <tr>
-    <td width="9999px"><strong>:penguin: Linux</strong></td>
-  </tr>
-  <tr>
-    <td>
-      :arrow_right: <a href="https://flathub.org/apps/it.mq1.TinyWiiBackupManager">Download on Flathub</a> (recommended for most users)
-      <br>
-      :arrow_right: <a href="https://github.com/mq1/TinyWiiBackupManager/releases/latest">Download AppImage</a>
-    </td>
-  </tr>
-</table>
+```sh
+sudo apt-get install -y build-essential pkg-config libfontconfig1-dev
+```
 
-<br>
+Le binaire est produit dans `target/release/TinyXbox360BackupManager`.
 
-## :page_facing_up: Additional Info
+## Technologies
 
-For useful tips, check out the [Wiki](https://github.com/mq1/TinyWiiBackupManager/wiki)
+Pur Rust, aucune dépendance externe à l'exécution :
 
-<br>
-<br>
+- [Slint](https://slint.dev) — interface graphique
+- [iso2god-rs](https://github.com/iliazeus/iso2god-rs) — conversion ISO → GOD
+- [xdvdfs](https://crates.io/crates/xdvdfs) — lecture/extraction des images
+  XDVDFS (équivalent d'[extract-xiso](https://github.com/XboxDev/extract-xiso))
+- [suppaftp](https://crates.io/crates/suppaftp) — client FTP
+- [XboxUnity](https://www.xboxunity.net) — jaquettes et title updates
+  (endpoints documentés dans `doc/assets-url.md`)
 
-<p align="center"> Made with :white_heart::pink_heart::light_blue_heart::brown_heart::black_heart::heart::orange_heart::yellow_heart::green_heart::blue_heart::purple_heart: for the Wii homebrew community </p>
+## Licence
+
+GPL-3.0-only. Basé sur le travail de Manuel Quarneti (TinyWiiBackupManager),
+iliazeus (iso2god-rs) et antangelo (xdvdfs).

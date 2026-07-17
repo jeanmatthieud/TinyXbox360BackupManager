@@ -1,4 +1,5 @@
-// SPDX-FileCopyrightText: 2026 Manuel Quarneti <mq1@ik.me>
+// SPDX-FileCopyrightText: 2026 Manuel Quarneti <mq1@ik.me> (TinyWiiBackupManager)
+// SPDX-FileContributor: Modified by Jean-Matthieu Dechriste (TinyXbox360BackupManager)
 // SPDX-License-Identifier: GPL-3.0-only
 
 #![warn(clippy::all, rust_2018_idioms)]
@@ -9,13 +10,10 @@ mod config;
 mod convert;
 mod covers;
 mod dialogs;
-mod disc_info;
 mod drive_info;
 mod file_drop;
 mod games;
-mod homebrew;
 mod notification;
-mod osc;
 mod state;
 mod update;
 mod util;
@@ -27,7 +25,7 @@ use crate::{file_drop::FileDropHandler, state::State};
 use anyhow::{Result, bail};
 use slint::{BackendSelector, ComponentHandle, ModelRc, SharedString, ToSharedString};
 use std::{collections::VecDeque, process::Command};
-use twbm_core::data_dir::DATA_DIR;
+use txbm_core::data_dir::DATA_DIR;
 
 slint::include_modules!();
 
@@ -52,7 +50,7 @@ fn main() -> Result<()> {
         .select()?;
 
     #[cfg(target_os = "linux")]
-    let _ = slint::set_xdg_app_id("it.mq1.TinyWiiBackupManager");
+    let _ = slint::set_xdg_app_id("net.jeanm.TinyXbox360BackupManager");
 
     let app = AppWindow::new()?;
     let dispatcher = app.global::<Dispatcher<'_>>();
@@ -70,8 +68,6 @@ fn main() -> Result<()> {
     ui_state.set_data_dir(DATA_DIR.to_string_lossy().to_shared_string());
     ui_state.set_config(DisplayedConfig::from(&state.config));
     ui_state.set_games(ModelRc::from(state.displayed_games.clone()));
-    ui_state.set_homebrew_apps(ModelRc::from(state.displayed_homebrew_apps.clone()));
-    ui_state.set_osc_apps(ModelRc::from(state.displayed_osc_apps.clone()));
     ui_state.set_notifications(ModelRc::from(state.notifications.clone()));
     ui_state.set_conversion_queue(ModelRc::from(state.displayed_conversion_queue.clone()));
     ui_state.set_games_to_add(ModelRc::from(state.displayed_games_to_add.clone()));
