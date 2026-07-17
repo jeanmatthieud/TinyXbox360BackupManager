@@ -8,9 +8,9 @@ license.workspace = true
 repository.workspace = true
 description.workspace = true
 
-[[bin]]
-name = "TinyXbox360BackupManager"
-path = "src/main.rs"
+[package.metadata.winresource]
+OriginalFilename = "TinyXbox360BackupManager.exe"
+LegalCopyright = "Copyright © 2026 Manuel Quarneti and Jean-Matthieu Dechriste. Licensed under GPL-3.0-only."
 
 [dependencies]
 txbm-core = { path = "../core", default-features = false }
