@@ -33,6 +33,7 @@ export component AppWindow inherits Window {
     min-height: 600px;
     background: MyPalette.background;
     title: UiState.drive-info.label.is-empty ? "TinyXbox360BackupManager  ›  No target selected" : (UiState.drive-info.total-gib > 0 ? "TinyXbox360BackupManager  ›  \{UiState.drive-info.label}  (\{UiState.drive-info.used-gib.to-fixed(2)}/\{UiState.drive-info.total-gib.to-fixed(2)} GiB)" : "TinyXbox360BackupManager  ›  \{UiState.drive-info.label}");
+    icon: @image-url("../package/windows/TinyXbox360BackupManager-64x64.png");
     default-font-size: 14px;
 
     // Initialize
