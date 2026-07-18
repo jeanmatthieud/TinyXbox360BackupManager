@@ -11,6 +11,7 @@ import { HorizontalLine } from "horizontal-line.slint";
 import { MyPalette } from "../styling.slint";
 import { IconButton, IconButtonKind } from "icon-button.slint";
 import { Modal } from "modal.slint";
+import { CoverImage } from "cover-image.slint";
 import { UiState } from "../ui-state.slint";
 import { Message, Dispatcher } from "../messages.slint";
 
@@ -112,7 +113,7 @@ export component GameInfoModal inherits Modal {
                 VerticalLayout {
                     alignment: center;
 
-                    Image {
+                    CoverImage {
                         source: UiState.current-game.cover;
                         height: 200px;
                     }

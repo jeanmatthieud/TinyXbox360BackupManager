@@ -145,6 +145,12 @@ fn convert_into(in_path: &Path, root: &Path, update_progress: &dyn Fn(u32)) -> R
                     .or(in_path.file_stem().and_then(|s| s.to_str()))
                     .unwrap_or("Xbox game"),
             );
+            // Embed the TitleID in the folder name so later scans can
+            // identify the game without reading its XBE.
+            let name = match info.title_id.as_deref() {
+                Some(tid) => crate::game::og_folder_name(&name, tid),
+                None => name,
+            };
             let dest = root.join(GAMES_DIR).join(&name);
             if dest.exists() {
                 bail!("the folder {} already exists", dest.display());

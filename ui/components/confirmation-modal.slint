@@ -14,11 +14,15 @@ export component ConfirmationModal inherits Modal {
     callback cancelled();
     callback confirmed();
 
-    VerticalLayout {
+    w: max(300px, min(600px, max(v.preferred-width, footer.preferred-width)));
+    h: layout.preferred-height;
+
+    layout := VerticalLayout {
         spacing: 10px;
 
         ScrollView {
             width: v.preferred-width;
+            height: min(v.preferred-height, 300px);
 
             v := VerticalLayout {
                 alignment: start;
@@ -29,7 +33,7 @@ export component ConfirmationModal inherits Modal {
             }
         }
 
-        VerticalLayout {
+        footer := VerticalLayout {
             height: self.min-height;
 
             HorizontalLine { }

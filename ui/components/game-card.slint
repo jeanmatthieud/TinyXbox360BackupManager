@@ -6,6 +6,7 @@ import { Card } from "card.slint";
 import { Spinner } from "std-widgets.slint";
 import { DisplayedGame } from "../types.slint";
 import { IconButton } from "icon-button.slint";
+import { CoverImage } from "cover-image.slint";
 import { IconSet, IconDisplay } from "@lucide";
 import { MyPalette } from "../styling.slint";
 import { UiState } from "../ui-state.slint";
@@ -48,7 +49,7 @@ export component GameCard inherits Card {
             }
         }
 
-        if game.cover.width > 0: Image {
+        if game.cover.width > 0: CoverImage {
             source: game.cover;
             height: 93px;
         }

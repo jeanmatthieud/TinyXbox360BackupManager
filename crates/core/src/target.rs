@@ -402,11 +402,15 @@ fn scan_extracted_dir(
         match format {
             Some(format) => {
                 let size = session.dir_size(&game_dir, 3);
-                let title = entry.name.clone();
-                let search_term = title.to_lowercase();
+                // TitleID from the folder-name suffix if present; games
+                // added by hand are resolved later (covers pass), not
+                // here — one RETR per game would slow the scan down.
+                let (title, id) = crate::game::split_title_id_suffix(&entry.name);
+                let id = id.unwrap_or_default();
+                let search_term = format!("{title}\0{id}").to_lowercase();
                 *games_bytes += size;
                 games.push(Game {
-                    id: String::new(),
+                    id,
                     title,
                     format,
                     path: PathBuf::from(&game_dir),

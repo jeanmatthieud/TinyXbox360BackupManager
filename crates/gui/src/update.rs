@@ -248,12 +248,13 @@ impl State {
                     let app = weak.upgrade().unwrap();
                     app.global::<UiState<'_>>().set_downloading_covers(true);
 
-                    let ids = self.games.iter().map(|g| g.id.clone()).collect::<Vec<_>>();
+                    let games = self.games.clone();
+                    let target = Target::from_config(&self.config.contents);
 
                     let weak = weak.clone();
 
                     let _ = std::thread::spawn(move || {
-                        let res = covers::download_covers(ids, &weak);
+                        let res = covers::download_covers(games, target, &weak);
 
                         let _ = weak.upgrade_in_event_loop(move |app| {
                             let dispatcher = app.global::<Dispatcher<'_>>();
@@ -269,6 +270,18 @@ impl State {
                             );
                         });
                     });
+                }
+            }
+            Message::SetGameId => {
+                // Payload: "<path>\n<TitleID>", sent by the covers pass
+                // once a TitleID has been resolved over FTP.
+                if let Some((path, id)) = payload.split_once('\n') {
+                    let path = Path::new(path);
+                    for game in self.games.iter_mut().filter(|g| g.path == path) {
+                        game.id = id.to_string();
+                        game.search_term = format!("{}\0{id}", game.title).to_lowercase();
+                    }
+                    message_queue.push_back((Message::RefreshDisplayedGames, SharedString::new()));
                 }
             }
             Message::FinishedDownloadingCovers => {
@@ -289,6 +302,9 @@ impl State {
                     self.notifications.push(Notification::error(text));
                     return;
                 }
+                // Also drop the Original Xbox covers database; it is
+                // re-downloaded by the covers pass right after.
+                txbm_core::mobcat::clear_db();
 
                 message_queue.push_back((Message::RefreshDisplayedGames, SharedString::new()));
                 message_queue.push_back((Message::DownloadCovers, SharedString::new()));

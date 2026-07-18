@@ -46,6 +46,33 @@ pub struct Game {
 /// STFS content types considered as installed games.
 const GOD_CONTENT_TYPES: [(&str, bool); 2] = [("00007000", true), ("00005000", false)];
 
+/// FATX limits file names to 42 characters.
+const FATX_MAX_NAME: usize = 42;
+
+/// Folder name for an extracted Original Xbox game: the TitleID is
+/// embedded as a ` [XXXXXXXX]` suffix so scans (especially over FTP)
+/// can identify the game without reading its `default.xbe`.
+/// Aurora ignores the folder name (it displays the XBE title).
+pub fn og_folder_name(title: &str, title_id: &str) -> String {
+    let suffix = format!(" [{title_id}]");
+    let max_title = FATX_MAX_NAME - suffix.chars().count();
+    let title: String = title.trim().chars().take(max_title).collect();
+    format!("{}{suffix}", title.trim_end())
+}
+
+/// Splits a folder name into (title, TitleID) if it carries
+/// a ` [XXXXXXXX]` suffix.
+pub fn split_title_id_suffix(name: &str) -> (String, Option<String>) {
+    if let Some(start) = name.rfind(" [")
+        && let Some(id) = name[start + 2..].strip_suffix(']')
+        && id.len() == 8
+        && id.chars().all(|c| c.is_ascii_hexdigit())
+    {
+        return (name[..start].trim().to_string(), Some(id.to_uppercase()));
+    }
+    (name.to_string(), None)
+}
+
 /// Scan the drive (mount point) for installed games.
 pub fn scan_drive(drive_dir: &Path) -> Vec<Game> {
     let mut games = Vec::new();
@@ -100,10 +127,17 @@ pub fn scan_drive(drive_dir: &Path) -> Vec<Game> {
             } else {
                 continue;
             };
-            let title = entry.file_name().to_string_lossy().to_string();
-            let search_term = title.to_lowercase();
+            let folder_name = entry.file_name().to_string_lossy().to_string();
+            let (title, mut id) = split_title_id_suffix(&folder_name);
+            // Game added by hand (no TitleID suffix): read it from the
+            // XBE, which is cheap on a local target.
+            if id.is_none() && format == GameFormat::ExtractedXbe {
+                id = crate::xbe::title_id_from_file(&game_dir.join("default.xbe")).ok();
+            }
+            let id = id.unwrap_or_default();
+            let search_term = format!("{title}\0{id}").to_lowercase();
             games.push(Game {
-                id: String::new(),
+                id,
                 title,
                 format,
                 path: game_dir.clone(),
