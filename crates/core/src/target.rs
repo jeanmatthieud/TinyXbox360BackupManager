@@ -113,9 +113,6 @@ fn remove_dir_all_with_progress(
     Ok(())
 }
 
-/// STFS content types considered as installed games.
-const GOD_CONTENT_TYPES: [(&str, bool); 2] = [("00007000", true), ("00005000", false)];
-
 /// Finds the root of the console's internal hard drive (Hdd1).
 pub fn ftp_hdd_root(session: &mut FtpSession) -> String {
     session
@@ -316,9 +313,9 @@ fn scan_ftp(ftp: &FtpConfig, cancel: &AtomicBool) -> Result<(Vec<Game>, DriveInf
             }
             let title_dir = format!("{content_dir}/{}", entry.name);
             for sub in session.list_dir(&title_dir) {
-                let Some((_, is_x360)) = GOD_CONTENT_TYPES
+                let Some((_, format, is_x360)) = crate::game::INSTALLED_CONTENT_TYPES
                     .iter()
-                    .find(|(t, _)| sub.is_dir && sub.name.eq_ignore_ascii_case(t))
+                    .find(|(t, _, _)| sub.is_dir && sub.name.eq_ignore_ascii_case(t))
                 else {
                     continue;
                 };
@@ -332,7 +329,7 @@ fn scan_ftp(ftp: &FtpConfig, cancel: &AtomicBool) -> Result<(Vec<Game>, DriveInf
                 games.push(Game {
                     id: title_id.clone(),
                     title,
-                    format: GameFormat::God,
+                    format: *format,
                     path: PathBuf::from(&title_dir),
                     size,
                     is_x360: *is_x360,

@@ -30,6 +30,8 @@ which-fs = "0.2"
 derive_more = { version = "2.1", features = ["display", "from_str"] }
 semver = "1.0"
 rusqlite = { version = "0.32", features = ["bundled"] }
+sevenz-rust2 = { version = "0.21.3", default-features = false }
+zip = { version = "8.6.0", default-features = false, features = ["deflate", "deflate64"] }
 
 [features]
 default = ["rustls"]

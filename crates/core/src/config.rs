@@ -59,6 +59,7 @@ pub struct ConfigContents {
     pub view_as: ViewAs,
     pub theme_preference: ThemePreference,
     pub show_x360: bool,
+    pub show_arcade: bool,
     pub show_og: bool,
     pub known_drives: Vec<PathBuf>,
 
@@ -79,6 +80,7 @@ impl Default for ConfigContents {
             view_as: ViewAs::Grid,
             theme_preference: ThemePreference::System,
             show_x360: true,
+            show_arcade: true,
             show_og: true,
             known_drives: Vec::new(),
             console_ip: String::new(),

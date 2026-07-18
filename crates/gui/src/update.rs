@@ -70,8 +70,14 @@ impl State {
                     .games
                     .iter()
                     .filter(|game| {
-                        ((self.config.contents.show_x360 && game.is_x360)
-                            || (self.config.contents.show_og && !game.is_x360))
+                        let shown = match game.format {
+                            txbm_core::game::GameFormat::Arcade => {
+                                self.config.contents.show_arcade
+                            }
+                            _ if game.is_x360 => self.config.contents.show_x360,
+                            _ => self.config.contents.show_og,
+                        };
+                        shown
                             && (self.games_filter.is_empty()
                                 || game.search_term.contains(&self.games_filter))
                     })
@@ -82,6 +88,12 @@ impl State {
             }
             Message::ToggleShowX360 => {
                 self.config.contents.show_x360 = !self.config.contents.show_x360;
+
+                message_queue.push_back((Message::RefreshDisplayedGames, SharedString::new()));
+                message_queue.push_back((Message::SyncConfig, SharedString::new()));
+            }
+            Message::ToggleShowArcade => {
+                self.config.contents.show_arcade = !self.config.contents.show_arcade;
 
                 message_queue.push_back((Message::RefreshDisplayedGames, SharedString::new()));
                 message_queue.push_back((Message::SyncConfig, SharedString::new()));

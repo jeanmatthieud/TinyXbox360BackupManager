@@ -4,7 +4,11 @@
 
 use crate::{DisplayedGame, util::GIB};
 use slint::{Image, ToSharedString};
-use txbm_core::{covers, data_dir::DATA_DIR, game::Game};
+use txbm_core::{
+    covers,
+    data_dir::DATA_DIR,
+    game::{Game, GameFormat},
+};
 
 impl From<&Game> for DisplayedGame {
     fn from(game: &Game) -> Self {
@@ -20,6 +24,7 @@ impl From<&Game> for DisplayedGame {
             path: game.path.to_string_lossy().to_shared_string(),
             size_gib: game.size as f32 / GIB,
             is_x360: game.is_x360,
+            is_arcade: game.format == GameFormat::Arcade,
             cover,
         }
     }

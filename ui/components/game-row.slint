@@ -18,7 +18,7 @@ export component GameRow inherits Rectangle {
     IconDisplay {
         x: 5px;
         y: 5px;
-        icon: game.is-x360 ? IconSet.Disc3 : IconSet.Box;
+        icon: game.is-arcade ? IconSet.Gamepad2 : game.is-x360 ? IconSet.Disc3 : IconSet.Box;
         size: 14px;
         stroke: MyPalette.foreground;
     }

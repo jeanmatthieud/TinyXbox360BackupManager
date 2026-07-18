@@ -48,7 +48,7 @@ fn main() -> anyhow::Result<()> {
 
     if let Some(iso) = args.next() {
         println!("adding {iso}…");
-        txbm_core::convert::perform(iso.into(), &config, &|p| println!("  {p}%"))?;
+        txbm_core::convert::perform(iso.into(), &config, &|p, _| println!("  {p}%"))?;
 
         // The test ISO is an installation disc: verify that its content
         // has been pushed to Content/0000000000000000/AAAA0001/00000002.

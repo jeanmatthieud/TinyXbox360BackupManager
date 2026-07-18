@@ -6,8 +6,6 @@ use crate::config::SortBy;
 use crate::util::dir_size;
 use crate::{CONTENT_DIR, GAMES_DIR};
 use std::cmp::Ordering;
-use std::fs::File;
-use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -15,6 +13,8 @@ pub enum GameFormat {
     /// GOD container in Content/0000000000000000/<TitleID>/00007000 (360)
     /// or 00005000 (Xbox Original).
     God,
+    /// XBLA package in Content/0000000000000000/<TitleID>/000D0000.
+    Arcade,
     /// Extracted folder with default.xex (Xbox 360).
     ExtractedXex,
     /// Extracted folder with default.xbe (Original Xbox).
@@ -25,6 +25,7 @@ impl GameFormat {
     pub fn label(&self) -> &'static str {
         match self {
             GameFormat::God => "GOD",
+            GameFormat::Arcade => "XBLA",
             GameFormat::ExtractedXex => "Extracted (360)",
             GameFormat::ExtractedXbe => "Xbox OG",
         }
@@ -43,11 +44,16 @@ pub struct Game {
     pub search_term: String,
 }
 
-/// STFS content types considered as installed games.
-const GOD_CONTENT_TYPES: [(&str, bool); 2] = [("00007000", true), ("00005000", false)];
+/// STFS content types considered as installed games under
+/// Content/0000000000000000/<TitleID>/: (folder, format, is Xbox 360).
+pub const INSTALLED_CONTENT_TYPES: [(&str, GameFormat, bool); 3] = [
+    ("00007000", GameFormat::God, true),
+    ("00005000", GameFormat::God, false),
+    ("000D0000", GameFormat::Arcade, true),
+];
 
 /// FATX limits file names to 42 characters.
-const FATX_MAX_NAME: usize = 42;
+pub const FATX_MAX_NAME: usize = 42;
 
 /// Folder name for an extracted Original Xbox game: the TitleID is
 /// embedded as a ` [XXXXXXXX]` suffix so scans (especially over FTP)
@@ -86,12 +92,12 @@ pub fn scan_drive(drive_dir: &Path) -> Vec<Game> {
             if !title_dir.is_dir() || title_id.len() != 8 {
                 continue;
             }
-            for (content_type, is_x360) in GOD_CONTENT_TYPES {
+            for (content_type, format, is_x360) in INSTALLED_CONTENT_TYPES {
                 let type_dir = title_dir.join(content_type);
                 if !type_dir.is_dir() {
                     continue;
                 }
-                let title = con_header_title(&type_dir)
+                let title = crate::stfs::title_from_dir(&type_dir)
                     .or_else(|| {
                         u32::from_str_radix(&title_id, 16)
                             .ok()
@@ -102,7 +108,7 @@ pub fn scan_drive(drive_dir: &Path) -> Vec<Game> {
                 games.push(Game {
                     id: title_id.clone(),
                     title,
-                    format: GameFormat::God,
+                    format,
                     path: title_dir.clone(),
                     size: dir_size(&type_dir),
                     is_x360,
@@ -158,37 +164,4 @@ pub fn get_compare_fn(sort_by: SortBy) -> impl FnMut(&Game, &Game) -> Ordering {
         SortBy::SizeDescending => a.size.cmp(&b.size),
         SortBy::SizeAscending => b.size.cmp(&a.size),
     }
-}
-
-/// Read the game name from the CON header of a GOD folder
-/// (UTF-16 big-endian at offset 0x411).
-fn con_header_title(type_dir: &Path) -> Option<String> {
-    let entries = std::fs::read_dir(type_dir).ok()?;
-    for entry in entries.flatten() {
-        let path = entry.path();
-        // The CON header is the file named after the MediaID (8 hex chars, no ".data").
-        let name = entry.file_name().to_string_lossy().to_string();
-        if !path.is_file() || name.len() != 8 {
-            continue;
-        }
-        let mut file = File::open(&path).ok()?;
-        let mut magic = [0u8; 4];
-        file.read_exact(&mut magic).ok()?;
-        if &magic != b"CON " && &magic != b"LIVE" && &magic != b"PIRS" {
-            continue;
-        }
-        file.seek(SeekFrom::Start(0x411)).ok()?;
-        let mut buf = [0u8; 0x100];
-        file.read_exact(&mut buf).ok()?;
-        let utf16: Vec<u16> = buf
-            .chunks_exact(2)
-            .map(|c| u16::from_be_bytes([c[0], c[1]]))
-            .take_while(|&c| c != 0)
-            .collect();
-        let title = String::from_utf16_lossy(&utf16).trim().to_string();
-        if !title.is_empty() {
-            return Some(title);
-        }
-    }
-    None
 }

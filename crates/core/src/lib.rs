@@ -3,6 +3,7 @@
 
 #![warn(clippy::all, rust_2018_idioms)]
 
+pub mod archive;
 pub mod config;
 pub mod conversion_queue;
 pub mod convert;
@@ -15,6 +16,7 @@ pub mod game;
 pub mod god;
 pub mod iso_info;
 pub mod mobcat;
+pub mod stfs;
 pub mod target;
 pub mod unity;
 pub mod updates;
