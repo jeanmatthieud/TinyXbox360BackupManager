@@ -189,7 +189,8 @@ export component GameInfoModal inherits Modal {
                 padding: 10px;
                 spacing: 10px;
 
-                if UiState.current-game.is-x360 && !UiState.current-game.id.is-empty: IconButton {
+                // - TODO : Proper title update listing
+                if false && UiState.current-game.is-x360 && !UiState.current-game.id.is-empty: IconButton {
                     label: "Title Updates";
                     icon: IconSet.Download;
                     kind: IconButtonKind.Secondary;
