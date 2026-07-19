@@ -15,4 +15,11 @@ export component CoverImage inherits Image {
     source-clip-y: 0;
     source-clip-width: is-wrap ? round(self.source.width * front-fraction) : self.source.width;
     source-clip-height: self.source.height;
+
+    // Default to the clipped front panel's aspect ratio so the element is no
+    // wider than the visible cover (3:4 portrait fallback while no image is
+    // loaded). Usage sites can still override width.
+    width: self.source-clip-height > 0
+        ? self.height * self.source-clip-width / self.source-clip-height
+        : self.height * 3 / 4;
 }

@@ -1,0 +1,167 @@
+// SPDX-FileCopyrightText: 2026 Jean-Matthieu Dechriste
+// SPDX-License-Identifier: GPL-3.0-only
+
+import { ScrollView, Spinner } from "std-widgets.slint";
+import { IconSet, IconDisplay } from "@lucide";
+import { HorizontalLine } from "horizontal-line.slint";
+import { MyPalette } from "../styling.slint";
+import { IconButton, IconButtonKind } from "icon-button.slint";
+import { TooltipArea } from "tooltip-area.slint";
+import { Modal } from "modal.slint";
+import { UiState } from "../ui-state.slint";
+import { Message, Dispatcher } from "../messages.slint";
+
+export component TitleUpdatesModal inherits Modal {
+    max-h: 460px;
+
+    VerticalLayout {
+        padding: 20px;
+        spacing: 10px;
+
+        HorizontalLayout {
+            spacing: 8px;
+
+            Text {
+                text: "Title Updates — \{UiState.current-game.title}";
+                font-size: 16px;
+                overflow: elide;
+            }
+
+            if UiState.fetching-title-updates: Spinner {
+                width: 16px;
+                height: 16px;
+                indeterminate: true;
+            }
+        }
+
+        if !UiState.fetching-title-updates && UiState.title-updates.length == 0: Text {
+            text: "No title update available for this title.";
+            color: MyPalette.foreground.transparentize(0.4);
+        }
+
+        if UiState.title-updates.length > 0: ScrollView {
+            width: v.preferred-width;
+            height: min(v.preferred-height, 300px);
+
+            v := VerticalLayout {
+                width: 560px;
+                spacing: 4px;
+
+                for tu in UiState.title-updates: Rectangle {
+                    height: 34px;
+                    background: tu.is-active ? MyPalette.selection-background : transparent;
+                    border-radius: 6px;
+
+                    HorizontalLayout {
+                        padding-left: 8px;
+                        padding-right: 8px;
+                        spacing: 10px;
+
+                        Rectangle {
+                            width: 16px;
+
+                            if tu.is-active: IconDisplay {
+                                icon: IconSet.CircleCheck;
+                                stroke: green;
+                                size: 16px;
+                            }
+                        }
+
+                        Text {
+                            text: tu.name.is-empty ? "Title update \{tu.id}" : tu.name;
+                            vertical-alignment: center;
+                            overflow: elide;
+                            horizontal-stretch: 1;
+                        }
+
+                        Text {
+                            text: tu.version.is-empty ? "" : "v\{tu.version}";
+                            vertical-alignment: center;
+                            horizontal-alignment: right;
+                            horizontal-stretch: 0;
+                            width: 32px;
+                            color: MyPalette.foreground.transparentize(0.4);
+                        }
+
+                        Text {
+                            text: tu.size-text;
+                            vertical-alignment: center;
+                            horizontal-alignment: right;
+                            horizontal-stretch: 0;
+                            width: 70px;
+                            color: MyPalette.foreground.transparentize(0.4);
+                        }
+
+                        if tu.is-active: IconButton {
+                            tooltip: "Disable this update";
+                            icon: IconSet.PackageX;
+                            kind: IconButtonKind.Destructive;
+                            height: 24px;
+                            width: 24px;
+                            squared: true;
+                            clicked => {
+                                if !UiState.updating-title-update {
+                                    Dispatcher.dispatch(
+                                        Message.DeactivateTitleUpdate,
+                                        "\{UiState.current-game.path}\n\{tu.installed-file-name}");
+                                }
+                            }
+                        }
+
+                        if !tu.is-active && tu.is-cached: IconButton {
+                            tooltip: "Enable this update";
+                            icon: IconSet.Download;
+                            kind: IconButtonKind.Primary;
+                            height: 24px;
+                            width: 24px;
+                            squared: true;
+                            clicked => {
+                                if !UiState.updating-title-update {
+                                    Dispatcher.dispatch(
+                                        Message.ActivateTitleUpdate,
+                                        "\{UiState.current-game.path}\n\{tu.hash}");
+                                }
+                            }
+                        }
+
+                        if !tu.is-active && !tu.is-cached: Rectangle {
+                            width: 24px;
+                            height: 24px;
+
+                            TooltipArea {
+                                width: 100%;
+                                height: 100%;
+                                tooltip: "Not downloaded in Aurora's cache";
+
+                                IconDisplay {
+                                    icon: IconSet.CircleX;
+                                    stroke: MyPalette.foreground.transparentize(0.6);
+                                    size: 16px;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    VerticalLayout {
+        height: self.min-height;
+
+        HorizontalLine { }
+
+        HorizontalLayout {
+            alignment: end;
+            padding: 10px;
+
+            IconButton {
+                label: "Close";
+                kind: IconButtonKind.Primary;
+                clicked => {
+                    UiState.showing-title-updates = false;
+                }
+            }
+        }
+    }
+}

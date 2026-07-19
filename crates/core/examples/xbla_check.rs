@@ -20,7 +20,8 @@ fn main() -> Result<()> {
     config.contents.mount_point = target.clone().into();
 
     println!("installing {input} into {target}…");
-    txbm_core::convert::perform(input.into(), &config, &|p, _| println!("  {p}%"))?;
+    let cancel = std::sync::atomic::AtomicBool::new(false);
+    txbm_core::convert::perform(input.into(), &config, &cancel, &|p, _| println!("  {p}%"))?;
 
     println!("rescan:");
     for game in txbm_core::game::scan_drive(std::path::Path::new(&target)) {

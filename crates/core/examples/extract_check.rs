@@ -13,7 +13,8 @@ fn main() -> anyhow::Result<()> {
     println!("detection: {:?} ({})", info.kind, info.kind.label());
     println!("title_id={:?} media_id={:?} name={:?}", info.title_id, info.media_id, info.name);
 
-    txbm_core::extract::extract_iso(&iso, &dest, &mut |done, total| {
+    let cancel = std::sync::atomic::AtomicBool::new(false);
+    txbm_core::extract::extract_iso(&iso, &dest, &cancel, &mut |done, total| {
         println!("extracting {done}/{total}");
     })?;
     Ok(())

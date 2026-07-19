@@ -34,6 +34,12 @@ export struct DisplayedConfig {
     ftp-password: string,
 }
 
+export struct DisplayedRecentLocation {
+    // Folder name (local drive) or IP (console over FTP).
+    name: string,
+    is-ftp: bool,
+}
+
 export struct DisplayedGame {
     path: string,
     is-x360: bool,
@@ -43,6 +49,23 @@ export struct DisplayedGame {
     title: string,
     id: string,
     cover: image,
+    // True when only DLC and/or a title update are installed, with no
+    // actual game package (base install removed or never completed).
+    incomplete: bool,
+}
+
+export struct DisplayedTitleUpdate {
+    id: string,
+    hash: string,
+    name: string,
+    version: string,
+    size-text: string,
+    // File name under 000B0000 when installed, empty otherwise.
+    installed-file-name: string,
+    is-active: bool,
+    // True if Aurora already downloaded this update into its own cache
+    // (the only case in which this app can activate it).
+    is-cached: bool,
 }
 
 export struct DisplayedDriveInfo {

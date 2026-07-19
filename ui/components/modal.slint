@@ -5,8 +5,11 @@ import { MyPalette } from "../styling.slint";
 import { Card } from "card.slint";
 
 export component Modal inherits Rectangle {
-    in property <length> w: 600px;
-    in property <length> h: 400px;
+    in property <length> min-w: 300px;
+    in property <length> max-w: 600px;
+    in property <length> min-h: 0px;
+    in property <length> max-h: 400px;
+    in property <length> spacing: 0px;
 
     height: 100%;
     width: 100%;
@@ -28,14 +31,18 @@ export component Modal inherits Rectangle {
         background: MyPalette.overlay;
     }
 
-    // the actual modal
+    // the actual modal, sized to fit its content within [min, max] bounds
     Card {
-        width: w;
-        height: h;
+        width: max(min-w, min(max-w, body.preferred-width));
+        height: max(min-h, min(max-h, body.preferred-height));
 
         x: (root.width - self.width) / 2;
         y: (root.height - self.height) / 2;
 
-        @children
+        body := VerticalLayout {
+            spacing: root.spacing;
+
+            @children
+        }
     }
 }

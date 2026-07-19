@@ -17,140 +17,193 @@ import { Message, Dispatcher } from "../messages.slint";
 
 export component GameInfoModal inherits Modal {
     VerticalLayout {
-        alignment: stretch;
+        alignment: space-between;
+        height: self.min-height;
 
         VerticalLayout {
-            alignment: space-between;
+            padding: 20px;
+            spacing: 10px;
 
-            VerticalLayout {
-                padding: 20px;
-                spacing: 10px;
-
-                Text {
-                    text: UiState.current-game.title;
-                    font-size: 18px;
-                    overflow: elide;
-                }
-
-                Link {
-                    icon: IconSet.Folder;
-                    label: "Path: \{UiState.current-game.path}";
-                    uri: UiState.current-game.path;
-                }
+            Text {
+                text: UiState.current-game.title;
+                font-size: 18px;
+                overflow: elide;
             }
 
-            HorizontalLayout {
-                alignment: space-between;
-                padding-right: 10px;
-                padding-left: 20px;
-
-                VerticalLayout {
-                    spacing: 5px;
-                    alignment: center;
-                    y: parent.height - self.height - 10px;
-
-                    HorizontalLayout {
-                        spacing: 5px;
-
-                        IconDisplay {
-                            icon: IconSet.FileQuestionMark;
-                            stroke: MyPalette.foreground;
-                            size: 14px;
-                        }
-
-                        Text {
-                            text: "Format: \{UiState.current-game.format}";
-                        }
-                    }
-
-                    HorizontalLayout {
-                        spacing: 5px;
-
-                        IconDisplay {
-                            icon: IconSet.Tag;
-                            stroke: MyPalette.foreground;
-                            size: 14px;
-                        }
-
-                        Text {
-                            text: "Title ID: \{(UiState.current-game.id.is-empty ? "N/A" : UiState.current-game.id)}";
-                        }
-                    }
-
-                    HorizontalLayout {
-                        spacing: 5px;
-
-                        IconDisplay {
-                            icon: IconSet.Gamepad;
-                            stroke: MyPalette.foreground;
-                            size: 14px;
-                        }
-
-                        if UiState.current-game.is-x360: Text {
-                            text: "System: Xbox 360";
-                        }
-
-                        if !UiState.current-game.is-x360: Text {
-                            text: "System: Original Xbox";
-                        }
-                    }
-
-                    HorizontalLayout {
-                        spacing: 5px;
-
-                        IconDisplay {
-                            icon: IconSet.HardDrive;
-                            stroke: MyPalette.foreground;
-                            size: 14px;
-                        }
-
-                        Text {
-                            text: "Size: \{UiState.current-game.size-gib.to-fixed(2)} GiB";
-                        }
-                    }
-                }
-
-                VerticalLayout {
-                    alignment: center;
-
-                    CoverImage {
-                        source: UiState.current-game.cover;
-                        height: 200px;
-                    }
-                }
-            }
-
-            VerticalLayout { }
+            // Link {
+            //     icon: IconSet.Folder;
+            //     label: "Path: \{UiState.current-game.path}";
+            //     uri: UiState.current-game.path;
+            // }
         }
 
-        VerticalLayout {
-            height: self.min-height;
+        HorizontalLayout {
+            alignment: space-between;
+            padding-left: 20px;
+            padding-right: 20px;
+            padding-bottom: 20px;
+            spacing: 40px;
 
-            HorizontalLine { }
+            VerticalLayout {
+                spacing: 5px;
+                alignment: LayoutAlignment.start;
+                // y: parent.height - self.height - 10px;
 
-            HorizontalLayout {
-                alignment: space-between;
+                HorizontalLayout {
+                    spacing: 5px;
+                    cross-axis-alignment: CrossAxisAlignment.center;
 
-                VerticalLayout {
-                    alignment: center;
-                    padding-left: 15px;
+                    IconDisplay {
+                        icon: IconSet.Gamepad;
+                        stroke: MyPalette.foreground;
+                        size: 14px;
+                    }
 
-                    if !UiState.current-game.id.is-empty: Link {
-                        uri: "https://www.xboxunity.net/#/search/\{UiState.current-game.id}";
-                        label: "XboxUnity page";
+                    if UiState.current-game.is-x360: Text {
+                        text: "System: Xbox 360";
+                    }
+
+                    if !UiState.current-game.is-x360: Text {
+                        text: "System: Original Xbox";
                     }
                 }
 
                 HorizontalLayout {
-                    padding: 10px;
-                    spacing: 10px;
+                    spacing: 5px;
+                    cross-axis-alignment: CrossAxisAlignment.center;
 
-                    IconButton {
-                        label: "Close";
-                        kind: IconButtonKind.Primary;
-                        clicked => {
-                            UiState.current-game = { };
-                        }
+                    IconDisplay {
+                        icon: IconSet.HardDrive;
+                        stroke: MyPalette.foreground;
+                        size: 14px;
+                    }
+
+                    Text {
+                        text: "Size: \{UiState.current-game.size-gib.to-fixed(2)} GiB";
+                    }
+                }
+
+                HorizontalLayout {
+                    spacing: 5px;
+                    cross-axis-alignment: CrossAxisAlignment.center;
+
+                    IconDisplay {
+                        icon: IconSet.Tag;
+                        stroke: MyPalette.foreground;
+                        size: 14px;
+                    }
+
+                    Text {
+                        text: "Title ID: \{(UiState.current-game.id.is-empty ? "N/A" : UiState.current-game.id)}";
+                    }
+                }
+
+                HorizontalLayout {
+                    spacing: 5px;
+                    cross-axis-alignment: CrossAxisAlignment.center;
+
+                    IconDisplay {
+                        icon: IconSet.FileQuestionMark;
+                        stroke: MyPalette.foreground;
+                        size: 14px;
+                    }
+
+                    Text {
+                        text: "Format: \{UiState.current-game.format}";
+                    }
+                }
+
+                for line in UiState.current-game-discs: HorizontalLayout {
+                    spacing: 5px;
+                    cross-axis-alignment: CrossAxisAlignment.center;
+
+                    IconDisplay {
+                        icon: IconSet.Disc;
+                        stroke: MyPalette.foreground;
+                        size: 14px;
+                    }
+
+                    Text {
+                        text: line;
+                    }
+                }
+
+                if UiState.current-game.incomplete: HorizontalLayout {
+                    spacing: 5px;
+                    cross-axis-alignment: CrossAxisAlignment.center;
+
+                    IconDisplay {
+                        icon: IconSet.TriangleAlert;
+                        stroke: MyPalette.destructive;
+                        size: 14px;
+                    }
+
+                    Text {
+                        text: "Game disc missing";
+                        color: MyPalette.destructive;
+                    }
+                }
+
+                for line in UiState.current-game-dlc: HorizontalLayout {
+                    spacing: 5px;
+                    cross-axis-alignment: CrossAxisAlignment.center;
+
+                    IconDisplay {
+                        icon: IconSet.Gift;
+                        stroke: MyPalette.foreground;
+                        size: 14px;
+                    }
+
+                    Text {
+                        text: line;
+                    }
+                }
+            }
+
+            CoverImage {
+                source: UiState.current-game.cover;
+                height: 200px;
+            }
+        }
+    }
+
+    VerticalLayout {
+        height: self.min-height;
+
+        HorizontalLine { }
+
+        HorizontalLayout {
+            alignment: space-between;
+
+            VerticalLayout {
+                alignment: center;
+                padding-left: 15px;
+
+                // if !UiState.current-game.id.is-empty: Link {
+                //     uri: "https://www.xboxunity.net/#/search/\{UiState.current-game.id}";
+                //     label: "XboxUnity page";
+                // }
+            }
+
+            HorizontalLayout {
+                padding: 10px;
+                spacing: 10px;
+
+                if UiState.current-game.is-x360 && !UiState.current-game.id.is-empty: IconButton {
+                    label: "Title Updates";
+                    icon: IconSet.Download;
+                    kind: IconButtonKind.Secondary;
+                    clicked => {
+                        Dispatcher.dispatch(Message.FetchTitleUpdates, UiState.current-game.path);
+                    }
+                }
+
+                IconButton {
+                    label: "Close";
+                    kind: IconButtonKind.Primary;
+                    clicked => {
+                        UiState.current-game = { };
+                        UiState.showing-title-updates = false;
                     }
                 }
             }

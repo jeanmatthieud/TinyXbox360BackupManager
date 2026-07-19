@@ -4,6 +4,7 @@ use anyhow::{Context, Result, anyhow, bail};
 use std::fs::{self, File};
 use std::io::{BufReader, Read};
 use std::path::Path;
+use std::sync::atomic::AtomicBool;
 use xdvdfs::blockdev::OffsetWrapper;
 
 /// Extracts all content from an XISO image (original Xbox or Xbox 360)
@@ -13,6 +14,7 @@ use xdvdfs::blockdev::OffsetWrapper;
 pub fn extract_iso(
     source_iso: &Path,
     dest_dir: &Path,
+    cancel: &AtomicBool,
     progress: &mut dyn FnMut(u64, u64),
 ) -> Result<()> {
     let file = File::open(source_iso)
@@ -36,6 +38,9 @@ pub fn extract_iso(
     progress(0, total);
 
     for (dir, node) in &tree {
+        if crate::convert::is_cancelled(cancel) {
+            bail!(crate::convert::CONVERSION_CANCELLED);
+        }
         let name = node
             .name_str::<std::io::Error>()
             .map_err(|e| anyhow!("invalid file name: {e}"))?;

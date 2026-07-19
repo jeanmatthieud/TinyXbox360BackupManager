@@ -2,9 +2,25 @@
 // SPDX-FileContributor: Modified by Jean-Matthieu Dechriste (TinyXbox360BackupManager)
 // SPDX-License-Identifier: GPL-3.0-only
 
-use crate::{DisplayedConfig, TargetKind};
+use crate::{DisplayedConfig, DisplayedRecentLocation, TargetKind};
 use slint::ToSharedString;
-use txbm_core::{config::Config, target::Target};
+use txbm_core::{
+    config::{Config, TargetKind as CoreTargetKind},
+    target::Target,
+};
+
+/// Builds the model backing `UiState.recent-locations` from the config.
+pub fn recent_locations(config: &Config) -> Vec<DisplayedRecentLocation> {
+    config
+        .contents
+        .recent_locations
+        .iter()
+        .map(|l| DisplayedRecentLocation {
+            name: l.display_name().to_shared_string(),
+            is_ftp: matches!(l.kind, CoreTargetKind::Ftp),
+        })
+        .collect()
+}
 
 impl From<txbm_core::config::TargetKind> for TargetKind {
     fn from(kind: txbm_core::config::TargetKind) -> Self {

@@ -2,7 +2,7 @@
 // SPDX-FileContributor: Modified by Jean-Matthieu Dechriste (TinyXbox360BackupManager)
 // SPDX-License-Identifier: GPL-3.0-only
 
-use crate::{DisplayedGame, Notification};
+use crate::{DisplayedGame, DisplayedTitleUpdate, Notification};
 use slint::{SharedString, VecModel};
 use std::{
     collections::VecDeque,
@@ -19,6 +19,7 @@ pub struct State {
     pub games: Vec<Game>,
     pub drive_info: DriveInfo,
     pub displayed_games: Rc<VecModel<DisplayedGame>>,
+    pub displayed_title_updates: Rc<VecModel<DisplayedTitleUpdate>>,
     pub conversion_queue: VecDeque<QueuedConversion>,
     pub displayed_conversion_queue: Rc<VecModel<SharedString>>,
     pub games_to_add: VecDeque<PathBuf>,
@@ -29,6 +30,8 @@ pub struct State {
     pub is_scanning: bool,
     /// Flag shared with the scan thread to cancel it.
     pub scan_cancel: Arc<AtomicBool>,
+    /// Flag shared with the running conversion thread to cancel it.
+    pub conversion_cancel: Arc<AtomicBool>,
     pub games_filter: String,
 }
 
@@ -39,6 +42,7 @@ impl State {
             games: Vec::new(),
             drive_info: DriveInfo::default(),
             displayed_games: Rc::new(VecModel::from(Vec::new())),
+            displayed_title_updates: Rc::new(VecModel::from(Vec::new())),
             conversion_queue: VecDeque::new(),
             displayed_conversion_queue: Rc::new(VecModel::from(Vec::new())),
             games_to_add: VecDeque::new(),
@@ -48,6 +52,7 @@ impl State {
             is_downloading_covers: false,
             is_scanning: false,
             scan_cancel: Arc::new(AtomicBool::new(false)),
+            conversion_cancel: Arc::new(AtomicBool::new(false)),
             games_filter: String::new(),
         }
     }

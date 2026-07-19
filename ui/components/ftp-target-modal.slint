@@ -10,127 +10,122 @@ import { UiState } from "../ui-state.slint";
 import { Message, Dispatcher } from "../messages.slint";
 
 export component FtpTargetModal inherits Modal {
-    w: 480px;
-    h: 360px;
-
     VerticalLayout {
-        VerticalLayout {
-            padding: 20px;
+        padding: 20px;
+        spacing: 10px;
+
+        Text {
+            text: "Console over FTP (Aurora)";
+            font-size: 18px;
+        }
+
+        Text {
+            text: "On the console, press Select to reveal its IP, then\nStart > Modules > FTP Server for the credentials (xbox/xbox by default).";
+            wrap: word-wrap;
+        }
+
+        HorizontalLayout {
             spacing: 10px;
 
-            Text {
-                text: "Console over FTP (Aurora)";
-                font-size: 18px;
-            }
+            VerticalLayout {
+                alignment: center;
+                width: 90px;
 
-            Text {
-                text: "On the console, press Select to reveal its IP, then\nStart > Modules > FTP Server for the credentials (xbox/xbox by default).";
-                wrap: word-wrap;
-            }
-
-            HorizontalLayout {
-                spacing: 10px;
-
-                VerticalLayout {
-                    alignment: center;
-                    width: 90px;
-
-                    Text {
-                        text: "Console IP:";
-                    }
-                }
-
-                LineEdit {
-                    width: 170px;
-                    text: UiState.config.console-ip;
-                    placeholder-text: "192.168.1.42";
-                    edited => Dispatcher.dispatch(Message.SetConsoleIp, self.text);
-                }
-
-                VerticalLayout {
-                    alignment: center;
-
-                    Text {
-                        text: "Port:";
-                    }
-                }
-
-                LineEdit {
-                    width: 60px;
-                    text: UiState.config.ftp-port;
-                    edited => Dispatcher.dispatch(Message.SetFtpPort, self.text);
+                Text {
+                    text: "Console IP:";
                 }
             }
 
-            HorizontalLayout {
-                spacing: 10px;
+            LineEdit {
+                width: 170px;
+                text: UiState.config.console-ip;
+                placeholder-text: "192.168.1.42";
+                edited => Dispatcher.dispatch(Message.SetConsoleIp, self.text);
+            }
 
-                VerticalLayout {
-                    alignment: center;
-                    width: 90px;
+            VerticalLayout {
+                alignment: center;
 
-                    Text {
-                        text: "User:";
-                    }
+                Text {
+                    text: "Port:";
                 }
+            }
 
-                LineEdit {
-                    width: 110px;
-                    text: UiState.config.ftp-user;
-                    edited => Dispatcher.dispatch(Message.SetFtpUser, self.text);
-                }
-
-                VerticalLayout {
-                    alignment: center;
-
-                    Text {
-                        text: "Password:";
-                    }
-                }
-
-                LineEdit {
-                    width: 110px;
-                    text: UiState.config.ftp-password;
-                    input-type: InputType.password;
-                    edited => Dispatcher.dispatch(Message.SetFtpPassword, self.text);
-                }
+            LineEdit {
+                width: 60px;
+                text: UiState.config.ftp-port;
+                edited => Dispatcher.dispatch(Message.SetFtpPort, self.text);
             }
         }
 
-        VerticalLayout {
-            height: self.min-height;
+        HorizontalLayout {
+            spacing: 10px;
 
-            HorizontalLine { }
+            VerticalLayout {
+                alignment: center;
+                width: 90px;
+
+                Text {
+                    text: "User:";
+                }
+            }
+
+            LineEdit {
+                width: 110px;
+                text: UiState.config.ftp-user;
+                edited => Dispatcher.dispatch(Message.SetFtpUser, self.text);
+            }
+
+            VerticalLayout {
+                alignment: center;
+
+                Text {
+                    text: "Password:";
+                }
+            }
+
+            LineEdit {
+                width: 110px;
+                text: UiState.config.ftp-password;
+                input-type: InputType.password;
+                edited => Dispatcher.dispatch(Message.SetFtpPassword, self.text);
+            }
+        }
+    }
+
+    VerticalLayout {
+        height: self.min-height;
+
+        HorizontalLine { }
+
+        HorizontalLayout {
+            alignment: space-between;
+            padding: 10px;
+            spacing: 10px;
+
+            IconButton {
+                icon: IconSet.Cable;
+                label: "Test connection";
+                clicked => Dispatcher.dispatch(Message.TestFtp, "");
+            }
 
             HorizontalLayout {
-                alignment: space-between;
-                padding: 10px;
                 spacing: 10px;
 
                 IconButton {
-                    icon: IconSet.Cable;
-                    label: "Test connection";
-                    clicked => Dispatcher.dispatch(Message.TestFtp, "");
+                    label: "Cancel";
+                    clicked => {
+                        UiState.editing-ftp-target = false;
+                    }
                 }
 
-                HorizontalLayout {
-                    spacing: 10px;
-
-                    IconButton {
-                        label: "Cancel";
-                        clicked => {
-                            UiState.editing-ftp-target = false;
-                        }
-                    }
-
-                    IconButton {
-                        icon: IconSet.MonitorUp;
-                        label: "Use this console";
-                        kind: IconButtonKind.Primary;
-                        clicked => {
-                            UiState.editing-ftp-target = false;
-                            Dispatcher.dispatch(Message.SetTargetFtp, "");
-                        }
+                IconButton {
+                    icon: IconSet.MonitorUp;
+                    label: "Use this console";
+                    kind: IconButtonKind.Primary;
+                    clicked => {
+                        UiState.editing-ftp-target = false;
+                        Dispatcher.dispatch(Message.SetTargetFtp, "");
                     }
                 }
             }

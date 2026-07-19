@@ -52,6 +52,7 @@ export component GameRow inherits Rectangle {
         squared: true;
         clicked => {
             UiState.current-game = game;
+            Dispatcher.dispatch(Message.FetchGameDetails, game.path);
         }
     }
 

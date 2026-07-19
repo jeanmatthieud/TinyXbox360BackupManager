@@ -4,9 +4,15 @@
 
 use crate::{AppWindow, Dispatcher, Message, UiState};
 use slint::{ComponentHandle, SharedString, Weak};
+use std::sync::{Arc, atomic::AtomicBool};
 use txbm_core::{config::Config, conversion_queue::QueuedConversion};
 
-pub fn perform_conversion(conv: QueuedConversion, config: &Config, weak: &Weak<AppWindow>) {
+pub fn perform_conversion(
+    conv: QueuedConversion,
+    config: &Config,
+    cancel: Arc<AtomicBool>,
+    weak: &Weak<AppWindow>,
+) {
     let res = match conv {
         QueuedConversion::Standard(in_path) => {
             let filename = in_path
@@ -29,7 +35,7 @@ pub fn perform_conversion(conv: QueuedConversion, config: &Config, weak: &Weak<A
                 });
             };
 
-            txbm_core::convert::perform(in_path, config, &update_progress)
+            txbm_core::convert::perform(in_path, config, &cancel, &update_progress)
         }
     };
 
@@ -38,9 +44,16 @@ pub fn perform_conversion(conv: QueuedConversion, config: &Config, weak: &Weak<A
 
         dispatcher.invoke_dispatch(Message::SetStatus, SharedString::new());
 
-        if let Err(e) = res {
-            let text = slint::format!("Conversion failed: {e:#}");
-            dispatcher.invoke_dispatch(Message::NotifyError, text);
+        match res {
+            Ok(()) => {}
+            Err(e) if e.to_string().contains(txbm_core::convert::CONVERSION_CANCELLED) => {
+                dispatcher
+                    .invoke_dispatch(Message::NotifyInfo, "Conversion cancelled".into());
+            }
+            Err(e) => {
+                let text = slint::format!("Conversion failed: {e:#}");
+                dispatcher.invoke_dispatch(Message::NotifyError, text);
+            }
         }
 
         // Drop the finished conversion and move on to the next one (even on

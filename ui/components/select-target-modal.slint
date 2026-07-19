@@ -9,52 +9,83 @@ import { UiState } from "../ui-state.slint";
 import { Message, Dispatcher } from "../messages.slint";
 
 export component SelectTargetModal inherits Modal {
-    w: 440px;
-    h: 230px;
-
     VerticalLayout {
-        VerticalLayout {
-            padding: 20px;
-            spacing: 15px;
+        padding: 20px;
+        spacing: 15px;
 
-            Text {
-                text: "Where is your game library?";
-                font-size: 18px;
-            }
+        Text {
+            text: "Where is your game library?";
+            font-size: 18px;
+        }
 
-            IconButton {
-                icon: IconSet.HardDrive;
-                label: "Local drive / folder (USB FAT32)…";
-                clicked => {
-                    UiState.selecting-target = false;
-                    Dispatcher.dispatch(Message.PickMountPoint, "");
-                }
-            }
-
-            IconButton {
-                icon: IconSet.MonitorUp;
-                label: "Console over FTP (Aurora)…";
-                clicked => {
-                    UiState.selecting-target = false;
-                    UiState.editing-ftp-target = true;
-                }
+        IconButton {
+            icon: IconSet.HardDrive;
+            label: "Local drive / folder (USB FAT32)";
+            clicked => {
+                UiState.selecting-target = false;
+                Dispatcher.dispatch(Message.PickMountPoint, "");
             }
         }
 
-        VerticalLayout {
-            height: self.min-height;
+        IconButton {
+            icon: IconSet.MonitorUp;
+            label: "Console over FTP (Aurora)";
+            clicked => {
+                UiState.selecting-target = false;
+                UiState.editing-ftp-target = true;
+            }
+        }
 
-            HorizontalLine { }
+        if UiState.recent-locations.length > 0: HorizontalLine { }
 
-            HorizontalLayout {
-                alignment: end;
-                padding: 10px;
+        for loc[i] in UiState.recent-locations: HorizontalLayout {
+            spacing: 8px;
 
-                IconButton {
-                    label: "Cancel";
-                    clicked => {
-                        UiState.selecting-target = false;
-                    }
+            VerticalLayout {
+                alignment: center;
+                horizontal-stretch: 1;
+
+                Text {
+                    text: loc.name;
+                    overflow: elide;
+                }
+            }
+
+            IconButton {
+                icon: loc.is-ftp ? IconSet.MonitorUp : IconSet.HardDrive;
+                tooltip: "Connect";
+                width: 30px;
+                clicked => {
+                    UiState.selecting-target = false;
+                    Dispatcher.dispatch(Message.ConnectRecentLocation, i);
+                }
+            }
+
+            IconButton {
+                icon: IconSet.Trash;
+                kind: IconButtonKind.Destructive;
+                tooltip: "Remove from history";
+                width: 30px;
+                clicked => {
+                    Dispatcher.dispatch(Message.RemoveRecentLocation, i);
+                }
+            }
+        }
+    }
+
+    VerticalLayout {
+        height: self.min-height;
+
+        HorizontalLine { }
+
+        HorizontalLayout {
+            alignment: end;
+            padding: 10px;
+
+            IconButton {
+                label: "Cancel";
+                clicked => {
+                    UiState.selecting-target = false;
                 }
             }
         }

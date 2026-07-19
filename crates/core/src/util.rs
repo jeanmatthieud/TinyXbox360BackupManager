@@ -1,6 +1,30 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
+use sha1::{Digest, Sha1};
 use std::path::Path;
+
+/// SHA1 hex digest of `bytes` (lowercase).
+pub fn sha1_hex(bytes: &[u8]) -> String {
+    let mut hasher = Sha1::new();
+    hasher.update(bytes);
+    format!("{:x}", hasher.finalize())
+}
+
+/// SHA1 hex digest of a file's content (lowercase), streamed so the whole
+/// file never needs to sit in memory at once.
+pub fn sha1_hex_file(path: &Path) -> std::io::Result<String> {
+    let mut file = std::fs::File::open(path)?;
+    let mut hasher = Sha1::new();
+    let mut buf = [0u8; 1 << 16];
+    loop {
+        let n = std::io::Read::read(&mut file, &mut buf)?;
+        if n == 0 {
+            break;
+        }
+        hasher.update(&buf[..n]);
+    }
+    Ok(format!("{:x}", hasher.finalize()))
+}
 
 /// Number of files in a directory (recursive).
 pub fn file_count(path: &Path) -> u64 {

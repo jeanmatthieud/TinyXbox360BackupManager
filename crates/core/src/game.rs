@@ -42,6 +42,10 @@ pub struct Game {
     pub size: u64,
     pub is_x360: bool,
     pub search_term: String,
+    /// True when the title folder only has DLC and/or a title update, with
+    /// no actual game package installed (e.g. the base install was removed
+    /// or never completed).
+    pub incomplete: bool,
 }
 
 /// STFS content types considered as installed games under
@@ -92,11 +96,13 @@ pub fn scan_drive(drive_dir: &Path) -> Vec<Game> {
             if !title_dir.is_dir() || title_id.len() != 8 {
                 continue;
             }
+            let mut found_package = false;
             for (content_type, format, is_x360) in INSTALLED_CONTENT_TYPES {
                 let type_dir = title_dir.join(content_type);
                 if !type_dir.is_dir() {
                     continue;
                 }
+                found_package = true;
                 let title = crate::stfs::title_from_dir(&type_dir)
                     .or_else(|| {
                         u32::from_str_radix(&title_id, 16)
@@ -110,10 +116,37 @@ pub fn scan_drive(drive_dir: &Path) -> Vec<Game> {
                     title,
                     format,
                     path: title_dir.clone(),
-                    size: dir_size(&type_dir),
+                    size: dir_size(&type_dir)
+                        + dir_size(&title_dir.join(crate::stfs::dlc_dir_name())),
                     is_x360,
                     search_term,
+                    incomplete: false,
                 });
+            }
+
+            // No game package: only DLC and/or a title update sit here,
+            // orphaned from a base install that was removed or never
+            // completed. Still surface it, flagged incomplete.
+            if !found_package {
+                let dlc_dir = title_dir.join(crate::stfs::dlc_dir_name());
+                let title_update_dir = title_dir.join(crate::stfs::title_update_dir_name());
+                if dlc_dir.is_dir() || title_update_dir.is_dir() {
+                    let title = u32::from_str_radix(&title_id, 16)
+                        .ok()
+                        .and_then(iso2god::game_list::find_title_by_id)
+                        .unwrap_or_else(|| title_id.clone());
+                    let search_term = format!("{title}\0{title_id}").to_lowercase();
+                    games.push(Game {
+                        id: title_id.clone(),
+                        title,
+                        format: GameFormat::God,
+                        path: title_dir.clone(),
+                        size: dir_size(&dlc_dir) + dir_size(&title_update_dir),
+                        is_x360: true,
+                        search_term,
+                        incomplete: true,
+                    });
+                }
             }
         }
     }
@@ -150,6 +183,7 @@ pub fn scan_drive(drive_dir: &Path) -> Vec<Game> {
                 size: dir_size(&game_dir),
                 is_x360: format == GameFormat::ExtractedXex,
                 search_term,
+                incomplete: false,
             });
         }
     }

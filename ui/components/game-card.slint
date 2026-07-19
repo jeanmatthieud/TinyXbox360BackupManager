@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 import { Card } from "card.slint";
-import { Spinner } from "std-widgets.slint";
+import { Spinner, VerticalBox } from "std-widgets.slint";
 import { DisplayedGame } from "../types.slint";
 import { IconButton } from "icon-button.slint";
 import { CoverImage } from "cover-image.slint";
@@ -17,6 +17,7 @@ export component GameCard inherits Card {
 
     width: 172px;
     height: self.min-height;
+    border-color: game.incomplete ? MyPalette.destructive : MyPalette.border;
 
     VerticalLayout {
         padding: 10px;
@@ -49,36 +50,27 @@ export component GameCard inherits Card {
             }
         }
 
-        if game.cover.width > 0: CoverImage {
-            source: game.cover;
-            height: 93px;
-        }
-
-        // Cover currently downloading: circular indicator.
-        if game.cover.width == 0 && !game.id.is-empty && UiState.downloading-covers: VerticalLayout {
+        VerticalLayout {
             height: 93px;
             alignment: center;
 
             HorizontalLayout {
                 alignment: center;
 
-                Spinner {
+                if game.cover.width > 0: CoverImage {
+                    source: game.cover;
+                    height: 93px;
+                }
+
+                // Cover currently downloading: circular indicator.
+                if game.cover.width == 0 && !game.id.is-empty && UiState.downloading-covers: Spinner {
                     width: 48px;
                     height: 48px;
                     indeterminate: true;
                 }
-            }
-        }
 
-        // No cover available: neutral icon.
-        if game.cover.width == 0 && (game.id.is-empty || !UiState.downloading-covers): VerticalLayout {
-            height: 93px;
-            alignment: center;
-
-            HorizontalLayout {
-                alignment: center;
-
-                IconDisplay {
+                // No cover available: neutral icon.
+                if game.cover.width == 0 && (game.id.is-empty || !UiState.downloading-covers): IconDisplay {
                     icon: IconSet.Image;
                     size: 48px;
                     stroke: MyPalette.foreground.transparentize(0.6);
@@ -101,6 +93,7 @@ export component GameCard inherits Card {
                 icon: IconSet.Info;
                 clicked => {
                     UiState.current-game = game;
+                    Dispatcher.dispatch(Message.FetchGameDetails, game.path);
                 }
             }
 

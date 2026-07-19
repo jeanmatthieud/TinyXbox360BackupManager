@@ -26,6 +26,7 @@ impl From<&Game> for DisplayedGame {
             is_x360: game.is_x360,
             is_arcade: game.format == GameFormat::Arcade,
             cover,
+            incomplete: game.incomplete,
         }
     }
 }

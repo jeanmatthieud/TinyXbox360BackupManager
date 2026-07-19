@@ -5842,7 +5842,7 @@ checksum = "9ea3136b675547379c4bd395ca6b938e5ad3c3d20fad76e7fe85f9e0d011419c"
 
 [[package]]
 name = "txbm-core"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "derive_more",
@@ -5855,6 +5855,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sevenz-rust2",
+ "sha1",
  "suppaftp",
  "ureq",
  "which-fs",
@@ -5864,7 +5865,7 @@ dependencies = [
 
 [[package]]
 name = "txbm-gui"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "lucide-slint",

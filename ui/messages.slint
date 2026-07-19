@@ -32,10 +32,13 @@ export enum Message {
     PickGames,
     FilterGames,
     SetTargetFtp,
+    ConnectRecentLocation,
+    RemoveRecentLocation,
     Disconnect,
     ScanFinished,
     CancelScan,
     TestFtp,
+    RestartAurora,
     FetchAuroraPaths,
     CancelAllConversions,
     CancelConversion,
@@ -50,6 +53,13 @@ export enum Message {
     DownloadCovers,
     FileDropped,
     RunDotClean,
+    FetchGameDetails,
+    GameDetailsFetched,
+    FetchTitleUpdates,
+    TitleUpdatesFetched,
+    ActivateTitleUpdate,
+    DeactivateTitleUpdate,
+    TitleUpdateChanged,
 }
 
 export global Dispatcher {

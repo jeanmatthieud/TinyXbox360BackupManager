@@ -7,6 +7,7 @@ use iso2god::{game_list, god, iso};
 use std::fs::{self, File};
 use std::io::{Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::AtomicBool;
 
 /// Converts an Xbox 360 game ISO to GOD in `content_dir`
 /// (the `Content/0000000000000000` folder of the target).
@@ -17,6 +18,7 @@ pub fn convert_to_god(
     source_iso: &Path,
     content_dir: &Path,
     game_title: Option<&str>,
+    cancel: &AtomicBool,
     progress: &mut dyn FnMut(u64, u64),
 ) -> Result<PathBuf> {
     let source_iso_file =
@@ -48,9 +50,16 @@ pub fn convert_to_god(
     }
     fs::create_dir_all(&data_dir).context("creating GOD data folder")?;
 
+    let title_dir = content_dir.join(format!("{:08X}", exe_info.title_id));
+
     progress(0, part_count);
 
     for part_index in 0..part_count {
+        if crate::convert::is_cancelled(cancel) {
+            // Drop the partially-written GOD title folder before bailing.
+            let _ = fs::remove_dir_all(&title_dir);
+            anyhow::bail!(crate::convert::CONVERSION_CANCELLED);
+        }
         let mut iso_data_volume = File::open(source_iso)?;
         iso_data_volume.seek(SeekFrom::Start(iso_reader.volume_descriptor.root_offset))?;
 
@@ -113,7 +122,7 @@ pub fn convert_to_god(
         .write_all(&con_header)
         .context("writing CON header")?;
 
-    Ok(content_dir.join(format!("{:08X}", exe_info.title_id)))
+    Ok(title_dir)
 }
 
 fn read_part_mht(file_layout: &god::FileLayout<'_>, part_index: u64) -> Result<god::HashList> {

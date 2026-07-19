@@ -3,14 +3,16 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 use crate::{
-    AppWindow, Dispatcher, DisplayedConfig, DisplayedDriveInfo, DisplayedGame, Message,
-    Notification, Page, UiState, convert::perform_conversion, covers, dialogs, state::State, util,
+    AppWindow, Dispatcher, DisplayedConfig, DisplayedDriveInfo, DisplayedGame,
+    DisplayedTitleUpdate, Message, Notification, Page, UiState, convert::perform_conversion,
+    covers, dialogs, game_details, state::State, title_updates, util,
 };
-use slint::{ComponentHandle, SharedString, ToSharedString, Weak};
+use slint::{ComponentHandle, ModelRc, SharedString, ToSharedString, VecModel, Weak};
 use std::{
     collections::VecDeque,
     fs,
     path::{Path, PathBuf},
+    rc::Rc,
     sync::Mutex,
 };
 use txbm_core::{
@@ -23,6 +25,20 @@ const NEW_DRIVE_TEXT: &str = "New drive detected\nOnce the games are on the cons
 /// Result of the asynchronous scan of the target, deposited by the scan thread
 /// then retrieved in the ScanFinished handler.
 static SCAN_RESULT: Mutex<Option<anyhow::Result<(Vec<Game>, DriveInfo)>>> = Mutex::new(None);
+
+/// Result of the asynchronous disc/DLC fetch for the game shown in the
+/// info modal, deposited by the fetch thread then retrieved in the
+/// GameDetailsFetched handler.
+static GAME_DETAILS_RESULT: Mutex<Option<(PathBuf, txbm_core::game_details::GameDetails)>> =
+    Mutex::new(None);
+
+/// Result of the asynchronous title-update fetch for the Title Updates
+/// window, deposited by the fetch thread then retrieved in the
+/// TitleUpdatesFetched handler.
+#[allow(clippy::type_complexity)]
+static TITLE_UPDATES_RESULT: Mutex<
+    Option<(PathBuf, anyhow::Result<Vec<DisplayedTitleUpdate>>)>,
+> = Mutex::new(None);
 
 impl State {
     pub fn update(
@@ -42,8 +58,11 @@ impl State {
             Message::SyncConfig => {
                 let app = weak.upgrade().unwrap();
 
-                app.global::<UiState<'_>>()
-                    .set_config(DisplayedConfig::from(&self.config));
+                let ui_state = app.global::<UiState<'_>>();
+                ui_state.set_config(DisplayedConfig::from(&self.config));
+                ui_state.set_recent_locations(ModelRc::from(Rc::new(VecModel::from(
+                    crate::config::recent_locations(&self.config),
+                ))));
 
                 if let Err(e) = self.config.write() {
                     let text = slint::format!("Failed to write config: {e}");
@@ -61,6 +80,7 @@ impl State {
                     if self.config.check_mount_point() {
                         self.notifications.push(Notification::info(NEW_DRIVE_TEXT));
                     }
+                    self.config.contents.record_recent_location();
                 }
                 message_queue.push_back((Message::SyncConfig, SharedString::new()));
                 message_queue.push_back((Message::RefreshAll, SharedString::new()));
@@ -226,6 +246,16 @@ impl State {
                         self.notifications.push(Notification::info("Scan cancelled"));
                     }
                     Some(Err(e)) => {
+                        // A real scan failure (timeout, unreachable console...)
+                        // means the target can no longer be trusted: clear the
+                        // stale game list/drive info rather than leaving the
+                        // UI looking still connected.
+                        self.games.clear();
+                        self.drive_info = DriveInfo::default();
+                        app.global::<UiState<'_>>()
+                            .set_drive_info(DisplayedDriveInfo::from(&self.drive_info));
+                        message_queue.push_back((Message::RefreshDisplayedGames, SharedString::new()));
+
                         let text = slint::format!("Failed to scan the target: {e:#}");
                         self.notifications.push(Notification::error(text));
                     }
@@ -240,9 +270,42 @@ impl State {
                 }
 
                 self.config.contents.target_kind = TargetKind::Ftp;
+                self.config.contents.record_recent_location();
 
                 message_queue.push_back((Message::SyncConfig, SharedString::new()));
                 message_queue.push_back((Message::RefreshAll, SharedString::new()));
+            }
+            Message::ConnectRecentLocation => {
+                let i: usize = payload.parse().unwrap();
+                let Some(loc) = self.config.contents.recent_locations.get(i).cloned() else {
+                    return;
+                };
+
+                match loc.kind {
+                    TargetKind::Local => {
+                        self.config.contents.target_kind = TargetKind::Local;
+                        self.config.contents.mount_point = loc.mount_point;
+                    }
+                    TargetKind::Ftp => {
+                        self.config.contents.target_kind = TargetKind::Ftp;
+                        self.config.contents.console_ip = loc.console_ip;
+                        self.config.contents.ftp_port = loc.ftp_port;
+                        self.config.contents.ftp_user = loc.ftp_user;
+                        self.config.contents.ftp_password = loc.ftp_password;
+                    }
+                }
+                // Move it back to the top of the list.
+                self.config.contents.record_recent_location();
+
+                message_queue.push_back((Message::SyncConfig, SharedString::new()));
+                message_queue.push_back((Message::RefreshAll, SharedString::new()));
+            }
+            Message::RemoveRecentLocation => {
+                let i: usize = payload.parse().unwrap();
+                if i < self.config.contents.recent_locations.len() {
+                    self.config.contents.recent_locations.remove(i);
+                    message_queue.push_back((Message::SyncConfig, SharedString::new()));
+                }
             }
             Message::Disconnect => {
                 // We forget the target but keep the FTP credentials
@@ -418,11 +481,15 @@ impl State {
                 let app = weak.upgrade().unwrap();
                 app.global::<UiState<'_>>().set_converting(true);
 
+                self.conversion_cancel
+                    .store(false, std::sync::atomic::Ordering::Relaxed);
+
                 let weak = weak.clone();
                 let config = self.config.clone();
+                let cancel = self.conversion_cancel.clone();
 
                 let _ = std::thread::spawn(move || {
-                    perform_conversion(conv, &config, &weak);
+                    perform_conversion(conv, &config, cancel, &weak);
                 });
             }
             Message::ConversionFinished => {
@@ -469,6 +536,45 @@ impl State {
                             }
                             Err(e) => {
                                 let text = slint::format!("FTP connection failed: {e:#}");
+                                dispatcher.invoke_dispatch(Message::NotifyError, text);
+                            }
+                        }
+                    });
+                });
+            }
+            Message::RestartAurora => {
+                let ftp_config = self.config.contents.ftp_config();
+
+                if ftp_config.host.is_empty() {
+                    let text = "No console IP configured";
+                    self.notifications.push(Notification::error(text));
+                    return;
+                }
+
+                let text = "Restarting Aurora...";
+                self.notifications.push(Notification::info(text));
+
+                let weak = weak.clone();
+                std::thread::spawn(move || {
+                    let res = FtpSession::connect(&ftp_config).and_then(|mut session| {
+                        session.restart_aurora()?;
+                        session.quit();
+                        Ok(())
+                    });
+
+                    let _ = weak.upgrade_in_event_loop(move |app| {
+                        let dispatcher = app.global::<Dispatcher<'_>>();
+
+                        match res {
+                            Ok(()) => {
+                                let text = "Aurora is ready 🎉";
+                                dispatcher.invoke_dispatch(
+                                    Message::NotifyInfo,
+                                    SharedString::from(text),
+                                );
+                            }
+                            Err(e) => {
+                                let text = slint::format!("Failed to restart Aurora: {e:#}");
                                 dispatcher.invoke_dispatch(Message::NotifyError, text);
                             }
                         }
@@ -579,8 +685,15 @@ impl State {
                 let _ = self.displayed_conversion_queue.remove(i);
             }
             Message::CancelAllConversions => {
-                // Keep the running conversion (index 0) in place; it will be
-                // removed when it finishes. Only drop the pending items.
+                // Signal the running conversion (index 0) to stop; it bails at
+                // its next cancellation checkpoint, cleans up its partial local
+                // output, and is removed from the queue by `ConversionFinished`.
+                if self.is_converting {
+                    self.conversion_cancel
+                        .store(true, std::sync::atomic::Ordering::Relaxed);
+                }
+                // Drop the pending items right away, keeping the running one
+                // (index 0) until it finishes bailing.
                 let pending_start = if self.is_converting { 1 } else { 0 };
                 while self.conversion_queue.len() > pending_start {
                     let _ = self.conversion_queue.remove(pending_start);
@@ -615,6 +728,198 @@ impl State {
                         self.games_to_add = VecDeque::from([path]);
                         self.displayed_games_to_add.set_vec(displayed_games_to_add);
                     }
+                }
+            }
+            Message::FetchGameDetails => {
+                let app = weak.upgrade().unwrap();
+                let ui_state = app.global::<UiState<'_>>();
+                if ui_state.get_fetching_game_details() {
+                    return;
+                }
+
+                let path = Path::new(payload.as_str());
+                let Some(game) = self.games.iter().find(|g| g.path == path).cloned() else {
+                    return;
+                };
+                let Some(target) = Target::from_config(&self.config.contents) else {
+                    return;
+                };
+
+                ui_state.set_fetching_game_details(true);
+                ui_state.set_current_game_discs(ModelRc::default());
+                ui_state.set_current_game_dlc(ModelRc::default());
+
+                let weak = weak.clone();
+                std::thread::spawn(move || {
+                    let details = target.game_details(&game).unwrap_or_default();
+                    *GAME_DETAILS_RESULT.lock().unwrap() = Some((game.path.clone(), details));
+
+                    let _ = weak.upgrade_in_event_loop(move |app| {
+                        app.global::<Dispatcher<'_>>()
+                            .invoke_dispatch(Message::GameDetailsFetched, SharedString::new());
+                    });
+                });
+            }
+            Message::GameDetailsFetched => {
+                let app = weak.upgrade().unwrap();
+                let ui_state = app.global::<UiState<'_>>();
+                ui_state.set_fetching_game_details(false);
+
+                let Some((path, details)) = GAME_DETAILS_RESULT.lock().unwrap().take() else {
+                    return;
+                };
+                // Discard if the user closed the modal or switched games
+                // while the fetch was running.
+                if Path::new(ui_state.get_current_game().path.as_str()) != path {
+                    return;
+                }
+
+                ui_state.set_current_game_discs(ModelRc::from(Rc::new(VecModel::from(
+                    game_details::disc_lines(&details),
+                ))));
+                ui_state.set_current_game_dlc(ModelRc::from(Rc::new(VecModel::from(
+                    game_details::dlc_lines(&details),
+                ))));
+            }
+            Message::FetchTitleUpdates => {
+                let app = weak.upgrade().unwrap();
+                let ui_state = app.global::<UiState<'_>>();
+                ui_state.set_showing_title_updates(true);
+                if ui_state.get_fetching_title_updates() {
+                    return;
+                }
+
+                let path = Path::new(payload.as_str());
+                let Some(game) = self.games.iter().find(|g| g.path == path).cloned() else {
+                    return;
+                };
+                let Some(target) = Target::from_config(&self.config.contents) else {
+                    return;
+                };
+
+                ui_state.set_fetching_title_updates(true);
+                self.displayed_title_updates.set_vec(Vec::new());
+
+                let weak = weak.clone();
+                std::thread::spawn(move || {
+                    let result = title_updates::fetch(&target, &game);
+                    *TITLE_UPDATES_RESULT.lock().unwrap() = Some((game.path.clone(), result));
+
+                    let _ = weak.upgrade_in_event_loop(move |app| {
+                        app.global::<Dispatcher<'_>>()
+                            .invoke_dispatch(Message::TitleUpdatesFetched, SharedString::new());
+                    });
+                });
+            }
+            Message::TitleUpdatesFetched => {
+                let app = weak.upgrade().unwrap();
+                let ui_state = app.global::<UiState<'_>>();
+                ui_state.set_fetching_title_updates(false);
+
+                let Some((path, result)) = TITLE_UPDATES_RESULT.lock().unwrap().take() else {
+                    return;
+                };
+                // Discard if the user closed the modal or switched games
+                // while the fetch was running.
+                if Path::new(ui_state.get_current_game().path.as_str()) != path {
+                    return;
+                }
+
+                match result {
+                    Ok(updates) => self.displayed_title_updates.set_vec(updates),
+                    Err(e) => {
+                        let text = slint::format!("Failed to fetch title updates: {e:#}");
+                        self.notifications.push(Notification::error(text));
+                    }
+                }
+            }
+            Message::ActivateTitleUpdate => {
+                let Some((path, hash)) = payload.split_once('\n') else {
+                    return;
+                };
+                let path = Path::new(path);
+                let Some(game) = self.games.iter().find(|g| g.path == path).cloned() else {
+                    return;
+                };
+                let Some(target) = Target::from_config(&self.config.contents) else {
+                    return;
+                };
+                let hash = hash.to_string();
+
+                let app = weak.upgrade().unwrap();
+                app.global::<UiState<'_>>().set_updating_title_update(true);
+
+                let weak = weak.clone();
+                std::thread::spawn(move || {
+                    let res = target.activate_title_update(&game, &hash);
+
+                    let _ = weak.upgrade_in_event_loop(move |app| {
+                        let dispatcher = app.global::<Dispatcher<'_>>();
+                        match res {
+                            Ok(()) => {
+                                dispatcher.invoke_dispatch(
+                                    Message::NotifyInfo,
+                                    "Title update installed".to_shared_string(),
+                                );
+                            }
+                            Err(e) => {
+                                let text =
+                                    slint::format!("Failed to install title update: {e:#}");
+                                dispatcher.invoke_dispatch(Message::NotifyError, text);
+                            }
+                        }
+                        dispatcher
+                            .invoke_dispatch(Message::TitleUpdateChanged, SharedString::new());
+                    });
+                });
+            }
+            Message::DeactivateTitleUpdate => {
+                let Some((path, file_name)) = payload.split_once('\n') else {
+                    return;
+                };
+                let path = Path::new(path);
+                let Some(game) = self.games.iter().find(|g| g.path == path).cloned() else {
+                    return;
+                };
+                let Some(target) = Target::from_config(&self.config.contents) else {
+                    return;
+                };
+                let file_name = file_name.to_string();
+
+                let app = weak.upgrade().unwrap();
+                app.global::<UiState<'_>>().set_updating_title_update(true);
+
+                let weak = weak.clone();
+                std::thread::spawn(move || {
+                    let res = target.deactivate_title_update(&game, &file_name);
+
+                    let _ = weak.upgrade_in_event_loop(move |app| {
+                        let dispatcher = app.global::<Dispatcher<'_>>();
+                        match res {
+                            Ok(()) => {
+                                dispatcher.invoke_dispatch(
+                                    Message::NotifyInfo,
+                                    "Title update removed".to_shared_string(),
+                                );
+                            }
+                            Err(e) => {
+                                let text = slint::format!("Failed to remove title update: {e:#}");
+                                dispatcher.invoke_dispatch(Message::NotifyError, text);
+                            }
+                        }
+                        dispatcher
+                            .invoke_dispatch(Message::TitleUpdateChanged, SharedString::new());
+                    });
+                });
+            }
+            Message::TitleUpdateChanged => {
+                let app = weak.upgrade().unwrap();
+                let ui_state = app.global::<UiState<'_>>();
+                ui_state.set_updating_title_update(false);
+
+                let path = ui_state.get_current_game().path;
+                if !path.is_empty() {
+                    message_queue.push_back((Message::FetchTitleUpdates, path));
                 }
             }
             #[cfg(windows)]

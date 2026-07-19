@@ -9,6 +9,9 @@ use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 
+/// Discs sharing a TitleID are told apart by these two bytes.
+const DISC_NUMBER_OFFSET: u64 = 0x366;
+
 /// Marketplace content (DLC, unlocks).
 pub const CONTENT_TYPE_DLC: u32 = 0x0000_0002;
 /// Title update.
@@ -18,6 +21,18 @@ pub const CONTENT_TYPE_ARCADE: u32 = 0x000D_0000;
 
 pub fn is_stfs_magic(magic: &[u8; 4]) -> bool {
     magic == b"CON " || magic == b"LIVE" || magic == b"PIRS"
+}
+
+/// Folder name for installed DLC / marketplace content
+/// (`Content/0000000000000000/<TitleID>/00000002`).
+pub fn dlc_dir_name() -> String {
+    format!("{CONTENT_TYPE_DLC:08X}")
+}
+
+/// Folder name for installed title updates, read by the dashboard at boot
+/// (`Content/0000000000000000/<TitleID>/000B0000`).
+pub fn title_update_dir_name() -> String {
+    format!("{CONTENT_TYPE_TITLE_UPDATE:08X}")
 }
 
 #[derive(Debug, Clone)]
@@ -32,6 +47,11 @@ pub struct StfsInfo {
     pub display_name: Option<String>,
     /// Game title (first locale); not always filled in.
     pub title_name: Option<String>,
+    /// 1-based disc number, telling apart the packages of a multi-disc
+    /// game sharing the same TitleID (0 if unset).
+    pub disc_number: u8,
+    /// Total number of discs in the set (0 or 1 for single-disc games).
+    pub disc_in_set: u8,
 }
 
 impl StfsInfo {
@@ -52,40 +72,59 @@ impl StfsInfo {
 pub fn inspect(path: &Path) -> Result<Option<StfsInfo>> {
     let mut file =
         File::open(path).with_context(|| format!("opening {}", path.display()))?;
+    inspect_reader(&mut file, path.to_owned())
+}
 
+/// Like `inspect`, but reads from an arbitrary seekable reader (e.g. an
+/// in-memory buffer downloaded over FTP). `path` is only carried through
+/// for display purposes.
+pub fn inspect_reader<R: Read + Seek>(
+    reader: &mut R,
+    path: PathBuf,
+) -> Result<Option<StfsInfo>> {
     let mut magic = [0u8; 4];
-    if file.read_exact(&mut magic).is_err() || !is_stfs_magic(&magic) {
+    if reader.read_exact(&mut magic).is_err() || !is_stfs_magic(&magic) {
         return Ok(None);
     }
 
-    let read_u32 = |file: &mut File, offset: u64| -> Result<u32> {
+    let read_u32 = |reader: &mut R, offset: u64| -> Result<u32> {
         let mut buf = [0u8; 4];
-        file.seek(SeekFrom::Start(offset))?;
-        file.read_exact(&mut buf)?;
+        reader.seek(SeekFrom::Start(offset))?;
+        reader.read_exact(&mut buf)?;
         Ok(u32::from_be_bytes(buf))
     };
+    let read_u8 = |reader: &mut R, offset: u64| -> Result<u8> {
+        let mut buf = [0u8; 1];
+        reader.seek(SeekFrom::Start(offset))?;
+        reader.read_exact(&mut buf)?;
+        Ok(buf[0])
+    };
 
-    let content_type = read_u32(&mut file, 0x344)?;
-    let media_id = read_u32(&mut file, 0x354)?;
-    let title_id = read_u32(&mut file, 0x360)?;
-    let display_name = read_utf16_be(&mut file, 0x411);
-    let title_name = read_utf16_be(&mut file, 0x1691);
+    let content_type = read_u32(reader, 0x344)?;
+    let media_id = read_u32(reader, 0x354)?;
+    let title_id = read_u32(reader, 0x360)?;
+    let disc_number = read_u8(reader, DISC_NUMBER_OFFSET)?;
+    let disc_in_set = read_u8(reader, DISC_NUMBER_OFFSET + 1)?;
+    let display_name = read_utf16_be(reader, 0x411);
+    let title_name = read_utf16_be(reader, 0x1691);
 
     Ok(Some(StfsInfo {
-        path: path.to_owned(),
+        path,
         content_type,
         title_id: format!("{title_id:08X}"),
         media_id: format!("{media_id:08X}"),
         display_name,
         title_name,
+        disc_number,
+        disc_in_set,
     }))
 }
 
 /// Reads a 0x100-byte UTF-16 big-endian string field.
-fn read_utf16_be(file: &mut File, offset: u64) -> Option<String> {
+fn read_utf16_be<R: Read + Seek>(reader: &mut R, offset: u64) -> Option<String> {
     let mut buf = [0u8; 0x100];
-    file.seek(SeekFrom::Start(offset)).ok()?;
-    file.read_exact(&mut buf).ok()?;
+    reader.seek(SeekFrom::Start(offset)).ok()?;
+    reader.read_exact(&mut buf).ok()?;
     let utf16: Vec<u16> = buf
         .chunks_exact(2)
         .map(|c| u16::from_be_bytes([c[0], c[1]]))
