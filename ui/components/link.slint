@@ -25,7 +25,7 @@ export component Link inherits Rectangle {
 
     t := Text {
         x: 17px;
-        y: 0px;
+        y: (parent.height - self.height) / 2;
         text: label;
         color: MyPalette.accent-background;
         overflow: elide;
