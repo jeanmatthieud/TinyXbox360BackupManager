@@ -13,12 +13,17 @@ export component Notifications inherits TouchArea {
     height: v.height;
 
     v := VerticalLayout {
-        width: min(self.preferred-width, 400px);
+        width: self.preferred-width;
         height: self.preferred-height;
         padding: 10px;
         spacing: 5px;
+        cross-axis-alignment: end;
 
-        for notification[i] in UiState.notifications: Card {
+        for notification[i] in UiState.notifications: card := Card {
+            // Card hugs the text up to 400px: driven by the text's natural
+            // (unwrapped) preferred-width, which - unlike its stretch-resolved
+            // width - is unaffected by wrapping and safe to use here.
+            width: min(t.preferred-width + 78px, 400px);
             min-height: 40px;
 
             h := HorizontalLayout {
@@ -40,10 +45,14 @@ export component Notifications inherits TouchArea {
                     }
                 }
 
-                Text {
+                t := Text {
+                    // Explicit width (rather than horizontal-stretch) so the wrap
+                    // preferred-height is computed against the actual rendered
+                    // width instead of the unconstrained one: 78px = h's paddings
+                    // (20px) + icon column (14px) + close column (24px) + spacing (20px).
+                    width: card.width - 78px;
                     text: notification.text;
                     wrap: word-wrap;
-                    horizontal-stretch: 1;
                 }
 
                 VerticalLayout {
