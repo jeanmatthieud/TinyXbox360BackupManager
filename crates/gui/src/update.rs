@@ -247,14 +247,11 @@ impl State {
                     }
                     Some(Err(e)) => {
                         // A real scan failure (timeout, unreachable console...)
-                        // means the target can no longer be trusted: clear the
-                        // stale game list/drive info rather than leaving the
-                        // UI looking still connected.
-                        self.games.clear();
-                        self.drive_info = DriveInfo::default();
-                        app.global::<UiState<'_>>()
-                            .set_drive_info(DisplayedDriveInfo::from(&self.drive_info));
-                        message_queue.push_back((Message::RefreshDisplayedGames, SharedString::new()));
+                        // means the target can no longer be trusted: disconnect,
+                        // same as the explicit "Disconnect" button, so the UI
+                        // doesn't keep looking connected (stale games/drive info,
+                        // "Disconnect from..." button) after a failed target.
+                        message_queue.push_back((Message::Disconnect, SharedString::new()));
 
                         let text = slint::format!("Failed to scan the target: {e:#}");
                         self.notifications.push(Notification::error(text));
