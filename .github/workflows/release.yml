@@ -265,6 +265,13 @@ jobs:
 
       - name: Build the app icon
         run: |
+          set -x
+          # iconutil rejects palette-indexed / non-canonical PNGs. Log what the
+          # runner actually has, then re-encode each entry to plain RGBA.
+          for f in package/macos/TinyXbox360BackupManager.iconset/*.png; do
+            sips -g pixelWidth -g pixelHeight -g bitsPerSample -g samplesPerPixel "$f"
+            sips -s format png "$f" --out "$f"
+          done
           iconutil -c icns package/macos/TinyXbox360BackupManager.iconset \
             -o TinyXbox360BackupManager.app/Contents/Resources/TinyXbox360BackupManager.icns
 
