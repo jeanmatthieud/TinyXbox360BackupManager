@@ -59,6 +59,16 @@ pub struct FtpSession {
     stream: FtpStream,
 }
 
+impl Drop for FtpSession {
+    /// Best-effort FTP `QUIT` so the console frees its (single) connection
+    /// slot even when a session is dropped on an error path, without an
+    /// explicit `quit()` call. Bounded by `IO_TIMEOUT`, so a dead/timed-out
+    /// connection cannot hang this beyond that.
+    fn drop(&mut self) {
+        let _ = self.stream.quit();
+    }
+}
+
 fn parent_and_name(remote_dir: &str) -> (String, String) {
     let trimmed = remote_dir.trim_end_matches('/');
     match trimmed.rsplit_once('/') {
@@ -331,7 +341,43 @@ impl FtpSession {
         Ok(())
     }
 
-    pub fn quit(mut self) {
-        let _ = self.stream.quit();
+    /// Uploads an in-memory buffer as a single file, creating `remote_dir`
+    /// if needed. Unlike `upload_dir`, this needs no local directory tree.
+    pub fn put_bytes(&mut self, remote_dir: &str, file_name: &str, bytes: &[u8]) -> Result<()> {
+        self.cwd_create(remote_dir)
+            .with_context(|| format!("creating {remote_dir}"))?;
+        let mut reader = std::io::Cursor::new(bytes);
+        self.stream
+            .put_file(file_name, &mut reader)
+            .with_context(|| format!("sending {remote_dir}/{file_name}"))?;
+        Ok(())
     }
+
+    /// Removes a single file from a remote directory.
+    pub fn remove_file(&mut self, remote_dir: &str, file_name: &str) -> Result<()> {
+        self.cwd(remote_dir)
+            .with_context(|| format!("entering {remote_dir}"))?;
+        self.stream
+            .rm(file_name)
+            .with_context(|| format!("removing {remote_dir}/{file_name}"))
+    }
+
+    /// Restarts the Aurora dashboard on the console (FTP `SITE RESTART`).
+    ///
+    /// Aurora replies `211 Restarting Aurora. Please reconnect.` (status
+    /// `System`, not the `CommandOk` that `FtpStream::site` expects), then
+    /// resets the connection — confirmed against a real console. Use
+    /// `custom_command` accepting both statuses instead.
+    pub fn restart_aurora(&mut self) -> Result<()> {
+        use suppaftp::Status;
+
+        self.stream
+            .custom_command("SITE RESTART", &[Status::CommandOk, Status::System])
+            .context("sending SITE RESTART")?;
+        Ok(())
+    }
+
+    /// Closes the connection. Just a documented drop point: the actual
+    /// `QUIT` is sent by the `Drop` impl, which also covers error paths.
+    pub fn quit(self) {}
 }

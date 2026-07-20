@@ -1,0 +1,25 @@
+// SPDX-FileCopyrightText: 2026 Manuel Quarneti <mq1@ik.me> (TinyWiiBackupManager)
+// SPDX-FileContributor: Modified by Jean-Matthieu Dechriste (TinyXbox360BackupManager)
+// SPDX-License-Identifier: GPL-3.0-only
+
+// Xbox 360 covers from XboxUnity are full DVD wraps laid out left-to-right in
+// landscape: back | spine | front. Using the standard DVD keepcase template
+// (back 130mm, spine 14mm, front 130mm = 274mm total), the front panel is the
+// rightmost 130/274 ≈ 47.45% of the width, which also drops the spine. Covers
+// that are already front-only (portrait, e.g. Original Xbox) are shown as-is.
+export component CoverImage inherits Image {
+    property <bool> is-wrap: self.source.width > self.source.height;
+    property <float> front-fraction: 0.4745;
+
+    source-clip-x: is-wrap ? round(self.source.width * (1 - front-fraction)) : 0;
+    source-clip-y: 0;
+    source-clip-width: is-wrap ? round(self.source.width * front-fraction) : self.source.width;
+    source-clip-height: self.source.height;
+
+    // Default to the clipped front panel's aspect ratio so the element is no
+    // wider than the visible cover (3:4 portrait fallback while no image is
+    // loaded). Usage sites can still override width.
+    width: self.source-clip-height > 0
+        ? self.height * self.source-clip-width / self.source-clip-height
+        : self.height * 3 / 4;
+}

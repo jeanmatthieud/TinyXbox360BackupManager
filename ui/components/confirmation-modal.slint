@@ -14,42 +14,41 @@ export component ConfirmationModal inherits Modal {
     callback cancelled();
     callback confirmed();
 
-    VerticalLayout {
-        spacing: 10px;
+    // spacing: 10px;
 
-        ScrollView {
-            width: v.preferred-width;
+    ScrollView {
+        width: v.preferred-width;
+        height: min(v.preferred-height, 300px);
 
-            v := VerticalLayout {
-                alignment: start;
-                padding: 20px;
-                spacing: 5px;
+        v := VerticalLayout {
+            alignment: start;
+            padding: 20px;
+            spacing: 5px;
 
-                @children
-            }
+            @children
         }
+    }
 
-        VerticalLayout {
-            height: self.min-height;
+    VerticalLayout {
+        height: self.min-height;
 
-            HorizontalLine { }
+        HorizontalLine { }
 
-            HorizontalLayout {
-                alignment: end;
-                padding: 10px;
-                spacing: 10px;
+        HorizontalLayout {
+            alignment: end;
+            padding: 10px;
+            spacing: 10px;
 
-                IconButton {
-                    label: "Cancel";
-                    clicked => cancelled();
-                }
+            IconButton {
+                label: "Cancel";
+                clicked => cancelled();
+            }
 
-                IconButton {
-                    label: "Ok";
-                    kind: destructive ? IconButtonKind.Destructive : IconButtonKind.Primary;
-                    icon: btn-icon;
-                    clicked => confirmed();
-                }
+            IconButton {
+                label: "Ok";
+                kind: destructive ? IconButtonKind.Destructive : IconButtonKind.Primary;
+                icon: btn-icon;
+                clicked => confirmed();
             }
         }
     }

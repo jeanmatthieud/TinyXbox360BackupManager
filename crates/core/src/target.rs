@@ -113,9 +113,6 @@ fn remove_dir_all_with_progress(
     Ok(())
 }
 
-/// STFS content types considered as installed games.
-const GOD_CONTENT_TYPES: [(&str, bool); 2] = [("00007000", true), ("00005000", false)];
-
 /// Finds the root of the console's internal hard drive (Hdd1).
 pub fn ftp_hdd_root(session: &mut FtpSession) -> String {
     session
@@ -177,29 +174,32 @@ impl AuroraPaths {
     }
 }
 
-/// Looks for Aurora installation on the console's drives
-/// and returns its database folder.
-fn find_aurora_databases(session: &mut FtpSession) -> Option<String> {
+/// Looks for the Aurora installation on the console's drives and returns
+/// its `Aurora/Data` folder (holding `Databases/` and `TitleUpdates/`).
+pub(crate) fn find_aurora_data_dir(session: &mut FtpSession) -> Option<String> {
     let roots = session.list_root().ok()?;
     for root in roots {
         for entry in session.list_dir(&format!("/{root}")) {
-            if !entry.is_dir || !entry.name.eq_ignore_ascii_case("Aurora") {
-                continue;
-            }
-            let db_dir = format!("/{root}/{}/Data/Databases", entry.name);
-            let files = session.list_dir(&db_dir);
-            let has_settings = files
-                .iter()
-                .any(|f| f.name.eq_ignore_ascii_case("settings.db"));
-            let has_content = files
-                .iter()
-                .any(|f| f.name.eq_ignore_ascii_case("content.db"));
-            if has_settings && has_content {
-                return Some(db_dir);
+            if entry.is_dir && entry.name.eq_ignore_ascii_case("Aurora") {
+                return Some(format!("/{root}/{}/Data", entry.name));
             }
         }
     }
     None
+}
+
+/// Looks for Aurora installation on the console's drives
+/// and returns its database folder.
+fn find_aurora_databases(session: &mut FtpSession) -> Option<String> {
+    let db_dir = format!("{}/Databases", find_aurora_data_dir(session)?);
+    let files = session.list_dir(&db_dir);
+    let has_settings = files
+        .iter()
+        .any(|f| f.name.eq_ignore_ascii_case("settings.db"));
+    let has_content = files
+        .iter()
+        .any(|f| f.name.eq_ignore_ascii_case("content.db"));
+    (has_settings && has_content).then_some(db_dir)
 }
 
 /// Reads Aurora's ScanPaths (settings.db) and resolves them to FTP paths
@@ -315,14 +315,21 @@ fn scan_ftp(ftp: &FtpConfig, cancel: &AtomicBool) -> Result<(Vec<Game>, DriveInf
                 continue;
             }
             let title_dir = format!("{content_dir}/{}", entry.name);
-            for sub in session.list_dir(&title_dir) {
-                let Some((_, is_x360)) = GOD_CONTENT_TYPES
+            let sub_entries = session.list_dir(&title_dir);
+            let mut found_package = false;
+            for sub in &sub_entries {
+                let Some((_, format, is_x360)) = crate::game::INSTALLED_CONTENT_TYPES
                     .iter()
-                    .find(|(t, _)| sub.is_dir && sub.name.eq_ignore_ascii_case(t))
+                    .find(|(t, _, _)| sub.is_dir && sub.name.eq_ignore_ascii_case(t))
                 else {
                     continue;
                 };
-                let size = session.dir_size(&format!("{title_dir}/{}", sub.name), 3);
+                found_package = true;
+                let dlc_size = session.dir_size(
+                    &format!("{title_dir}/{}", crate::stfs::dlc_dir_name()),
+                    3,
+                );
+                let size = session.dir_size(&format!("{title_dir}/{}", sub.name), 3) + dlc_size;
                 let title = u32::from_str_radix(&title_id, 16)
                     .ok()
                     .and_then(iso2god::game_list::find_title_by_id)
@@ -332,12 +339,50 @@ fn scan_ftp(ftp: &FtpConfig, cancel: &AtomicBool) -> Result<(Vec<Game>, DriveInf
                 games.push(Game {
                     id: title_id.clone(),
                     title,
-                    format: GameFormat::God,
+                    format: *format,
                     path: PathBuf::from(&title_dir),
                     size,
                     is_x360: *is_x360,
                     search_term,
+                    incomplete: false,
                 });
+            }
+
+            // No game package: only DLC and/or a title update sit here,
+            // orphaned from a base install that was removed or never
+            // completed. Still surface it, flagged incomplete.
+            if !found_package {
+                let has_dlc = sub_entries
+                    .iter()
+                    .any(|s| s.is_dir && s.name.eq_ignore_ascii_case(&crate::stfs::dlc_dir_name()));
+                let has_title_update = sub_entries.iter().any(|s| {
+                    s.is_dir && s.name.eq_ignore_ascii_case(&crate::stfs::title_update_dir_name())
+                });
+                if has_dlc || has_title_update {
+                    let dlc_size = session
+                        .dir_size(&format!("{title_dir}/{}", crate::stfs::dlc_dir_name()), 3);
+                    let title_update_size = session.dir_size(
+                        &format!("{title_dir}/{}", crate::stfs::title_update_dir_name()),
+                        3,
+                    );
+                    let size = dlc_size + title_update_size;
+                    let title = u32::from_str_radix(&title_id, 16)
+                        .ok()
+                        .and_then(iso2god::game_list::find_title_by_id)
+                        .unwrap_or_else(|| title_id.clone());
+                    let search_term = format!("{title}\0{title_id}").to_lowercase();
+                    games_bytes += size;
+                    games.push(Game {
+                        id: title_id.clone(),
+                        title,
+                        format: GameFormat::God,
+                        path: PathBuf::from(&title_dir),
+                        size,
+                        is_x360: true,
+                        search_term,
+                        incomplete: true,
+                    });
+                }
             }
         }
     }
@@ -402,17 +447,22 @@ fn scan_extracted_dir(
         match format {
             Some(format) => {
                 let size = session.dir_size(&game_dir, 3);
-                let title = entry.name.clone();
-                let search_term = title.to_lowercase();
+                // TitleID from the folder-name suffix if present; games
+                // added by hand are resolved later (covers pass), not
+                // here — one RETR per game would slow the scan down.
+                let (title, id) = crate::game::split_title_id_suffix(&entry.name);
+                let id = id.unwrap_or_default();
+                let search_term = format!("{title}\0{id}").to_lowercase();
                 *games_bytes += size;
                 games.push(Game {
-                    id: String::new(),
+                    id,
                     title,
                     format,
                     path: PathBuf::from(&game_dir),
                     size,
                     is_x360: format == GameFormat::ExtractedXex,
                     search_term,
+                    incomplete: false,
                 });
             }
             // No executable here: descend one level if Aurora

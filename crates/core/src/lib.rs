@@ -3,6 +3,7 @@
 
 #![warn(clippy::all, rust_2018_idioms)]
 
+pub mod archive;
 pub mod config;
 pub mod conversion_queue;
 pub mod convert;
@@ -12,12 +13,17 @@ pub mod drive_info;
 pub mod extract;
 pub mod ftp;
 pub mod game;
+pub mod game_details;
 pub mod god;
 pub mod iso_info;
+pub mod mobcat;
+pub mod stfs;
 pub mod target;
+pub mod title_updates;
 pub mod unity;
 pub mod updates;
 pub mod util;
+pub mod xbe;
 
 /// Standard folder of GOD / official content on the console.
 pub const CONTENT_DIR: &str = "Content/0000000000000000";

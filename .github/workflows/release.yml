@@ -263,6 +263,14 @@ jobs:
           VERSION=$(yq '.package.version' Cargo.toml)
           /usr/libexec/PlistBuddy -c "Add :CFBundleShortVersionString string $VERSION" TinyXbox360BackupManager.app/Contents/Info.plist
 
+      - name: Build the app icon
+        run: |
+          # iconutil does not create parent dirs for its output; the App skeleton
+          # ships only Contents/Info.plist, so Resources must be created first.
+          mkdir -p TinyXbox360BackupManager.app/Contents/Resources
+          iconutil -c icns package/macos/TinyXbox360BackupManager.iconset \
+            -o TinyXbox360BackupManager.app/Contents/Resources/TinyXbox360BackupManager.icns
+
       - name: Build the fat binary
         run: |
           lipo -create \

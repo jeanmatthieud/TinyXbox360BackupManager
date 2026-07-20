@@ -30,19 +30,26 @@ Inspired by [TinyWiiBackupManager](https://github.com/mq1/TinyWiiBackupManager):
 
 #### :video_game: Game Management
 
-Provide an **ISO** image to the application, and it does the rest:
+Provide an **ISO** image or an **Arcade (XBLA) game** — as a `.7z`/`.zip` archive or a bare STFS package — and the application does the rest:
 
-| Detected image type | Processing | Destination |
+| Detected input type | Processing | Destination |
 |---|---|---|
-| Xbox 360 game (`default.xex`) | Conversion to **GOD** (Games on Demand) | `Content/0000000000000000/<TitleID>/00007000/` |
-| Original Xbox game (`default.xbe`) | **Extraction** of the content | `Games/<Game Name>/` |
-| Install / DLC disk (no executable) | Extraction and merging of the `Content` folder | `Content/0000000000000000/<TitleID>/00000002/` |
+| Xbox 360 game ISO (`default.xex`) | Conversion to **GOD** (Games on Demand) | `Content/0000000000000000/<TitleID>/00007000/` |
+| Original Xbox game ISO (`default.xbe`) | **Extraction** of the content | `Games/<Game Name>/` |
+| Install / **Expansion Installer** disc (no executable; contains DLC and title updates) | Extraction and merging of the `Content` folder | `Content/0000000000000000/<TitleID>/<type>/` |
+| **Arcade (XBLA) game** (`.7z`/`.zip` archive) | Extraction, verification of the **Arcade** package (STFS metadata: title, TitleID) | `Content/0000000000000000/<TitleID>/000D0000/` |
+| STFS package (`LIVE`/`CON `/`PIRS`, usually no extension) | Installed as-is according to its content type | `Content/0000000000000000/<TitleID>/<type>/` |
+
+**DLC and title updates** found alongside the Arcade game in an archive are installed too (respectively in `00000002/` and `000B0000/`), so unlocks work out of the box. They can also be added individually as bare STFS packages.
 
 The library is managed **directly on your chosen target**:
 
 - **USB drive / local folder (FAT32)**: games are written directly in the correct format.
 - **FTP console (Aurora)**: the game list is read from the console, added ISOs are converted locally then pushed directly to `Hdd1`, and deletion is done remotely (one connection at a time, as required by the console's FTP server).
 - **Covers**: retrieved automatically from [XboxUnity](https://www.xboxunity.net) (local cache).
+
+> [!WARNING]
+> Title updates for original Xbox (OG) games are not yet supported.
 
 Homebrew management is intentionally not currently supported.
 
@@ -87,13 +94,13 @@ Homebrew management is intentionally not currently supported.
 
 ## :rocket: Usage
 
-The interface resembles TinyWiiBackupManager: sidebar (Games, Toolbox, Settings, About), grid or table view, 360/OG filters, search, conversion queue, notifications, ISO drag-and-drop.
+The interface resembles TinyWiiBackupManager: sidebar (Games, Toolbox, Settings, About), grid or table view, 360/XBLA/OG filters, search, conversion queue, notifications, drag-and-drop.
 
 1. Click the **hard drive** icon (at the bottom of the sidebar) then select the target: **USB drive / local folder**, or **FTP console** (IP + Aurora credentials, `xbox`/`xbox` port 21 by default, with connection test).
-2. **Games** page: the list reflects the content of the target (local or remote). Click the **+** button (or drag and drop) to add ISOs; the application detects the type of each image and starts GOD conversion or extraction, directly to the target (tracked in the conversion queue and status bar).
+2. **Games** page: the list reflects the content of the target (local or remote). Click the **+** button (or drag and drop) to add ISOs, XBLA archives or STFS packages; the application detects the type of each input and starts GOD conversion, extraction or package installation, directly to the target (tracked in the conversion queue and status bar).
 3. On the console: Aurora > Settings > Content Paths, add `Hdd1:\Content\0000000000000000\` (and `Hdd1:\Games\`), Scan Depth 3–4, then run a scan.
 
-For **multi-disc games with an installation disc** (e.g., GTA V): the "Play" disc is converted to GOD, the installation disc is detected as a content disc and its `Content` folder is merged in the right place — simply provide both ISOs to the application.
+For **multi-disc games with an installation disc** (e.g., GTA V): the "Play" disc is converted to GOD, the installation disc is detected as a content disc and its `Content` folder is merged in the right place — simply provide both ISOs to the application. The same applies to **Expansion Installer** discs (e.g., GTA IV: The Complete Edition): the DLC and title updates they contain are installed to their respective folders.
 
 ## :hammer_and_wrench: Compilation
 

@@ -7,7 +7,7 @@ use slint::WindowHandle;
 use std::path::PathBuf;
 use walkdir::WalkDir;
 
-const INPUT_DIALOG_FILTER: &[&str] = &["iso"];
+const INPUT_DIALOG_FILTER: &[&str] = &["iso", "7z", "zip"];
 
 pub fn pick_mount_point(window_handle: &WindowHandle) -> Option<PathBuf> {
     FileDialog::new()
@@ -20,7 +20,9 @@ pub fn pick_games(window_handle: &WindowHandle) -> Vec<PathBuf> {
     FileDialog::new()
         .set_parent(window_handle)
         .set_title("Select Games")
-        .add_filter("Xbox Optical Disc Image", INPUT_DIALOG_FILTER)
+        .add_filter("Xbox games (ISO / XBLA archive)", INPUT_DIALOG_FILTER)
+        // STFS packages (XBLA/DLC) usually have no extension.
+        .add_filter("All files", &["*"])
         .pick_files()
         .unwrap_or_default()
 }
@@ -38,12 +40,18 @@ pub fn pick_games_r(window_handle: &WindowHandle) -> Vec<PathBuf> {
     };
 
     for entry in WalkDir::new(res).into_iter().filter_map(Result::ok) {
-        if entry.file_type().is_file()
-            && let Some(ext) = entry.path().extension()
-            && INPUT_DIALOG_FILTER
+        if !entry.file_type().is_file() {
+            continue;
+        }
+        // Known extensions, plus extension-less files: STFS packages
+        // (XBLA) usually have none — `should_add_game` sniffs their magic.
+        let accepted = match entry.path().extension() {
+            Some(ext) => INPUT_DIALOG_FILTER
                 .iter()
-                .any(|e| ext.eq_ignore_ascii_case(e))
-        {
+                .any(|e| ext.eq_ignore_ascii_case(e)),
+            None => true,
+        };
+        if accepted {
             paths.push(entry.into_path());
         }
     }

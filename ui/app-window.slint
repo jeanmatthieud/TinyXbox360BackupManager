@@ -17,6 +17,7 @@ import { IconSet } from "@lucide";
 import { GameTablePage } from "game-table-page.slint";
 import { Notifications } from "components/notifications.slint";
 import { GameInfoModal } from "components/game-info-modal.slint";
+import { TitleUpdatesModal } from "components/title-updates-modal.slint";
 import { ConfirmationModal } from "components/confirmation-modal.slint";
 import { Tooltip } from "tooltip.slint";
 import { ToolboxPage } from "toolbox-page.slint";
@@ -33,6 +34,7 @@ export component AppWindow inherits Window {
     min-height: 600px;
     background: MyPalette.background;
     title: UiState.drive-info.label.is-empty ? "TinyXbox360BackupManager  ›  No target selected" : (UiState.drive-info.total-gib > 0 ? "TinyXbox360BackupManager  ›  \{UiState.drive-info.label}  (\{UiState.drive-info.used-gib.to-fixed(2)}/\{UiState.drive-info.total-gib.to-fixed(2)} GiB)" : "TinyXbox360BackupManager  ›  \{UiState.drive-info.label}");
+    icon: @image-url("../package/windows/TinyXbox360BackupManager-64x64.png");
     default-font-size: 14px;
 
     // Initialize
@@ -103,6 +105,7 @@ export component AppWindow inherits Window {
     }
 
     if !UiState.current-game.path.is-empty: GameInfoModal { }
+    if UiState.showing-title-updates: TitleUpdatesModal { }
 
     if UiState.selecting-target: SelectTargetModal { }
     if UiState.editing-ftp-target: FtpTargetModal { }
@@ -111,7 +114,7 @@ export component AppWindow inherits Window {
         Text {
             text: "Are you sure you want to delete \{UiState.game-to-delete.title}?\nThis action cannot be undone.";
         }
-
+        destructive: true;
         cancelled => {
             UiState.game-to-delete = { };
         }
@@ -132,6 +135,23 @@ export component AppWindow inherits Window {
 
         cancelled => Dispatcher.dispatch(Message.ClearGamesToAdd, "");
         confirmed => Dispatcher.dispatch(Message.ConfirmGamesToAdd, "");
+    }
+
+    if UiState.confirming-cancel-all: ConfirmationModal {
+        Text {
+            text: UiState.converting
+                ? "Cancel all conversions?\nThe conversion in progress will be stopped and its partial files removed."
+                : "Cancel all pending conversions?";
+        }
+        destructive: true;
+        btn-icon: IconSet.X;
+        cancelled => {
+            UiState.confirming-cancel-all = false;
+        }
+        confirmed => {
+            Dispatcher.dispatch(Message.CancelAllConversions, "");
+            UiState.confirming-cancel-all = false;
+        }
     }
 
     if UiState.notifications.length > 0: Notifications {

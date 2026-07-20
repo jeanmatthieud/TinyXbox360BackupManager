@@ -14,8 +14,15 @@ pub enum IsoKind {
     Xbox360Game,
     /// Original Xbox game (default.xbe): to extract.
     XboxOriginal,
-    /// Installation disc / DLC (no executable): extract its Content folder.
+    /// Installation disc / DLC (no executable): extract its Content folder
+    /// as-is, trusting its TitleID folder name.
     ContentDisc,
+    /// Disc with its own executable (typically a bonus/"expansion
+    /// installer" app) that also bundles DLC / title-update packages for a
+    /// *different* game under a placeholder TitleID folder. Each bundled
+    /// package must be installed under its own real TitleID, read from its
+    /// STFS header, not from the installer's folder name.
+    BundledContent,
 }
 
 impl IsoKind {
@@ -24,6 +31,7 @@ impl IsoKind {
             IsoKind::Xbox360Game => "Xbox 360 Game",
             IsoKind::XboxOriginal => "Original Xbox Game",
             IsoKind::ContentDisc => "Installation disc / DLC",
+            IsoKind::BundledContent => "Bonus disc (bundled DLC / updates)",
         }
     }
 }
@@ -48,11 +56,29 @@ pub fn inspect(path: &Path) -> Result<IsoInfo> {
 
     let has_xex = reader.get_entry(&"\\default.xex".into())?.is_some();
     let has_xbe = reader.get_entry(&"\\default.xbe".into())?.is_some();
+    // Bonus discs bundling DLC/title updates for a different game (e.g. an
+    // "ExpansionInstaller" app) carry their own executable *and* a
+    // Content/0000000000000000 tree; real games essentially never embed
+    // that folder, so its presence takes priority.
+    let has_bundled_content = reader
+        .get_entry(&"\\Content\\0000000000000000".into())?
+        .is_some();
 
     if !has_xex && !has_xbe {
         return Ok(IsoInfo {
             path: path.to_owned(),
             kind: IsoKind::ContentDisc,
+            title_id: None,
+            media_id: None,
+            name: None,
+            disc_number: None,
+            disc_count: None,
+        });
+    }
+    if has_bundled_content {
+        return Ok(IsoInfo {
+            path: path.to_owned(),
+            kind: IsoKind::BundledContent,
             title_id: None,
             media_id: None,
             name: None,

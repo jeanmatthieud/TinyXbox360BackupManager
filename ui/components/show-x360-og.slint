@@ -35,6 +35,24 @@ export component ShowX360Og inherits Card {
         VerticalLine { }
 
         CheckBox {
+            checked: UiState.config.show-arcade;
+            toggled => Dispatcher.dispatch(Message.ToggleShowArcade, "");
+        }
+
+        TooltipArea {
+            tooltip: "Show Xbox Live Arcade";
+            width: xbla.preferred-width;
+
+            xbla := Text {
+                height: 38px;
+                vertical-alignment: center;
+                text: "XBLA";
+            }
+        }
+
+        VerticalLine { }
+
+        CheckBox {
             checked: UiState.config.show-og;
             toggled => Dispatcher.dispatch(Message.ToggleShowOg, "");
         }

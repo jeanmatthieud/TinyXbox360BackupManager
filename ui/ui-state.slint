@@ -6,6 +6,8 @@ import {
     DisplayedConfig,
     DisplayedDriveInfo,
     DisplayedGame,
+    DisplayedRecentLocation,
+    DisplayedTitleUpdate,
     Notification,
     Page,
 } from "types.slint";
@@ -14,8 +16,27 @@ export global UiState {
     in-out property <Page> current-page: Page.Games;
     in-out property <DisplayedGame> current-game;
     in-out property <DisplayedGame> game-to-delete;
+    // Disc/DLC lines for `current-game`, one already-formatted line per
+    // item ("Disc 1 of 2 — 6.05 GiB", "DLC — 2.00 GiB", ...), fetched on
+    // demand when its info modal is opened (may involve an FTP round-trip).
+    in-out property <[string]> current-game-discs;
+    in-out property <[string]> current-game-dlc;
+    in-out property <bool> fetching-game-details: false;
+
+    // Title Updates window for `current-game`, opened separately from a
+    // button on the info modal (only fetched then: it needs an XboxUnity
+    // HTTP call on top of the FTP round-trip).
+    in-out property <bool> showing-title-updates: false;
+    in-out property <[DisplayedTitleUpdate]> title-updates;
+    in-out property <bool> fetching-title-updates: false;
+    // True while a title update is being activated/deactivated.
+    in-out property <bool> updating-title-update: false;
+
     in-out property <bool> selecting-target: false;
     in-out property <bool> editing-ftp-target: false;
+    // Most-recently-used library locations (most recent first, max 5),
+    // shown in the target-selection modal.
+    in-out property <[DisplayedRecentLocation]> recent-locations;
 
     in-out property <DisplayedConfig> config;
     in-out property <string> app-version;
@@ -34,6 +55,8 @@ export global UiState {
     // True while a conversion is running (the item at index 0 of
     // conversion-queue is the one currently being converted).
     in-out property <bool> converting: false;
+    // True while the "cancel all conversions" confirmation modal is shown.
+    in-out property <bool> confirming-cancel-all: false;
     // Locations currently scanned by Aurora on the console, as displayed
     // lines (fetched from its databases over FTP).
     in-out property <[string]> aurora-scan-paths;

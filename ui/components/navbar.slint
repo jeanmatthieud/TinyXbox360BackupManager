@@ -24,7 +24,7 @@ export component Navbar inherits VerticalLayout {
             }
         }
 
-        NavbarButton {
+        if !UiState.config.target.is-empty: NavbarButton {
             active: UiState.current-page == Page.Toolbox;
             icon: IconSet.ToolCase;
             tooltip: "Toolbox";

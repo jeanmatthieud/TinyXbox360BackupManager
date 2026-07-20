@@ -139,6 +139,10 @@ pub struct TitleUpdateEntry {
     pub name: Option<String>,
     #[serde(rename = "Size")]
     pub size: Option<String>,
+    /// SHA1 hash of the update's content, also used by Aurora to name its
+    /// download cache folder for this update.
+    #[serde(rename = "hash")]
+    pub hash: Option<String>,
     /// MediaID this update applies to.
     #[serde(skip)]
     pub media_id: String,

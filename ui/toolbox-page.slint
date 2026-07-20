@@ -183,6 +183,22 @@ export component ToolboxPage inherits VerticalLayout {
                             text: "Test the FTP connection";
                         }
                     }
+
+                    HorizontalLayout {
+                        spacing: 10px;
+
+                        b1 := IconButton {
+                            icon: IconSet.RotateCw;
+                            width: self.height;
+                            clicked => Dispatcher.dispatch(Message.RestartAurora, "");
+                        }
+
+                        Text {
+                            height: b1.height;
+                            vertical-alignment: center;
+                            text: "Restart Aurora";
+                        }
+                    }
                 }
             }
 
@@ -256,7 +272,7 @@ export component ToolboxPage inherits VerticalLayout {
                         }
 
                         Text {
-                            text: "Covers (XboxUnity)";
+                            text: "Covers cache";
                         }
                     }
 

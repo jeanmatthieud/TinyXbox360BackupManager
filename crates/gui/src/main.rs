@@ -12,9 +12,11 @@ mod covers;
 mod dialogs;
 mod drive_info;
 mod file_drop;
+mod game_details;
 mod games;
 mod notification;
 mod state;
+mod title_updates;
 mod update;
 mod util;
 
@@ -67,7 +69,11 @@ fn main() -> Result<()> {
     ui_state.set_app_version(env!("CARGO_PKG_VERSION").to_shared_string());
     ui_state.set_data_dir(DATA_DIR.to_string_lossy().to_shared_string());
     ui_state.set_config(DisplayedConfig::from(&state.config));
+    ui_state.set_recent_locations(ModelRc::from(std::rc::Rc::new(slint::VecModel::from(
+        config::recent_locations(&state.config),
+    ))));
     ui_state.set_games(ModelRc::from(state.displayed_games.clone()));
+    ui_state.set_title_updates(ModelRc::from(state.displayed_title_updates.clone()));
     ui_state.set_notifications(ModelRc::from(state.notifications.clone()));
     ui_state.set_conversion_queue(ModelRc::from(state.displayed_conversion_queue.clone()));
     ui_state.set_games_to_add(ModelRc::from(state.displayed_games_to_add.clone()));

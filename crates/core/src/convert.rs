@@ -6,12 +6,53 @@
 use crate::config::Config;
 use crate::data_dir::DATA_DIR;
 use crate::ftp::FtpSession;
-use crate::iso_info::{self, IsoKind};
+use crate::iso_info::{self, IsoInfo, IsoKind};
+use crate::stfs::{self, StfsInfo};
 use crate::target::{AuroraPaths, Target, aurora_paths, ftp_hdd_root};
 use crate::util::sanitize_name;
-use crate::{CONTENT_DIR, GAMES_DIR, extract, god, unity};
+use crate::{CONTENT_DIR, GAMES_DIR, archive, extract, god, unity};
 use anyhow::{Context, Result, bail};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
+
+/// Error message used to signal that a conversion was cancelled by the user
+/// (mirrors [`crate::target::SCAN_CANCELLED`]). Recognized by the GUI to show
+/// an informational "cancelled" notice rather than a failure.
+pub const CONVERSION_CANCELLED: &str = "conversion cancelled";
+
+/// Returns whether the shared cancel flag has been raised.
+pub(crate) fn is_cancelled(cancel: &AtomicBool) -> bool {
+    cancel.load(Ordering::Relaxed)
+}
+
+/// Kind of input file accepted by the conversion pipeline.
+pub enum InputKind {
+    /// Optical disc image (360 game, OG game or content disc).
+    Iso(IsoInfo),
+    /// .7z / .zip archive expected to contain XBLA (STFS) packages.
+    Archive,
+    /// Bare STFS package (CON / LIVE / PIRS).
+    StfsPackage(StfsInfo),
+}
+
+/// Determines what `path` is, from its extension then its magic.
+pub fn inspect_input(path: &Path) -> Result<InputKind> {
+    let ext = path.extension().map(|e| e.to_ascii_lowercase());
+    if ext.as_deref().is_some_and(|e| e == "iso") {
+        return Ok(InputKind::Iso(iso_info::inspect(path)?));
+    }
+    if archive::is_supported_archive(path) {
+        return Ok(InputKind::Archive);
+    }
+    if let Some(info) = stfs::inspect(path)? {
+        return Ok(InputKind::StfsPackage(info));
+    }
+    // Last resort: maybe a renamed ISO.
+    iso_info::inspect(path).map(InputKind::Iso).context(
+        "unrecognized file: neither an ISO image, a .7z/.zip archive, \
+         nor an STFS package (CON/LIVE/PIRS)",
+    )
+}
 
 /// Converts/extracts `in_path` on the target, depending on the image type.
 /// `update_progress` receives a percentage (0-100) and, during the FTP upload
@@ -19,6 +60,7 @@ use std::path::{Path, PathBuf};
 pub fn perform(
     in_path: PathBuf,
     config: &Config,
+    cancel: &AtomicBool,
     update_progress: &dyn Fn(u32, Option<f64>),
 ) -> Result<()> {
     let target =
@@ -26,7 +68,7 @@ pub fn perform(
 
     match &target {
         Target::Local(root) => {
-            convert_into(&in_path, root, &|p| update_progress(p, None))?;
+            convert_into(&in_path, root, cancel, &|p| update_progress(p, None))?;
         }
         Target::Ftp(ftp) => {
             let stem = sanitize_name(
@@ -43,7 +85,7 @@ pub fn perform(
 
             let result = (|| -> Result<()> {
                 // Local conversion in staging folder: 0-50%.
-                convert_into(&in_path, &staging, &|p| update_progress(p * 50 / 100, None))?;
+                convert_into(&in_path, &staging, cancel, &|p| update_progress(p * 50 / 100, None))?;
 
                 // Direct upload to the console, to locations
                 // scanned by Aurora: 50-100%.
@@ -70,6 +112,9 @@ pub fn perform(
                     if staging_content.is_dir() {
                         let remote = paths.install_content_dir(&hdd);
                         for entry in std::fs::read_dir(&staging_content)?.flatten() {
+                            if is_cancelled(cancel) {
+                                bail!(CONVERSION_CANCELLED);
+                            }
                             let name = entry.file_name().to_string_lossy().to_string();
                             let base = sent_before;
                             session.upload_dir(
@@ -87,6 +132,9 @@ pub fn perform(
                     if staging_games.is_dir() {
                         let remote = paths.install_extracted_dir(&hdd);
                         for entry in std::fs::read_dir(&staging_games)?.flatten() {
+                            if is_cancelled(cancel) {
+                                bail!(CONVERSION_CANCELLED);
+                            }
                             let name = entry.file_name().to_string_lossy().to_string();
                             let base = sent_before;
                             session.upload_dir(
@@ -118,8 +166,22 @@ pub fn perform(
 
 /// Converts/extracts `in_path` to `root`, a local folder organized like
 /// an Xbox drive (Content/0000000000000000 + Games).
-fn convert_into(in_path: &Path, root: &Path, update_progress: &dyn Fn(u32)) -> Result<()> {
-    let info = iso_info::inspect(in_path)?;
+fn convert_into(
+    in_path: &Path,
+    root: &Path,
+    cancel: &AtomicBool,
+    update_progress: &dyn Fn(u32),
+) -> Result<()> {
+    let info = match inspect_input(in_path)? {
+        InputKind::StfsPackage(package) => {
+            install_stfs_package(&package, root, cancel, &mut |done, total| {
+                update_progress((done * 100 / total.max(1)) as u32);
+            })?;
+            return Ok(());
+        }
+        InputKind::Archive => return install_archive(in_path, root, cancel, update_progress),
+        InputKind::Iso(info) => info,
+    };
 
     match info.kind {
         IsoKind::Xbox360Game => {
@@ -134,7 +196,7 @@ fn convert_into(in_path: &Path, root: &Path, update_progress: &dyn Fn(u32)) -> R
             let content_dir = root.join(CONTENT_DIR);
             std::fs::create_dir_all(&content_dir)?;
 
-            god::convert_to_god(in_path, &content_dir, title.as_deref(), &mut |done, total| {
+            god::convert_to_god(in_path, &content_dir, title.as_deref(), cancel, &mut |done, total| {
                 update_progress((done * 100 / total.max(1)) as u32);
             })?;
         }
@@ -145,14 +207,26 @@ fn convert_into(in_path: &Path, root: &Path, update_progress: &dyn Fn(u32)) -> R
                     .or(in_path.file_stem().and_then(|s| s.to_str()))
                     .unwrap_or("Xbox game"),
             );
+            // Embed the TitleID in the folder name so later scans can
+            // identify the game without reading its XBE.
+            let name = match info.title_id.as_deref() {
+                Some(tid) => crate::game::og_folder_name(&name, tid),
+                None => name,
+            };
             let dest = root.join(GAMES_DIR).join(&name);
             if dest.exists() {
                 bail!("the folder {} already exists", dest.display());
             }
 
-            extract::extract_iso(in_path, &dest, &mut |done, total| {
+            let res = extract::extract_iso(in_path, &dest, cancel, &mut |done, total| {
                 update_progress((done * 100 / total.max(1)) as u32);
-            })?;
+            });
+            // On cancellation, drop the partially-extracted folder (it is a
+            // fresh folder — we bailed above if it already existed).
+            if res.is_err() && is_cancelled(cancel) {
+                let _ = std::fs::remove_dir_all(&dest);
+            }
+            res?;
         }
         IsoKind::ContentDisc => {
             let stem = sanitize_name(
@@ -167,7 +241,7 @@ fn convert_into(in_path: &Path, root: &Path, update_progress: &dyn Fn(u32)) -> R
             }
 
             let result = (|| -> Result<()> {
-                extract::extract_iso(in_path, &tmp, &mut |done, total| {
+                extract::extract_iso(in_path, &tmp, cancel, &mut |done, total| {
                     update_progress((done * 100 / total.max(1)) as u32);
                 })?;
 
@@ -191,8 +265,239 @@ fn convert_into(in_path: &Path, root: &Path, update_progress: &dyn Fn(u32)) -> R
             let _ = std::fs::remove_dir_all(root.join(".txbm-tmp"));
             result?;
         }
+        IsoKind::BundledContent => {
+            let stem = sanitize_name(
+                in_path
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("disc"),
+            );
+            let tmp = root.join(".txbm-tmp").join(&stem);
+            if tmp.exists() {
+                std::fs::remove_dir_all(&tmp)?;
+            }
+
+            let result = (|| -> Result<()> {
+                // Extraction: 0-80%.
+                extract::extract_iso(in_path, &tmp, cancel, &mut |done, total| {
+                    update_progress((done * 80 / total.max(1)) as u32);
+                })?;
+
+                // Scan the whole disc, not just its Content folder: some
+                // bonus discs also carry a loose title update at the root
+                // (e.g. `title_update.bin`). `$SystemUpdate` is excluded:
+                // it holds a generic dashboard update, not game content.
+                // Each found package is installed under its own internal
+                // TitleID, not the installer's own (often a placeholder).
+                let packages = find_installable_packages_excluding(&tmp, &["$SystemUpdate"])?;
+                if packages.is_empty() {
+                    bail!(
+                        "no installable DLC/title-update/Arcade package found \
+                         in this image's bundled content"
+                    );
+                }
+
+                // Installation: 80-100%.
+                install_packages(&packages, root, cancel, &|p| update_progress(80 + p * 20 / 100))?;
+                update_progress(100);
+                Ok(())
+            })();
+
+            let _ = std::fs::remove_dir_all(root.join(".txbm-tmp"));
+            result?;
+        }
     }
 
+    Ok(())
+}
+
+/// Copies an STFS package as-is (original file name, truncated to the FATX
+/// limit) to root/Content/0000000000000000/<TitleID>/<content type>/.
+/// Only Arcade, DLC and title-update packages are accepted.
+/// `update_progress` receives (copied bytes, total bytes).
+fn install_stfs_package(
+    info: &StfsInfo,
+    root: &Path,
+    cancel: &AtomicBool,
+    update_progress: &mut dyn FnMut(u64, u64),
+) -> Result<()> {
+    match info.content_type {
+        stfs::CONTENT_TYPE_ARCADE
+        | stfs::CONTENT_TYPE_DLC
+        | stfs::CONTENT_TYPE_TITLE_UPDATE => {}
+        other => bail!(
+            "unsupported STFS content type {other:08X} in {} \
+             (expected Arcade, DLC or title update)",
+            info.path.display()
+        ),
+    }
+
+    // Title updates aren't identified by name on the console (nor by
+    // Aurora, whose own cache keys them by content hash too): the source
+    // name is often a generic one shared by unrelated discs/updates (e.g.
+    // "title_update.bin"), which would otherwise silently overwrite an
+    // unrelated update installed under the same TitleID.
+    let file_name = if info.content_type == stfs::CONTENT_TYPE_TITLE_UPDATE {
+        crate::util::sha1_hex_file(&info.path)
+            .with_context(|| format!("hashing {}", info.path.display()))?
+    } else {
+        let file_name = info
+            .path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("package");
+        file_name.chars().take(crate::game::FATX_MAX_NAME).collect()
+    };
+
+    let dest_dir = root
+        .join(CONTENT_DIR)
+        .join(&info.title_id)
+        .join(info.content_type_dir());
+    std::fs::create_dir_all(&dest_dir)?;
+    let dest = dest_dir.join(&file_name);
+
+    // Re-adding a package overwrites it, like GOD re-conversion does.
+    let total = std::fs::metadata(&info.path)?.len();
+    let mut src = std::fs::File::open(&info.path)
+        .with_context(|| format!("opening {}", info.path.display()))?;
+    let mut dst = std::fs::File::create(&dest)
+        .with_context(|| format!("creating {}", dest.display()))?;
+    let mut buf = vec![0u8; 1 << 20];
+    let mut done: u64 = 0;
+    loop {
+        if is_cancelled(cancel) {
+            // Drop the partially-written destination file before bailing.
+            drop(dst);
+            let _ = std::fs::remove_file(&dest);
+            bail!(CONVERSION_CANCELLED);
+        }
+        let n = std::io::Read::read(&mut src, &mut buf)?;
+        if n == 0 {
+            break;
+        }
+        std::io::Write::write_all(&mut dst, &buf[..n])?;
+        done += n as u64;
+        update_progress(done, total);
+    }
+    Ok(())
+}
+
+/// Extracts a .7z/.zip archive and installs the XBLA packages it contains
+/// (plus any DLC / title updates). Fails if no Arcade package is found.
+fn install_archive(
+    in_path: &Path,
+    root: &Path,
+    cancel: &AtomicBool,
+    update_progress: &dyn Fn(u32),
+) -> Result<()> {
+    let stem = sanitize_name(
+        in_path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("archive"),
+    );
+    let tmp = DATA_DIR.join("tmp").join("archive").join(&stem);
+    if tmp.exists() {
+        std::fs::remove_dir_all(&tmp)?;
+    }
+
+    let result = (|| -> Result<()> {
+        // Extraction: 0-80%.
+        archive::extract_to(in_path, &tmp, &mut |done, total| {
+            update_progress((done * 80 / total.max(1)) as u32);
+        })?;
+        if is_cancelled(cancel) {
+            bail!(CONVERSION_CANCELLED);
+        }
+
+        let packages = find_installable_packages(&tmp)?;
+        if !packages
+            .iter()
+            .any(|p| p.content_type == stfs::CONTENT_TYPE_ARCADE)
+        {
+            bail!(
+                "no Arcade package (content type 000D0000) found in this archive: \
+                 is it really an XBLA game?"
+            );
+        }
+
+        // Installation: 80-100%, weighted by package size.
+        install_packages(&packages, root, cancel, &|p| update_progress(80 + p * 20 / 100))?;
+        update_progress(100);
+        Ok(())
+    })();
+
+    let _ = std::fs::remove_dir_all(&tmp);
+    result
+}
+
+/// Recursively finds every DLC / title-update / Arcade STFS package under
+/// `dir`, meant to be installed each under its own internal TitleID.
+fn find_installable_packages(dir: &Path) -> Result<Vec<StfsInfo>> {
+    find_installable_packages_excluding(dir, &[])
+}
+
+/// Like `find_installable_packages`, but does not descend into
+/// subdirectories (anywhere in the tree) whose name matches `exclude`
+/// (case-insensitive) — e.g. a disc's `$SystemUpdate` folder, which holds a
+/// generic dashboard update rather than game-specific content.
+fn find_installable_packages_excluding(dir: &Path, exclude: &[&str]) -> Result<Vec<StfsInfo>> {
+    let mut files = Vec::new();
+    collect_files(dir, exclude, &mut files)?;
+    Ok(files
+        .iter()
+        .filter_map(|f| stfs::inspect(f).ok().flatten())
+        .filter(|p| {
+            matches!(
+                p.content_type,
+                stfs::CONTENT_TYPE_ARCADE
+                    | stfs::CONTENT_TYPE_DLC
+                    | stfs::CONTENT_TYPE_TITLE_UPDATE
+            )
+        })
+        .collect())
+}
+
+/// Installs every package (each under its own internal TitleID/content-type
+/// folder), weighting `update_progress` (0-100) by package size.
+fn install_packages(
+    packages: &[StfsInfo],
+    root: &Path,
+    cancel: &AtomicBool,
+    update_progress: &dyn Fn(u32),
+) -> Result<()> {
+    let total: u64 = packages
+        .iter()
+        .map(|p| std::fs::metadata(&p.path).map(|m| m.len()).unwrap_or(0))
+        .sum();
+    let mut done_before: u64 = 0;
+    for package in packages {
+        install_stfs_package(package, root, cancel, &mut |done, _| {
+            update_progress(((done_before + done) * 100 / total.max(1)) as u32);
+        })?;
+        done_before += std::fs::metadata(&package.path).map(|m| m.len()).unwrap_or(0);
+    }
+    Ok(())
+}
+
+/// Recursively collects the files under `dir`, skipping subdirectories
+/// whose name (case-insensitive) is in `exclude`.
+fn collect_files(dir: &Path, exclude: &[&str], files: &mut Vec<PathBuf>) -> Result<()> {
+    for entry in std::fs::read_dir(dir)?.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            let name = entry.file_name();
+            if exclude
+                .iter()
+                .any(|e| name.to_string_lossy().eq_ignore_ascii_case(e))
+            {
+                continue;
+            }
+            collect_files(&path, exclude, files)?;
+        } else {
+            files.push(path);
+        }
+    }
     Ok(())
 }
 
@@ -224,6 +529,99 @@ fn merge_move(src: &Path, dst: &Path) -> Result<()> {
                 .and_then(|_| std::fs::remove_file(src))
         })?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+
+    fn stfs_package(content_type: u32, title_id: u32) -> Vec<u8> {
+        let mut buf = vec![0u8; 0x2000];
+        buf[..4].copy_from_slice(b"LIVE");
+        buf[0x344..0x348].copy_from_slice(&content_type.to_be_bytes());
+        buf[0x360..0x364].copy_from_slice(&title_id.to_be_bytes());
+        buf
+    }
+
+    #[test]
+    fn installs_zip_archive_with_arcade_and_dlc() {
+        let dir = std::env::temp_dir().join("txbm-convert-test");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let zip_path = dir.join("game.zip");
+        let file = std::fs::File::create(&zip_path).unwrap();
+        let mut zip = zip::ZipWriter::new(file);
+        let options = zip::write::SimpleFileOptions::default()
+            .compression_method(zip::CompressionMethod::Stored);
+        zip.start_file("Sub/ArcadeGamePackage", options).unwrap();
+        zip.write_all(&stfs_package(stfs::CONTENT_TYPE_ARCADE, 0x58410889))
+            .unwrap();
+        zip.start_file("Sub/DlcPackage", options).unwrap();
+        zip.write_all(&stfs_package(stfs::CONTENT_TYPE_DLC, 0x58410889))
+            .unwrap();
+        zip.start_file("readme.txt", options).unwrap();
+        zip.write_all(b"hello").unwrap();
+        zip.finish().unwrap();
+
+        let root = dir.join("root");
+        convert_into(&zip_path, &root, &AtomicBool::new(false), &|_| {}).unwrap();
+
+        let title_dir = root.join(CONTENT_DIR).join("58410889");
+        assert!(title_dir.join("000D0000/ArcadeGamePackage").is_file());
+        assert!(title_dir.join("00000002/DlcPackage").is_file());
+
+        let games = crate::game::scan_drive(&root);
+        assert_eq!(games.len(), 1);
+        assert_eq!(games[0].format, crate::game::GameFormat::Arcade);
+        assert_eq!(games[0].id, "58410889");
+
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn installs_bare_stfs_package() {
+        let dir = std::env::temp_dir().join("txbm-convert-test-bare");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let package = dir.join("SomeArcadeGame");
+        std::fs::write(&package, stfs_package(stfs::CONTENT_TYPE_ARCADE, 0x584108A1)).unwrap();
+
+        let root = dir.join("root");
+        convert_into(&package, &root, &AtomicBool::new(false), &|_| {}).unwrap();
+        assert!(
+            root.join(CONTENT_DIR)
+                .join("584108A1/000D0000/SomeArcadeGame")
+                .is_file()
+        );
+
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn rejects_archive_without_arcade_package() {
+        let dir = std::env::temp_dir().join("txbm-convert-test-noarc");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let zip_path = dir.join("dlc-only.zip");
+        let file = std::fs::File::create(&zip_path).unwrap();
+        let mut zip = zip::ZipWriter::new(file);
+        let options = zip::write::SimpleFileOptions::default()
+            .compression_method(zip::CompressionMethod::Stored);
+        zip.start_file("DlcPackage", options).unwrap();
+        zip.write_all(&stfs_package(stfs::CONTENT_TYPE_DLC, 0x58410889))
+            .unwrap();
+        zip.finish().unwrap();
+
+        let root = dir.join("root");
+        let err = convert_into(&zip_path, &root, &AtomicBool::new(false), &|_| {}).unwrap_err();
+        assert!(err.to_string().contains("no Arcade package"));
+
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 }
 
