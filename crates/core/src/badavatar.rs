@@ -257,13 +257,20 @@ fn download_component(
     let dest = work.join(format!("{}.{ext}", key_of(field)));
 
     status(&format!("Downloading {label}…"));
-    download_to_file(url, &dest, label, status)
+    download_to_file(url, &dest, label, cancel, status)
         .with_context(|| format!("downloading {label}"))?;
     Ok(dest)
 }
 
 /// Streams `url` to `dest`, reporting a coarse percentage in the status line.
-fn download_to_file(url: &str, dest: &Path, label: &str, status: &dyn Fn(&str)) -> Result<()> {
+/// Polls `cancel` between chunks so a long transfer can be interrupted.
+fn download_to_file(
+    url: &str,
+    dest: &Path,
+    label: &str,
+    cancel: &AtomicBool,
+    status: &dyn Fn(&str),
+) -> Result<()> {
     let mut response = AGENT
         .get(url)
         .header("Referer", origin_of(url).as_str())
@@ -283,6 +290,7 @@ fn download_to_file(url: &str, dest: &Path, label: &str, status: &dyn Fn(&str)) 
     let mut last_report: u64 = 0;
 
     loop {
+        check_cancel(cancel)?;
         let n = reader.read(&mut buf).context("reading response body")?;
         if n == 0 {
             break;

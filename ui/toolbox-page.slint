@@ -31,9 +31,14 @@ component BadAvatarUrlField inherits VerticalLayout {
 
     // Editing a LineEdit breaks its `text: url` binding, so a later reset (url
     // reverting to the default) would leave the field stale. Push the value back
-    // imperatively whenever `url` changes to keep the field in sync.
+    // imperatively when `url` changes — but only when it actually differs from
+    // what's shown, otherwise the echo of the user's own keystroke (which
+    // round-trips through the config) would reassign the text every character
+    // and bounce the caret to the end, breaking mid-string editing.
     changed url => {
-        edit.text = url;
+        if edit.text != url {
+            edit.text = url;
+        }
     }
 
     Text {

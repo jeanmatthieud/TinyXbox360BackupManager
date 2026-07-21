@@ -31,15 +31,25 @@ pub struct State {
     pub is_creating_badavatar: bool,
     /// Flag shared with the scan thread to cancel it.
     pub scan_cancel: Arc<AtomicBool>,
+    /// Flag shared with the network-discovery thread (FTP modal) to cancel it.
+    pub ftp_scan_cancel: Arc<AtomicBool>,
     /// Flag shared with the running conversion thread to cancel it.
     pub conversion_cancel: Arc<AtomicBool>,
+    /// Flag shared with the BadAvatar creation thread to cancel it.
+    pub badavatar_cancel: Arc<AtomicBool>,
     pub games_filter: String,
 }
 
 impl State {
     pub fn new() -> Self {
+        // The persisted config *is* the last active target, so it would always
+        // be reconnected on startup; honour the user's auto-reconnect policy by
+        // clearing it in memory when reconnecting to its kind is not wanted.
+        let mut config = Config::load();
+        config.contents.apply_auto_reconnect_policy();
+
         State {
-            config: Config::load(),
+            config,
             games: Vec::new(),
             drive_info: DriveInfo::default(),
             displayed_games: Rc::new(VecModel::from(Vec::new())),
@@ -54,7 +64,9 @@ impl State {
             is_scanning: false,
             is_creating_badavatar: false,
             scan_cancel: Arc::new(AtomicBool::new(false)),
+            ftp_scan_cancel: Arc::new(AtomicBool::new(false)),
             conversion_cancel: Arc::new(AtomicBool::new(false)),
+            badavatar_cancel: Arc::new(AtomicBool::new(false)),
             games_filter: String::new(),
         }
     }

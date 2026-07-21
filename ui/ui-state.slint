@@ -35,6 +35,12 @@ export global UiState {
 
     in-out property <bool> selecting-target: false;
     in-out property <bool> editing-ftp-target: false;
+    // FTP modal: true while the local network is being scanned for a console.
+    in-out property <bool> ftp-scanning: false;
+    // FTP modal: IP of the console found by the scan (empty if none/not yet).
+    in-out property <string> ftp-scan-found-ip: "";
+    // FTP modal: true once the user switches to the manual-entry form.
+    in-out property <bool> ftp-show-manual: false;
     // Most-recently-used library locations (most recent first, max 5),
     // shown in the target-selection modal.
     in-out property <[DisplayedRecentLocation]> recent-locations;

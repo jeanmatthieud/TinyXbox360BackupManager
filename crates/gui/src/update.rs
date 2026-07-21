@@ -13,7 +13,7 @@ use std::{
     fs,
     path::{Path, PathBuf},
     rc::Rc,
-    sync::{Mutex, atomic::AtomicBool},
+    sync::{Arc, Mutex, atomic::AtomicBool},
 };
 use txbm_core::{
     badavatar::UrlField, config::TargetKind, conversion_queue::QueuedConversion,
@@ -25,6 +25,11 @@ const NEW_DRIVE_TEXT: &str = "New drive detected\nOnce the games are on the cons
 /// Result of the asynchronous scan of the target, deposited by the scan thread
 /// then retrieved in the ScanFinished handler.
 static SCAN_RESULT: Mutex<Option<anyhow::Result<(Vec<Game>, DriveInfo)>>> = Mutex::new(None);
+
+/// Result of the asynchronous network scan started from the FTP modal:
+/// `Some(ip)` when a console was found, `None` when the scan finished without
+/// a match. Deposited by the scan thread, retrieved in FtpScanFinished.
+static FTP_SCAN_RESULT: Mutex<Option<Option<String>>> = Mutex::new(None);
 
 /// Result of the asynchronous disc/DLC fetch for the game shown in the
 /// info modal, deposited by the fetch thread then retrieved in the
@@ -148,6 +153,12 @@ impl State {
                 } else if value == txbm_core::config::ThemePreference::Dark {
                     crate::window_color::set(true);
                 }
+
+                message_queue.push_back((Message::SyncConfig, SharedString::new()));
+            }
+            Message::SetAutoReconnect => {
+                let value = payload.parse().unwrap();
+                self.config.contents.auto_reconnect = value;
 
                 message_queue.push_back((Message::SyncConfig, SharedString::new()));
             }
@@ -546,6 +557,76 @@ impl State {
                         }
                     });
                 });
+            }
+            Message::StartFtpScan => {
+                // Fresh scan: hand this run its own cancel flag. A previous run's
+                // flag (already true if it was cancelled) is thus left untouched,
+                // so an in-flight older thread stays cancelled instead of being
+                // revived by a shared `store(false)`.
+                self.ftp_scan_cancel = Arc::new(AtomicBool::new(false));
+
+                let app = weak.upgrade().unwrap();
+                let ui = app.global::<UiState<'_>>();
+                ui.set_ftp_scanning(true);
+                ui.set_ftp_scan_found_ip(SharedString::new());
+
+                let cfg = self.config.contents.ftp_config();
+                let cancel = self.ftp_scan_cancel.clone();
+                let weak = weak.clone();
+                std::thread::spawn(move || {
+                    let res = txbm_core::ftp::scan_network(
+                        cfg.port,
+                        &cfg.user,
+                        &cfg.password,
+                        &cancel,
+                    );
+
+                    // A cancelled run stays silent: it neither publishes its
+                    // (aborted) result nor wakes FtpScanFinished, so it can't
+                    // clobber a newer scan that replaced its cancel flag.
+                    if cancel.load(std::sync::atomic::Ordering::Relaxed) {
+                        return;
+                    }
+                    *FTP_SCAN_RESULT.lock().unwrap() = Some(res);
+
+                    let _ = weak.upgrade_in_event_loop(move |app| {
+                        app.global::<Dispatcher<'_>>()
+                            .invoke_dispatch(Message::FtpScanFinished, SharedString::new());
+                    });
+                });
+            }
+            Message::CancelFtpScan => {
+                self.ftp_scan_cancel
+                    .store(true, std::sync::atomic::Ordering::Relaxed);
+                let app = weak.upgrade().unwrap();
+                app.global::<UiState<'_>>().set_ftp_scanning(false);
+            }
+            Message::FtpScanFinished => {
+                let app = weak.upgrade().unwrap();
+                let ui = app.global::<UiState<'_>>();
+                ui.set_ftp_scanning(false);
+
+                // Cancelled (user switched to manual entry or closed the modal):
+                // ignore whatever the thread found.
+                if self
+                    .ftp_scan_cancel
+                    .load(std::sync::atomic::Ordering::Relaxed)
+                {
+                    return;
+                }
+
+                match FTP_SCAN_RESULT.lock().unwrap().take() {
+                    Some(Some(ip)) => {
+                        // Prefill the config (and thus the manual form) with the
+                        // discovered IP, and surface it in the scan view.
+                        self.config.contents.console_ip = ip.clone();
+                        ui.set_ftp_scan_found_ip(ip.into());
+                        message_queue.push_back((Message::SyncConfig, SharedString::new()));
+                    }
+                    _ => {
+                        ui.set_ftp_scan_found_ip(SharedString::new());
+                    }
+                }
             }
             Message::RestartAurora => {
                 let ftp_config = self.config.contents.ftp_config();
@@ -967,6 +1048,9 @@ impl State {
 
                 let cfg = self.config.contents.badavatar.clone();
                 self.is_creating_badavatar = true;
+                self.badavatar_cancel
+                    .store(false, std::sync::atomic::Ordering::Relaxed);
+                let cancel = self.badavatar_cancel.clone();
                 app.global::<UiState<'_>>().set_creating_badavatar(true);
 
                 let weak = weak.clone();
@@ -981,8 +1065,6 @@ impl State {
 
                     status("Creating the BadAvatar USB key…");
 
-                    // No cancel button yet; the flag is here for a future one.
-                    let cancel = AtomicBool::new(false);
                     let res =
                         txbm_core::badavatar::create_badavatar(&dest, &cfg, &cancel, &status);
 
@@ -1016,6 +1098,14 @@ impl State {
                         }
                     });
                 });
+            }
+            Message::CancelBadAvatar => {
+                if self.is_creating_badavatar {
+                    self.badavatar_cancel
+                        .store(true, std::sync::atomic::Ordering::Relaxed);
+                    message_queue
+                        .push_back((Message::SetStatus, "⟳  Cancelling…".to_shared_string()));
+                }
             }
             Message::BadAvatarCreated => {
                 self.is_creating_badavatar = false;

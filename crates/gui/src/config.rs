@@ -69,6 +69,7 @@ impl From<&Config> for DisplayedConfig {
             sort_by: config.contents.sort_by.to_shared_string(),
             view_as: config.contents.view_as.to_shared_string(),
             theme_preference: config.contents.theme_preference.to_shared_string(),
+            auto_reconnect: config.contents.auto_reconnect.to_shared_string(),
             show_x360: config.contents.show_x360,
             show_arcade: config.contents.show_arcade,
             show_og: config.contents.show_og,
