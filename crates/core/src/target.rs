@@ -158,6 +158,11 @@ impl AuroraPaths {
             .unwrap_or_else(|| format!("/{hdd}/{GAMES_DIR}"))
     }
 
+    /// True when Aurora scans no location at all.
+    pub fn is_empty(&self) -> bool {
+        self.content_dirs.is_empty() && self.extracted_dirs.is_empty()
+    }
+
     /// One line per scanned location, for display in the UI.
     pub fn display_lines(&self) -> Vec<String> {
         let mut lines: Vec<String> = self
@@ -282,10 +287,9 @@ fn read_aurora_databases(
         }
     }
 
-    if paths.content_dirs.is_empty() && paths.extracted_dirs.is_empty() {
-        bail!("no ScanPath in Aurora databases");
-    }
-
+    // An empty result is a valid state (Aurora scans nothing yet): callers
+    // that need a fallback check `is_empty()`, while the UI reports it to
+    // the user instead of treating it as an error.
     Ok(paths)
 }
 
@@ -301,7 +305,10 @@ fn scan_ftp(ftp: &FtpConfig, cancel: &AtomicBool) -> Result<(Vec<Game>, DriveInf
     let mut session = FtpSession::connect(ftp)?;
     let hdd = ftp_hdd_root(&mut session);
 
-    let paths = aurora_paths(&mut session).unwrap_or_else(|_| AuroraPaths::defaults(&hdd));
+    let paths = aurora_paths(&mut session)
+        .ok()
+        .filter(|p| !p.is_empty())
+        .unwrap_or_else(|| AuroraPaths::defaults(&hdd));
 
     let mut games = Vec::new();
     let mut games_bytes: u64 = 0;

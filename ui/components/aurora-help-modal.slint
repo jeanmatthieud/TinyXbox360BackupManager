@@ -1,0 +1,99 @@
+// SPDX-FileCopyrightText: 2026 Jean-Matthieu Dechriste
+// SPDX-License-Identifier: GPL-3.0-only
+
+import { IconSet, IconDisplay } from "@lucide";
+import { HorizontalLine } from "horizontal-line.slint";
+import { MyPalette } from "../styling.slint";
+import { IconButton, IconButtonKind } from "icon-button.slint";
+import { Modal } from "modal.slint";
+import { UiState } from "../ui-state.slint";
+import { Message, Dispatcher } from "../messages.slint";
+
+// Explains how to register scan paths in Aurora so this app (and the
+// console) can find the installed games.
+export component AuroraHelpModal inherits Modal {
+    max-w: 560px;
+    max-h: 460px;
+
+    VerticalLayout {
+        padding: 20px;
+        spacing: 12px;
+
+        HorizontalLayout {
+            spacing: 8px;
+            cross-axis-alignment: CrossAxisAlignment.center;
+
+            IconDisplay {
+                icon: IconSet.FolderSearch;
+                stroke: MyPalette.foreground;
+                size: 18px;
+            }
+
+            Text {
+                text: "Add scan paths in Aurora";
+                font-size: 16px;
+            }
+        }
+
+        Text {
+            text: "Aurora only lists games from the folders it is told to scan. On the console:";
+            wrap: word-wrap;
+        }
+
+        VerticalLayout {
+            spacing: 8px;
+
+            Text {
+                text: "1.  Open Aurora and go to 'Settings' → 'Content' → 'Manage Paths'";
+                wrap: word-wrap;
+            }
+
+            Text {
+                text: "2.  Add a scan path for your Xbox 360 games, pointing to\n     'Hdd1:\\Content\\0000000000000000'.";
+                wrap: word-wrap;
+            }
+
+            Text {
+                text: "3.  Add a scan path for your OG Xbox games, pointing to\n     'Hdd1:\\Games'.";
+                wrap: word-wrap;
+            }
+
+            Text {
+                text: "4.  Enable 'AutoScan'.";
+                wrap: word-wrap;
+            }
+
+            Text {
+                text: "5.  Save, then let Aurora rescan with 'Scan now'.";
+                wrap: word-wrap;
+            }
+        }
+
+        Text {
+            text: "Back here, hit the refresh button on the card to read the updated paths.";
+            wrap: word-wrap;
+            color: MyPalette.foreground.transparentize(0.4);
+            font-size: 12px;
+        }
+    }
+
+    VerticalLayout {
+        height: self.min-height;
+
+        HorizontalLine { }
+
+        HorizontalLayout {
+            alignment: end;
+            padding: 10px;
+
+            IconButton {
+                label: "Close";
+                kind: IconButtonKind.Primary;
+                clicked => {
+                    UiState.showing-aurora-help = false;
+                    Dispatcher.dispatch(Message.FetchAuroraPaths, "");
+                }
+            }
+        }
+    }
+}

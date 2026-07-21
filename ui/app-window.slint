@@ -24,6 +24,7 @@ import { ToolboxPage } from "toolbox-page.slint";
 import { ConversionQueuePage } from "conversion-queue.slint";
 import { SelectTargetModal } from "components/select-target-modal.slint";
 import { FtpTargetModal } from "components/ftp-target-modal.slint";
+import { AuroraHelpModal } from "components/aurora-help-modal.slint";
 import { UiState } from "ui-state.slint";
 
 export * from "types.slint";
@@ -109,6 +110,7 @@ export component AppWindow inherits Window {
 
     if UiState.selecting-target: SelectTargetModal { }
     if UiState.editing-ftp-target: FtpTargetModal { }
+    if UiState.showing-aurora-help: AuroraHelpModal { }
 
     if !UiState.game-to-delete.path.is-empty: ConfirmationModal {
         Text {
