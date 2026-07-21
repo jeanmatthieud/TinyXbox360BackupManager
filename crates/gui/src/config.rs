@@ -2,12 +2,31 @@
 // SPDX-FileContributor: Modified by Jean-Matthieu Dechriste (TinyXbox360BackupManager)
 // SPDX-License-Identifier: GPL-3.0-only
 
-use crate::{DisplayedConfig, DisplayedRecentLocation, TargetKind};
+use crate::{DisplayedBadAvatarConfig, DisplayedConfig, DisplayedRecentLocation, TargetKind};
 use slint::ToSharedString;
 use txbm_core::{
+    badavatar::UrlField,
     config::{Config, TargetKind as CoreTargetKind},
     target::Target,
 };
+
+/// Builds the model backing `UiState.badavatar` from the config, resolving each
+/// URL (override or built-in default) and exposing the default alongside so the
+/// UI can offer a per-field reset when the two differ.
+pub fn displayed_badavatar(config: &Config) -> DisplayedBadAvatarConfig {
+    let ba = &config.contents.badavatar;
+    DisplayedBadAvatarConfig {
+        abadavatar_url: ba.url(UrlField::Abadavatar).to_shared_string(),
+        xeunshackle_url: ba.url(UrlField::Xeunshackle).to_shared_string(),
+        aurora_url: ba.url(UrlField::Aurora).to_shared_string(),
+        system_update_url: ba.url(UrlField::SystemUpdate).to_shared_string(),
+        abadavatar_default_url: UrlField::Abadavatar.default_url().to_shared_string(),
+        xeunshackle_default_url: UrlField::Xeunshackle.default_url().to_shared_string(),
+        aurora_default_url: UrlField::Aurora.default_url().to_shared_string(),
+        system_update_default_url: UrlField::SystemUpdate.default_url().to_shared_string(),
+        include_system_update: ba.include_system_update,
+    }
+}
 
 /// Builds the model backing `UiState.recent-locations` from the config.
 pub fn recent_locations(config: &Config) -> Vec<DisplayedRecentLocation> {

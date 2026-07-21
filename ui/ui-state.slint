@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 import {
+    DisplayedBadAvatarConfig,
     DisplayedConfig,
     DisplayedDriveInfo,
     DisplayedGame,
@@ -62,4 +63,17 @@ export global UiState {
     in-out property <[string]> aurora-scan-paths;
     // True while fetching aurora-scan-paths over FTP.
     in-out property <bool> fetching-aurora-paths: false;
+    // True once a fetch has completed at least once (to tell an empty
+    // result apart from the initial "not fetched yet" state).
+    in-out property <bool> aurora-paths-loaded: false;
+    // Non-empty when the last fetch failed: shown in the card instead of a
+    // notification.
+    in-out property <string> aurora-paths-error;
+    // True while the "how to add Aurora scan paths" help modal is shown.
+    in-out property <bool> showing-aurora-help: false;
+
+    // BadAvatar USB-key creation (Toolbox), independent of the target.
+    in-out property <DisplayedBadAvatarConfig> badavatar;
+    // True while a BadAvatar key is being created.
+    in-out property <bool> creating-badavatar: false;
 }

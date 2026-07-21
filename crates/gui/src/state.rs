@@ -28,6 +28,7 @@ pub struct State {
     pub is_converting: bool,
     pub is_downloading_covers: bool,
     pub is_scanning: bool,
+    pub is_creating_badavatar: bool,
     /// Flag shared with the scan thread to cancel it.
     pub scan_cancel: Arc<AtomicBool>,
     /// Flag shared with the running conversion thread to cancel it.
@@ -51,6 +52,7 @@ impl State {
             is_converting: false,
             is_downloading_covers: false,
             is_scanning: false,
+            is_creating_badavatar: false,
             scan_cancel: Arc::new(AtomicBool::new(false)),
             conversion_cancel: Arc::new(AtomicBool::new(false)),
             games_filter: String::new(),

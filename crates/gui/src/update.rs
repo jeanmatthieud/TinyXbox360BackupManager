@@ -13,11 +13,11 @@ use std::{
     fs,
     path::{Path, PathBuf},
     rc::Rc,
-    sync::Mutex,
+    sync::{Mutex, atomic::AtomicBool},
 };
 use txbm_core::{
-    config::TargetKind, conversion_queue::QueuedConversion, data_dir::DATA_DIR,
-    drive_info::DriveInfo, ftp::FtpSession, game::Game, target::Target,
+    badavatar::UrlField, config::TargetKind, conversion_queue::QueuedConversion,
+    data_dir::DATA_DIR, drive_info::DriveInfo, ftp::FtpSession, game::Game, target::Target,
 };
 
 const NEW_DRIVE_TEXT: &str = "New drive detected\nOnce the games are on the console, remember to add the content paths in Aurora\n(Settings > Content Paths: Hdd1:\\Content\\0000000000000000 and Hdd1:\\Games, Scan Depth 3+)";
@@ -60,6 +60,7 @@ impl State {
 
                 let ui_state = app.global::<UiState<'_>>();
                 ui_state.set_config(DisplayedConfig::from(&self.config));
+                ui_state.set_badavatar(crate::config::displayed_badavatar(&self.config));
                 ui_state.set_recent_locations(ModelRc::from(Rc::new(VecModel::from(
                     crate::config::recent_locations(&self.config),
                 ))));
@@ -588,7 +589,9 @@ impl State {
                 }
 
                 let app = weak.upgrade().unwrap();
-                app.global::<UiState<'_>>().set_fetching_aurora_paths(true);
+                let ui_state = app.global::<UiState<'_>>();
+                ui_state.set_fetching_aurora_paths(true);
+                ui_state.set_aurora_paths_error(SharedString::new());
 
                 let weak = weak.clone();
                 std::thread::spawn(move || {
@@ -601,9 +604,11 @@ impl State {
                     let _ = weak.upgrade_in_event_loop(move |app| {
                         let ui_state = app.global::<UiState<'_>>();
                         ui_state.set_fetching_aurora_paths(false);
+                        ui_state.set_aurora_paths_loaded(true);
 
                         match res {
                             Ok(lines) => {
+                                ui_state.set_aurora_paths_error(SharedString::new());
                                 ui_state.set_aurora_scan_paths(slint::ModelRc::from(
                                     std::rc::Rc::new(slint::VecModel::from(
                                         lines
@@ -614,9 +619,12 @@ impl State {
                                 ));
                             }
                             Err(e) => {
-                                let text = slint::format!("Failed to read Aurora paths: {e:#}");
-                                app.global::<Dispatcher<'_>>()
-                                    .invoke_dispatch(Message::NotifyError, text);
+                                // Reported inside the toolbox card, not as a
+                                // toast notification.
+                                ui_state.set_aurora_scan_paths(slint::ModelRc::from(
+                                    std::rc::Rc::new(slint::VecModel::<SharedString>::default()),
+                                ));
+                                ui_state.set_aurora_paths_error(slint::format!("{e:#}"));
                             }
                         }
                     });
@@ -918,6 +926,94 @@ impl State {
                 if !path.is_empty() {
                     message_queue.push_back((Message::FetchTitleUpdates, path));
                 }
+            }
+            Message::SetBadAvatarUrl => {
+                // Payload: "<key>\n<url>", key being the BadAvatar component.
+                if let Some((key, value)) = payload.split_once('\n')
+                    && let Some(field) = UrlField::from_key(key)
+                {
+                    self.config.contents.badavatar.set_url(field, value.to_string());
+                    message_queue.push_back((Message::SyncConfig, SharedString::new()));
+                }
+            }
+            Message::ResetBadAvatarUrl => {
+                if let Some(field) = UrlField::from_key(payload.as_str()) {
+                    self.config.contents.badavatar.reset_url(field);
+                    message_queue.push_back((Message::SyncConfig, SharedString::new()));
+                }
+            }
+            Message::ToggleBadAvatarSystemUpdate => {
+                let flag = &mut self.config.contents.badavatar.include_system_update;
+                *flag = !*flag;
+                message_queue.push_back((Message::SyncConfig, SharedString::new()));
+            }
+            Message::CreateBadAvatar => {
+                if self.is_creating_badavatar {
+                    return;
+                }
+
+                let app = weak.upgrade().unwrap();
+                let window_handle = app.window().window_handle();
+                let Some(dest) = dialogs::pick_mount_point(&window_handle) else {
+                    return;
+                };
+
+                let cfg = self.config.contents.badavatar.clone();
+                self.is_creating_badavatar = true;
+                app.global::<UiState<'_>>().set_creating_badavatar(true);
+                self.notifications
+                    .push(Notification::info("Creating the BadAvatar USB key…"));
+
+                let weak = weak.clone();
+                std::thread::spawn(move || {
+                    let weak_status = weak.clone();
+                    let status = move |line: &str| {
+                        let text = SharedString::from(line);
+                        let _ = weak_status.upgrade_in_event_loop(move |app| {
+                            app.global::<UiState<'_>>().set_status(text);
+                        });
+                    };
+
+                    // No cancel button yet; the flag is here for a future one.
+                    let cancel = AtomicBool::new(false);
+                    let res =
+                        txbm_core::badavatar::create_badavatar(&dest, &cfg, &cancel, &status);
+
+                    let _ = weak.upgrade_in_event_loop(move |app| {
+                        let dispatcher = app.global::<Dispatcher<'_>>();
+
+                        dispatcher.invoke_dispatch(Message::SetStatus, SharedString::new());
+                        dispatcher.invoke_dispatch(Message::BadAvatarCreated, SharedString::new());
+
+                        match res {
+                            Ok(()) => {
+                                dispatcher.invoke_dispatch(
+                                    Message::NotifyInfo,
+                                    "BadAvatar USB key ready 🎉".to_shared_string(),
+                                );
+                            }
+                            Err(e)
+                                if e.to_string()
+                                    .contains(txbm_core::badavatar::BADAVATAR_CANCELLED) =>
+                            {
+                                dispatcher.invoke_dispatch(
+                                    Message::NotifyInfo,
+                                    "BadAvatar creation cancelled".to_shared_string(),
+                                );
+                            }
+                            Err(e) => {
+                                let text =
+                                    slint::format!("Failed to create BadAvatar key: {e:#}");
+                                dispatcher.invoke_dispatch(Message::NotifyError, text);
+                            }
+                        }
+                    });
+                });
+            }
+            Message::BadAvatarCreated => {
+                self.is_creating_badavatar = false;
+                let app = weak.upgrade().unwrap();
+                app.global::<UiState<'_>>().set_creating_badavatar(false);
             }
             #[cfg(windows)]
             Message::SetWindowColorLight => {

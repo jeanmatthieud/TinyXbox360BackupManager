@@ -2,6 +2,7 @@
 // SPDX-FileContributor: Modified by Jean-Matthieu Dechriste (TinyXbox360BackupManager)
 // SPDX-License-Identifier: GPL-3.0-only
 
+use crate::badavatar::BadAvatarConfig;
 use crate::data_dir::DATA_DIR;
 use anyhow::Result;
 use derive_more::{Display, FromStr};
@@ -71,6 +72,9 @@ pub struct ConfigContents {
     pub ftp_port: String,
     pub ftp_user: String,
     pub ftp_password: String,
+
+    /// BadAvatar USB-key creation settings (Toolbox).
+    pub badavatar: BadAvatarConfig,
 }
 
 impl Default for ConfigContents {
@@ -91,6 +95,7 @@ impl Default for ConfigContents {
             ftp_port: "21".to_string(),
             ftp_user: "xboxftp".to_string(),
             ftp_password: "xboxftp".to_string(),
+            badavatar: BadAvatarConfig::default(),
         }
     }
 }

@@ -4,6 +4,7 @@
 #![warn(clippy::all, rust_2018_idioms)]
 
 pub mod archive;
+pub mod badavatar;
 pub mod config;
 pub mod conversion_queue;
 pub mod convert;

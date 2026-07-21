@@ -3,19 +3,66 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 import { IconSet, IconDisplay, Icon } from "@lucide";
-import { ScrollView } from "std-widgets.slint";
+import {
+    ScrollView,
+    LineEdit,
+    CheckBox,
+    ProgressIndicator,
+    Spinner,
+    HorizontalBox,
+} from "std-widgets.slint";
 import { MyPalette } from "styling.slint";
 import { Card } from "components/card.slint";
 import { HorizontalLine } from "components/horizontal-line.slint";
 import { UiState } from "ui-state.slint";
 import { Link } from "components/link.slint";
-import { IconButton } from "components/icon-button.slint";
+import { IconButton, IconButtonKind } from "components/icon-button.slint";
 import { Message, Dispatcher } from "messages.slint";
 import { TargetKind } from "types.slint";
+
+// One editable BadAvatar download-URL row with a per-field reset button
+// (shown only when the field differs from its built-in default).
+component BadAvatarUrlField inherits VerticalLayout {
+    in property <string> label;
+    in property <string> url;
+    in property <string> default-url;
+    in property <string> field-key;
+    spacing: 3px;
+
+    // Editing a LineEdit breaks its `text: url` binding, so a later reset (url
+    // reverting to the default) would leave the field stale. Push the value back
+    // imperatively whenever `url` changes to keep the field in sync.
+    changed url => {
+        edit.text = url;
+    }
+
+    Text {
+        text: label;
+        font-size: 12px;
+    }
+
+    HorizontalLayout {
+        spacing: 5px;
+
+        edit := LineEdit {
+            horizontal-stretch: 1;
+            text: url;
+            edited => Dispatcher.dispatch(Message.SetBadAvatarUrl, field-key + "\n" + self.text);
+        }
+
+        if url != default-url: IconButton {
+            icon: IconSet.RotateCcw;
+            width: self.height;
+            clicked => Dispatcher.dispatch(Message.ResetBadAvatarUrl, field-key);
+        }
+    }
+}
 
 export component ToolboxPage inherits VerticalLayout {
     private property <int> optimal-allocation-granularity: (UiState.drive-info.total-gib <= 32) ? 32768 : 65536;
     private property <bool> is-optimal-allocation-granularity: UiState.drive-info.allocation-granularity == optimal-allocation-granularity;
+    // Local toggle for the BadAvatar advanced (URL) settings section.
+    private property <bool> show-badavatar-settings: false;
 
     init => {
         if UiState.config.target-kind == TargetKind.Ftp && !UiState.config.target.is-empty && !UiState.fetching-aurora-paths {
@@ -83,6 +130,122 @@ export component ToolboxPage inherits VerticalLayout {
             padding-top: 0px;
             spacing: 10px;
             alignment: start;
+
+            // Always available, regardless of the connected target.
+            Card {
+                VerticalLayout {
+                    padding: 10px;
+                    spacing: 10px;
+
+                    HorizontalLayout {
+                        alignment: LayoutAlignment.space-between;
+                        cross-axis-alignment: CrossAxisAlignment.center;
+
+                        HorizontalLayout {
+                            spacing: 5px;
+                            cross-axis-alignment: CrossAxisAlignment.center;
+
+                            IconDisplay {
+                                icon: IconSet.Usb;
+                                stroke: MyPalette.foreground;
+                                size: 14px;
+                            }
+
+                            Text {
+                                text: "BadAvatar USB key";
+                            }
+                        }
+
+                        if UiState.fetching-aurora-paths: Spinner {
+                            width: 27px;
+                            height: 27px;
+                            indeterminate: true;
+                        }
+
+                        if !UiState.fetching-aurora-paths: IconButton {
+                            icon: IconSet.Settings2;
+                            width: self.height;
+                            clicked => {
+                                show-badavatar-settings = !show-badavatar-settings;
+                            }
+                        }
+                    }
+
+                    HorizontalLine { }
+
+                    Text {
+                        text: "Creates a homebrew boot USB key (ABadAvatar + XeUnshackle + Aurora).\nPlug in a FAT32-formatted USB key first.";
+                        wrap: word-wrap;
+                    }
+
+                    if show-badavatar-settings: VerticalLayout {
+                        spacing: 8px;
+
+                        HorizontalLine { }
+
+                        Text {
+                            text: "Download URLs — edit to use a different source, reset to restore the default:";
+                            font-size: 12px;
+                            wrap: word-wrap;
+                        }
+
+                        BadAvatarUrlField {
+                            label: "ABadAvatar";
+                            url: UiState.badavatar.abadavatar-url;
+                            default-url: UiState.badavatar.abadavatar-default-url;
+                            field-key: "abadavatar";
+                        }
+
+                        BadAvatarUrlField {
+                            label: "XeUnshackle";
+                            url: UiState.badavatar.xeunshackle-url;
+                            default-url: UiState.badavatar.xeunshackle-default-url;
+                            field-key: "xeunshackle";
+                        }
+
+                        BadAvatarUrlField {
+                            label: "Aurora (.zip/.7z — the official .rar is not supported)";
+                            url: UiState.badavatar.aurora-url;
+                            default-url: UiState.badavatar.aurora-default-url;
+                            field-key: "aurora";
+                        }
+
+                        CheckBox {
+                            text: "Also download and add the official system update";
+                            checked: UiState.badavatar.include-system-update;
+                            toggled => {
+                                Dispatcher.dispatch(Message.ToggleBadAvatarSystemUpdate, "");
+                            }
+                        }
+
+                        if UiState.badavatar.include-system-update: BadAvatarUrlField {
+                            label: "System update";
+                            url: UiState.badavatar.system-update-url;
+                            default-url: UiState.badavatar.system-update-default-url;
+                            field-key: "system_update";
+                        }
+                    }
+
+                    HorizontalLine { }
+
+                    HorizontalLayout {
+                        spacing: 10px;
+
+                        bBadUsb := IconButton {
+                            disabled: UiState.creating-badavatar;
+                            icon: IconSet.Download;
+                            width: self.height;
+                            clicked => Dispatcher.dispatch(Message.CreateBadAvatar, "");
+                        }
+
+                        Text {
+                            height: bBadUsb.height;
+                            vertical-alignment: center;
+                            text: !UiState.creating-badavatar ? "Create the BadAvatar USB key" : "Working… see the status bar below.";
+                        }
+                    }
+                }
+            }
 
             if UiState.config.target-kind == TargetKind.Local && !UiState.config.target.is-empty: Card {
                 VerticalLayout {
@@ -226,7 +389,13 @@ export component ToolboxPage inherits VerticalLayout {
                             }
                         }
 
-                        IconButton {
+                        if UiState.fetching-aurora-paths: Spinner {
+                            width: 27px;
+                            height: 27px;
+                            indeterminate: true;
+                        }
+
+                        if !UiState.fetching-aurora-paths: IconButton {
                             icon: IconSet.RefreshCcw;
                             width: self.height;
                             clicked => {
@@ -239,14 +408,89 @@ export component ToolboxPage inherits VerticalLayout {
 
                     HorizontalLine { }
 
-                    Text {
-                        text: UiState.fetching-aurora-paths
-                            ? "Reading Aurora's scan paths…"
-                            : "The following paths are scanned by Aurora :";
+                    if UiState.fetching-aurora-paths && !UiState.aurora-paths-loaded: Text {
+                        text: "Reading Aurora's scan paths…";
                     }
 
-                    if UiState.aurora-scan-paths.length > 0: VerticalLayout {
+                    // Read failure: reported here, not as a notification.
+                    if !UiState.fetching-aurora-paths && UiState.aurora-paths-error != "": VerticalLayout {
+                        spacing: 5px;
+
+                        HorizontalLayout {
+                            spacing: 5px;
+                            cross-axis-alignment: CrossAxisAlignment.center;
+
+                            IconDisplay {
+                                icon: IconSet.TriangleAlert;
+                                stroke: MyPalette.destructive;
+                                size: 14px;
+                            }
+
+                            Text {
+                                text: "Couldn't read Aurora's scan paths.";
+                                color: MyPalette.destructive;
+                            }
+                        }
+
+                        Text {
+                            text: UiState.aurora-paths-error;
+                            font-size: 12px;
+                            wrap: word-wrap;
+                            color: MyPalette.foreground.transparentize(0.4);
+                        }
+                    }
+
+                    // Aurora scans nothing yet: warn and offer guidance.
+                    if UiState.aurora-paths-error == "" && UiState.aurora-paths-loaded && UiState.aurora-scan-paths.length == 0: VerticalLayout {
+                        height: self.min-height;
+                        spacing: 8px;
+
+                        HorizontalLayout {
+                            spacing: 5px;
+                            cross-axis-alignment: CrossAxisAlignment.center;
+
+                            IconDisplay {
+                                icon: IconSet.TriangleAlert;
+                                stroke: #e0a12f;
+                                size: 14px;
+                            }
+
+                            Text {
+                                text: "Aurora isn't scanning any location.";
+                                color: #e0a12f;
+                            }
+                        }
+
+                        Text {
+                            text: "No game will show up until you add scan paths in Aurora for your Xbox 360 (GOD) and OG Xbox games. Add them on the console, then refresh.";
+                            wrap: word-wrap;
+                        }
+
+                        HorizontalLine { }
+
+                        HorizontalLayout {
+                            spacing: 10px;
+
+                            b3 := IconButton {
+                                icon: IconSet.CircleQuestionMark;
+                                width: self.height;
+                                clicked => { UiState.showing-aurora-help = true };
+                            }
+
+                            Text {
+                                height: b3.height;
+                                vertical-alignment: center;
+                                text: "Help me add the content paths to Aurora";
+                            }
+                        }
+                    }
+
+                    if !UiState.fetching-aurora-paths && UiState.aurora-scan-paths.length > 0: VerticalLayout {
                         spacing: 3px;
+
+                        Text {
+                            text: "The following paths are scanned by Aurora :";
+                        }
 
                         for path in UiState.aurora-scan-paths: Text {
                             text: "- " + path;

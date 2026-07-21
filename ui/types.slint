@@ -34,6 +34,20 @@ export struct DisplayedConfig {
     ftp-password: string,
 }
 
+export struct DisplayedBadAvatarConfig {
+    // Effective URLs (user override or built-in default) shown in the fields.
+    abadavatar-url: string,
+    xeunshackle-url: string,
+    aurora-url: string,
+    system-update-url: string,
+    // Built-in default URLs, so each field can offer a reset when it differs.
+    abadavatar-default-url: string,
+    xeunshackle-default-url: string,
+    aurora-default-url: string,
+    system-update-default-url: string,
+    include-system-update: bool,
+}
+
 export struct DisplayedRecentLocation {
     // Folder name (local drive) or IP (console over FTP).
     name: string,
