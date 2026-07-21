@@ -106,6 +106,13 @@ impl State {
                     .collect::<Vec<_>>();
 
                 self.displayed_games.set_vec(displayed_games);
+
+                // Whether the (unfiltered) library holds any game at all, so the
+                // grid can tell "empty library" apart from "everything filtered
+                // out" (see game-grid-page.slint).
+                let app = weak.upgrade().unwrap();
+                app.global::<UiState<'_>>()
+                    .set_has_games(!self.games.is_empty());
             }
             Message::ToggleShowX360 => {
                 self.config.contents.show_x360 = !self.config.contents.show_x360;

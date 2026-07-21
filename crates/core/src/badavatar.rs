@@ -382,11 +382,21 @@ fn set_launch_default(dest: &Path) -> Result<()> {
     let path = dest.join("launch.ini");
     let text = fs::read_to_string(&path).context("reading launch.ini")?;
 
+    // Preserve the file's existing line ending: these homebrew configs ship as
+    // CRLF and the on-console INI parser can be line-ending sensitive, so we
+    // must not silently downgrade CRLF to LF.
+    let newline = if text.contains("\r\n") { "\r\n" } else { "\n" };
+
     let mut replaced = false;
     let mut out: Vec<String> = Vec::new();
     for line in text.lines() {
-        if !replaced && line.trim_start().to_lowercase().starts_with("default") && line.contains('=')
-        {
+        // Match the exact `Default` key (the text before `=`), not merely any
+        // line starting with "default" — the loose prefix would also catch a
+        // key like `DefaultTimeout` and clobber it.
+        let is_default_key = line
+            .split_once('=')
+            .is_some_and(|(key, _)| key.trim().eq_ignore_ascii_case("default"));
+        if !replaced && is_default_key {
             out.push(DEFAULT_LINE.to_string());
             replaced = true;
         } else {
@@ -397,7 +407,7 @@ fn set_launch_default(dest: &Path) -> Result<()> {
         out.push(DEFAULT_LINE.to_string());
     }
 
-    fs::write(&path, out.join("\n") + "\n").context("writing launch.ini")?;
+    fs::write(&path, out.join(newline) + newline).context("writing launch.ini")?;
     Ok(())
 }
 

@@ -44,6 +44,9 @@ export global UiState {
     in-out property <string> data-dir;
     in-out property <DisplayedDriveInfo> drive-info;
     in-out property <[DisplayedGame]> games;
+    // True when the (unfiltered) library holds at least one game, so the grid
+    // can tell an empty library apart from all games being hidden by filters.
+    in-out property <bool> has-games: false;
     in-out property <[Notification]> notifications;
     in-out property <[string]> conversion-queue;
     in-out property <[string]> games-to-add;
