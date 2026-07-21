@@ -25,6 +25,7 @@ export struct DisplayedConfig {
     sort-by: string,
     view-as: string,
     theme-preference: string,
+    auto-reconnect: string,
     show-x360: bool,
     show-arcade: bool,
     show-og: bool,
@@ -32,6 +33,20 @@ export struct DisplayedConfig {
     ftp-port: string,
     ftp-user: string,
     ftp-password: string,
+}
+
+export struct DisplayedBadAvatarConfig {
+    // Effective URLs (user override or built-in default) shown in the fields.
+    abadavatar-url: string,
+    xeunshackle-url: string,
+    aurora-url: string,
+    system-update-url: string,
+    // Built-in default URLs, so each field can offer a reset when it differs.
+    abadavatar-default-url: string,
+    xeunshackle-default-url: string,
+    aurora-default-url: string,
+    system-update-default-url: string,
+    include-system-update: bool,
 }
 
 export struct DisplayedRecentLocation {

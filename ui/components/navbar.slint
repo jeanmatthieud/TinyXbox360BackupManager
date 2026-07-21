@@ -24,7 +24,9 @@ export component Navbar inherits VerticalLayout {
             }
         }
 
-        if !UiState.config.target.is-empty: NavbarButton {
+        // Always available: the Toolbox hosts the BadAvatar USB-key creation,
+        // which is useful even when no target is connected.
+        NavbarButton {
             active: UiState.current-page == Page.Toolbox;
             icon: IconSet.ToolCase;
             tooltip: "Toolbox";

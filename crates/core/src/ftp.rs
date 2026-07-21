@@ -12,10 +12,125 @@ use crate::util::dir_size;
 use anyhow::{Context, Result};
 use std::fs::File;
 use std::io::{BufReader, Read};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::Path;
+use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 use suppaftp::FtpStream;
 use suppaftp::types::FileType;
+
+/// Per-host connect timeout while scanning the network. Kept short so an
+/// unreachable address doesn't stall a worker: a live host on the LAN answers
+/// (or refuses) in a few milliseconds.
+const SCAN_CONNECT_TIMEOUT: Duration = Duration::from_millis(500);
+/// Read/write timeout for the login exchange during a scan.
+const SCAN_IO_TIMEOUT: Duration = Duration::from_millis(1500);
+/// Number of concurrent probes while scanning the /24 subnet.
+const SCAN_WORKERS: usize = 64;
+
+/// Best-effort discovery of this machine's primary IPv4 address by opening a
+/// UDP socket "towards" a public address: no packet is actually sent, but the
+/// OS picks the outgoing interface, whose local address we can then read.
+fn local_ipv4() -> Option<Ipv4Addr> {
+    let sock = std::net::UdpSocket::bind("0.0.0.0:0").ok()?;
+    sock.connect("8.8.8.8:80").ok()?;
+    match sock.local_addr().ok()?.ip() {
+        // Skip loopback and the unspecified `0.0.0.0` the OS hands back when the
+        // machine has no usable route (UDP `connect` succeeds without a packet),
+        // which would otherwise make us scan a bogus `0.0.0.x` subnet.
+        IpAddr::V4(v4) if !v4.is_loopback() && !v4.is_unspecified() => Some(v4),
+        _ => None,
+    }
+}
+
+/// Console filesystem volumes exposed at the FTP root by Aurora/the console.
+/// Their presence distinguishes a real console from any other FTP server that
+/// happens to accept the same credentials.
+const CONSOLE_VOLUMES: &[&str] = &[
+    "Hdd1", "Usb0", "Usb1", "Usb2", "Flash", "Nand", "Ram", "Uda", "SysExt",
+];
+
+/// True if a root `LIST` looks like a 360 console: at least one entry's name
+/// matches a known console volume (see [`CONSOLE_VOLUMES`]).
+fn looks_like_console_root(lines: &[String]) -> bool {
+    lines.iter().any(|line| {
+        line.split_whitespace()
+            .next_back()
+            .is_some_and(|name| {
+                CONSOLE_VOLUMES
+                    .iter()
+                    .any(|v| name.eq_ignore_ascii_case(v))
+            })
+    })
+}
+
+/// Tries to open an FTP session on `ip:port`, log in with `user`/`password` and
+/// confirm the peer is a 360 console (its FTP root exposes console volumes such
+/// as `Hdd1`). Short timeouts throughout. Returns true only on a confirmed
+/// console, so an unrelated FTP server accepting the same credentials is not
+/// mistaken for one.
+fn probe_ftp(ip: Ipv4Addr, port: u16, user: &str, password: &str) -> bool {
+    let addr = SocketAddr::new(IpAddr::V4(ip), port);
+    let Ok(mut stream) = FtpStream::connect_timeout(addr, SCAN_CONNECT_TIMEOUT) else {
+        return false;
+    };
+    let _ = stream.get_ref().set_read_timeout(Some(SCAN_IO_TIMEOUT));
+    let _ = stream.get_ref().set_write_timeout(Some(SCAN_IO_TIMEOUT));
+    let ok = stream.login(user, password).is_ok()
+        && stream.cwd("/").is_ok()
+        && stream
+            .list(None)
+            .is_ok_and(|lines| looks_like_console_root(&lines));
+    let _ = stream.quit();
+    ok
+}
+
+/// Scans the local /24 subnet for an Aurora FTP server, trying to log in on
+/// `port` with `user`/`password`. Returns the IP (as a string) of the first
+/// host that accepts the login, or `None` if the scan completes — or is
+/// cancelled via `cancel` — without a match.
+pub fn scan_network(
+    port: u16,
+    user: &str,
+    password: &str,
+    cancel: &AtomicBool,
+) -> Option<String> {
+    let local = local_ipv4()?;
+    let [a, b, c, _] = local.octets();
+    let hosts: Vec<Ipv4Addr> = (1u8..=254)
+        .map(|h| Ipv4Addr::new(a, b, c, h))
+        .filter(|ip| *ip != local)
+        .collect();
+
+    let next = AtomicUsize::new(0);
+    let found_flag = AtomicBool::new(false);
+    let found: Mutex<Option<String>> = Mutex::new(None);
+
+    let worker_count = SCAN_WORKERS.min(hosts.len());
+    std::thread::scope(|s| {
+        for _ in 0..worker_count {
+            s.spawn(|| {
+                loop {
+                    if cancel.load(Ordering::Relaxed) || found_flag.load(Ordering::Relaxed) {
+                        return;
+                    }
+                    let i = next.fetch_add(1, Ordering::Relaxed);
+                    let Some(ip) = hosts.get(i) else {
+                        return;
+                    };
+                    if probe_ftp(*ip, port, user, password) {
+                        found_flag.store(true, Ordering::Relaxed);
+                        *found.lock().unwrap() = Some(ip.to_string());
+                        return;
+                    }
+                }
+            });
+        }
+    });
+
+    found.into_inner().unwrap()
+}
 
 /// Minimum delay between two intra-file progress notifications, so the UI
 /// isn't refreshed on every 8 KiB chunk.

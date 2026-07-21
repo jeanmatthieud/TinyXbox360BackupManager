@@ -2,7 +2,7 @@
 // SPDX-FileContributor: Modified by Jean-Matthieu Dechriste (TinyXbox360BackupManager)
 // SPDX-License-Identifier: GPL-3.0-only
 
-import { ScrollView } from "std-widgets.slint";
+import { ScrollView, Spinner } from "std-widgets.slint";
 import { MyPalette } from "styling.slint";
 import { GameCard } from "components/game-card.slint";
 import { IconSet, IconDisplay } from "@lucide";
@@ -11,6 +11,7 @@ import { GamesOtherToolbar } from "components/games-other-toolbar.slint";
 import { UiState } from "ui-state.slint";
 import { DisplayedGame } from "types.slint";
 import { NoDrive } from "components/no-drive.slint";
+import { NoGames } from "components/no-games.slint";
 
 export component GameGridPage inherits VerticalLayout {
     private property <int> col-count: max(1, floor((self.width - 10px) / (172px + 10px)));
@@ -23,7 +24,69 @@ export component GameGridPage inherits VerticalLayout {
 
     if UiState.config.target.is-empty: NoDrive { }
 
-    if !UiState.config.target.is-empty: ScrollView {
+    // Filters / count bar: visible whenever the library holds games, kept
+    // outside the games ScrollView below so the search box stays reachable
+    // even when the current filter matches nothing.
+    if !UiState.config.target.is-empty && UiState.has-games: HorizontalLayout {
+        padding-left: 10px;
+        padding-right: 10px;
+        padding-bottom: 10px;
+
+        GamesOtherToolbar { }
+    }
+
+    // Connected, first fetch still running: a large indeterminate spinner.
+    if !UiState.config.target.is-empty && UiState.scanning && UiState.games.length == 0: VerticalLayout {
+        alignment: center;
+
+        HorizontalLayout {
+            alignment: center;
+
+            Spinner {
+                width: 64px;
+                height: 64px;
+                indeterminate: true;
+            }
+        }
+    }
+
+    // Connected, scan done, library truly empty: invite to add a first game.
+    if !UiState.config.target.is-empty && !UiState.scanning && !UiState.has-games && UiState.games.length == 0: NoGames { }
+
+    // Connected, library has games but they are all hidden by the current
+    // search / category filters: tell the user rather than showing NoGames.
+    if !UiState.config.target.is-empty && !UiState.scanning && UiState.has-games && UiState.games.length == 0: VerticalLayout {
+        alignment: center;
+        spacing: 8px;
+
+        HorizontalLayout {
+            alignment: center;
+
+            IconDisplay {
+                icon: IconSet.SearchX;
+                stroke: MyPalette.foreground.transparentize(0.4);
+                size: 32px;
+            }
+        }
+
+        Text {
+            text: "No games match the current filters";
+            horizontal-alignment: center;
+            font-size: 16px;
+            font-weight: 600;
+            color: MyPalette.foreground;
+        }
+
+        Text {
+            text: "Clear the search box or re-enable a category to see your games again.";
+            horizontal-alignment: center;
+            wrap: word-wrap;
+            font-size: 13px;
+            color: MyPalette.foreground.transparentize(0.4);
+        }
+    }
+
+    if !UiState.config.target.is-empty && UiState.games.length > 0: ScrollView {
         width: parent.width;
         viewport-height: v.preferred-height;
 
@@ -31,8 +94,6 @@ export component GameGridPage inherits VerticalLayout {
             padding: 10px;
             padding-top: 0px;
             spacing: 10px;
-
-            GamesOtherToolbar { }
 
             GridLayout {
                 spacing: 10px;

@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 import {
+    DisplayedBadAvatarConfig,
     DisplayedConfig,
     DisplayedDriveInfo,
     DisplayedGame,
@@ -34,6 +35,12 @@ export global UiState {
 
     in-out property <bool> selecting-target: false;
     in-out property <bool> editing-ftp-target: false;
+    // FTP modal: true while the local network is being scanned for a console.
+    in-out property <bool> ftp-scanning: false;
+    // FTP modal: IP of the console found by the scan (empty if none/not yet).
+    in-out property <string> ftp-scan-found-ip: "";
+    // FTP modal: true once the user switches to the manual-entry form.
+    in-out property <bool> ftp-show-manual: false;
     // Most-recently-used library locations (most recent first, max 5),
     // shown in the target-selection modal.
     in-out property <[DisplayedRecentLocation]> recent-locations;
@@ -43,6 +50,9 @@ export global UiState {
     in-out property <string> data-dir;
     in-out property <DisplayedDriveInfo> drive-info;
     in-out property <[DisplayedGame]> games;
+    // True when the (unfiltered) library holds at least one game, so the grid
+    // can tell an empty library apart from all games being hidden by filters.
+    in-out property <bool> has-games: false;
     in-out property <[Notification]> notifications;
     in-out property <[string]> conversion-queue;
     in-out property <[string]> games-to-add;
@@ -62,4 +72,17 @@ export global UiState {
     in-out property <[string]> aurora-scan-paths;
     // True while fetching aurora-scan-paths over FTP.
     in-out property <bool> fetching-aurora-paths: false;
+    // True once a fetch has completed at least once (to tell an empty
+    // result apart from the initial "not fetched yet" state).
+    in-out property <bool> aurora-paths-loaded: false;
+    // Non-empty when the last fetch failed: shown in the card instead of a
+    // notification.
+    in-out property <string> aurora-paths-error;
+    // True while the "how to add Aurora scan paths" help modal is shown.
+    in-out property <bool> showing-aurora-help: false;
+
+    // BadAvatar USB-key creation (Toolbox), independent of the target.
+    in-out property <DisplayedBadAvatarConfig> badavatar;
+    // True while a BadAvatar key is being created.
+    in-out property <bool> creating-badavatar: false;
 }

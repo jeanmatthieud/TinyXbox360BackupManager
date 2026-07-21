@@ -45,7 +45,7 @@ Provide an **ISO** image or an **Arcade (XBLA) game** — as a `.7z`/`.zip` arch
 The library is managed **directly on your chosen target**:
 
 - **USB drive / local folder (FAT32)**: games are written directly in the correct format.
-- **FTP console (Aurora)**: the game list is read from the console, added ISOs are converted locally then pushed directly to `Hdd1`, and deletion is done remotely (one connection at a time, as required by the console's FTP server).
+- **FTP console (Aurora)**: the game list is read from the console, added ISOs are converted locally then pushed directly to the internal drive `Hdd1`, and deletion is done remotely (one connection at a time, as required by the console's FTP server).
 - **Covers**: retrieved automatically from [XboxUnity](https://www.xboxunity.net) (local cache).
 
 > [!WARNING]
@@ -96,9 +96,9 @@ Homebrew management is intentionally not currently supported.
 
 The interface resembles TinyWiiBackupManager: sidebar (Games, Toolbox, Settings, About), grid or table view, 360/XBLA/OG filters, search, conversion queue, notifications, drag-and-drop.
 
-1. Click the **hard drive** icon (at the bottom of the sidebar) then select the target: **USB drive / local folder**, or **FTP console** (IP + Aurora credentials, `xbox`/`xbox` port 21 by default, with connection test).
+1. Click the **hard drive** icon (at the bottom of the sidebar) then select the target: **USB drive / local folder**, or **FTP console** (IP + Aurora credentials, `xboxftp`/`xboxftp` port 21 by default, with connection test).
 2. **Games** page: the list reflects the content of the target (local or remote). Click the **+** button (or drag and drop) to add ISOs, XBLA archives or STFS packages; the application detects the type of each input and starts GOD conversion, extraction or package installation, directly to the target (tracked in the conversion queue and status bar).
-3. On the console: Aurora > Settings > Content Paths, add `Hdd1:\Content\0000000000000000\` (and `Hdd1:\Games\`), Scan Depth 3–4, then run a scan.
+3. On the console: Aurora > Settings > Content Paths, add `Hdd1:\Content\0000000000000000\` (and `Hdd1:\Games\`), Scan Depth 3-4, then run a scan.
 
 For **multi-disc games with an installation disc** (e.g., GTA V): the "Play" disc is converted to GOD, the installation disc is detected as a content disc and its `Content` folder is merged in the right place — simply provide both ISOs to the application. The same applies to **Expansion Installer** discs (e.g., GTA IV: The Complete Edition): the DLC and title updates they contain are installed to their respective folders.
 
@@ -124,7 +124,8 @@ Pure Rust, no runtime external dependencies:
 - [iso2god-rs](https://github.com/iliazeus/iso2god-rs) — ISO → GOD conversion
 - [xdvdfs](https://crates.io/crates/xdvdfs) — reading/extraction of XDVDFS images ([extract-xiso](https://github.com/XboxDev/extract-xiso) equivalent)
 - [suppaftp](https://crates.io/crates/suppaftp) — FTP client
-- [XboxUnity](https://www.xboxunity.net) — covers and title updates (endpoints documented in `doc/assets-url.md`)
+- [XboxUnity](https://www.xboxunity.net) — Xbox360 covers and title updates
+- [MobCat](https://github.com/MobCat/MobCats-original-xbox-game-list) — Xbox covers
 
 ## :scroll: License
 

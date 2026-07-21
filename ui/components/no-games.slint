@@ -1,0 +1,82 @@
+// SPDX-FileCopyrightText: 2026 Manuel Quarneti <mq1@ik.me> (TinyWiiBackupManager)
+// SPDX-FileContributor: Modified by Jean-Matthieu Dechriste (TinyXbox360BackupManager)
+// SPDX-License-Identifier: GPL-3.0-only
+
+import { IconSet, IconDisplay } from "@lucide";
+import { MyPalette } from "../styling.slint";
+import { Card } from "card.slint";
+import { IconButton, IconButtonKind } from "icon-button.slint";
+import { Message, Dispatcher } from "../messages.slint";
+
+// Shown when the target has been scanned but holds no game yet: an
+// invitation to add a first backup.
+export component NoGames inherits VerticalLayout {
+    alignment: center;
+
+    HorizontalLayout {
+        alignment: center;
+
+        Card {
+            width: min(420px, parent.width - 40px);
+
+            VerticalLayout {
+                padding: 32px;
+                spacing: 20px;
+                alignment: center;
+
+                // Icon badge
+                HorizontalLayout {
+                    alignment: center;
+
+                    Rectangle {
+                        width: 72px;
+                        height: 72px;
+                        border-radius: self.width / 2;
+                        background: MyPalette.accent-background.transparentize(0.85);
+
+                        IconDisplay {
+                            icon: IconSet.Gamepad2;
+                            stroke: MyPalette.accent-background;
+                            size: 34px;
+                        }
+                    }
+                }
+
+                VerticalLayout {
+                    spacing: 6px;
+
+                    Text {
+                        text: "No games yet";
+                        horizontal-alignment: center;
+                        font-size: 19px;
+                        font-weight: 700;
+                        color: MyPalette.foreground;
+                    }
+
+                    Text {
+                        text: "Add an ISO or XBLA backup to get started";
+                        horizontal-alignment: center;
+                        wrap: word-wrap;
+                        font-size: 14px;
+                        color: MyPalette.foreground.transparentize(0.4);
+                    }
+                }
+
+                HorizontalLayout {
+                    alignment: center;
+
+                    IconButton {
+                        icon: IconSet.Plus;
+                        label: "Add a game";
+                        kind: IconButtonKind.Primary;
+                        font-size: 15px;
+                        height: 38px;
+                        clicked => {
+                            Dispatcher.dispatch(Message.PickGames, "false");
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

@@ -64,6 +64,19 @@ export component SettingsPage inherits VerticalLayout {
                     }
                 }
             }
+
+            SettingCard {
+                icon: IconSet.Cable;
+                label: "Reconnect to the last target on startup";
+                items: [
+                    { value: "Never", label: "Never" },
+                    { value: "Always", label: "Always" },
+                    { value: "FtpOnly", label: "Only if the last target was over FTP" },
+                    { value: "UsbOnly", label: "Only if the last target was a USB drive" }
+                ];
+                active-item: UiState.config.auto-reconnect;
+                set-property: Message.SetAutoReconnect;
+            }
         }
     }
 }

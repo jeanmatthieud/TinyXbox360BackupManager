@@ -91,8 +91,10 @@ pub fn perform(
                 // scanned by Aurora: 50-100%.
                 let mut session = FtpSession::connect(ftp)?;
                 let hdd = ftp_hdd_root(&mut session);
-                let paths =
-                    aurora_paths(&mut session).unwrap_or_else(|_| AuroraPaths::defaults(&hdd));
+                let paths = aurora_paths(&mut session)
+                    .ok()
+                    .filter(|p| !p.is_empty())
+                    .unwrap_or_else(|| AuroraPaths::defaults(&hdd));
 
                 let upload = (|| -> Result<()> {
                     let total = crate::util::dir_size(&staging);
@@ -127,7 +129,7 @@ pub fn perform(
                     }
 
                     // Extracted games: staging/Games/* → first
-                    // "extracted" path of Aurora (e.g. \XBox OG).
+                    // "extracted" path of Aurora (e.g. \Xbox OG).
                     let staging_games = staging.join(GAMES_DIR);
                     if staging_games.is_dir() {
                         let remote = paths.install_extracted_dir(&hdd);

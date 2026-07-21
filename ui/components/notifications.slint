@@ -26,7 +26,7 @@ export component Notifications inherits TouchArea {
             width: min(t.preferred-width + 78px, 400px);
             min-height: 40px;
 
-            h := HorizontalLayout {
+            HorizontalLayout {
                 cross-axis-alignment: CrossAxisAlignment.center;
                 spacing: 10px;
                 padding-left: 10px;
@@ -45,14 +45,18 @@ export component Notifications inherits TouchArea {
                     }
                 }
 
-                t := Text {
+                VerticalLayout {
+                    height: self.min-height;
+
+                    t := Text {
                     // Explicit width (rather than horizontal-stretch) so the wrap
                     // preferred-height is computed against the actual rendered
                     // width instead of the unconstrained one: 78px = h's paddings
                     // (20px) + icon column (14px) + close column (24px) + spacing (20px).
                     width: card.width - 78px;
-                    text: notification.text;
-                    wrap: word-wrap;
+                        text: notification.text;
+                        wrap: word-wrap;
+                    }
                 }
 
                 VerticalLayout {

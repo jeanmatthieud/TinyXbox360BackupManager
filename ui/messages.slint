@@ -10,6 +10,7 @@ export enum Message {
     ToggleShowOg,
     SetRemoveSourcesGames,
     SetThemePreference,
+    SetAutoReconnect,
     SetViewAs,
     SetSortBy,
     SetConsoleIp,
@@ -38,6 +39,9 @@ export enum Message {
     ScanFinished,
     CancelScan,
     TestFtp,
+    StartFtpScan,
+    CancelFtpScan,
+    FtpScanFinished,
     RestartAurora,
     FetchAuroraPaths,
     CancelAllConversions,
@@ -60,6 +64,12 @@ export enum Message {
     ActivateTitleUpdate,
     DeactivateTitleUpdate,
     TitleUpdateChanged,
+    CreateBadAvatar,
+    CancelBadAvatar,
+    BadAvatarCreated,
+    SetBadAvatarUrl,
+    ResetBadAvatarUrl,
+    ToggleBadAvatarSystemUpdate,
 }
 
 export global Dispatcher {

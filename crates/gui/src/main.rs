@@ -69,6 +69,7 @@ fn main() -> Result<()> {
     ui_state.set_app_version(env!("CARGO_PKG_VERSION").to_shared_string());
     ui_state.set_data_dir(DATA_DIR.to_string_lossy().to_shared_string());
     ui_state.set_config(DisplayedConfig::from(&state.config));
+    ui_state.set_badavatar(config::displayed_badavatar(&state.config));
     ui_state.set_recent_locations(ModelRc::from(std::rc::Rc::new(slint::VecModel::from(
         config::recent_locations(&state.config),
     ))));

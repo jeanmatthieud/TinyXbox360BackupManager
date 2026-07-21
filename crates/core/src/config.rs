@@ -2,6 +2,7 @@
 // SPDX-FileContributor: Modified by Jean-Matthieu Dechriste (TinyXbox360BackupManager)
 // SPDX-License-Identifier: GPL-3.0-only
 
+use crate::badavatar::BadAvatarConfig;
 use crate::data_dir::DATA_DIR;
 use anyhow::Result;
 use derive_more::{Display, FromStr};
@@ -58,6 +59,7 @@ pub struct ConfigContents {
     pub sort_by: SortBy,
     pub view_as: ViewAs,
     pub theme_preference: ThemePreference,
+    pub auto_reconnect: AutoReconnect,
     pub show_x360: bool,
     pub show_arcade: bool,
     pub show_og: bool,
@@ -71,6 +73,9 @@ pub struct ConfigContents {
     pub ftp_port: String,
     pub ftp_user: String,
     pub ftp_password: String,
+
+    /// BadAvatar USB-key creation settings (Toolbox).
+    pub badavatar: BadAvatarConfig,
 }
 
 impl Default for ConfigContents {
@@ -82,6 +87,7 @@ impl Default for ConfigContents {
             sort_by: SortBy::NameDescending,
             view_as: ViewAs::Grid,
             theme_preference: ThemePreference::System,
+            auto_reconnect: AutoReconnect::Never,
             show_x360: true,
             show_arcade: true,
             show_og: true,
@@ -91,6 +97,7 @@ impl Default for ConfigContents {
             ftp_port: "21".to_string(),
             ftp_user: "xboxftp".to_string(),
             ftp_password: "xboxftp".to_string(),
+            badavatar: BadAvatarConfig::default(),
         }
     }
 }
@@ -102,6 +109,25 @@ impl ConfigContents {
             port: self.ftp_port.trim().parse().unwrap_or(21),
             user: self.ftp_user.trim().to_string(),
             password: self.ftp_password.clone(),
+        }
+    }
+
+    /// Applies the startup `auto_reconnect` policy to the loaded config:
+    /// clears the active target (as if disconnected) when the policy forbids
+    /// reconnecting to the last-used target kind. FTP credentials and the
+    /// recent-locations history are kept, so the target-selection modal can
+    /// still offer a manual reconnect.
+    pub fn apply_auto_reconnect_policy(&mut self) {
+        let keep = match self.auto_reconnect {
+            AutoReconnect::Always => true,
+            AutoReconnect::Never => false,
+            AutoReconnect::FtpOnly => self.target_kind == TargetKind::Ftp,
+            AutoReconnect::UsbOnly => self.target_kind == TargetKind::Local,
+        };
+
+        if !keep {
+            self.target_kind = TargetKind::Local;
+            self.mount_point = PathBuf::new();
         }
     }
 
@@ -240,4 +266,17 @@ pub enum ThemePreference {
     System,
     Light,
     Dark,
+}
+
+/// Whether the app should reconnect to the last-used target on startup.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default, Display, FromStr)]
+#[serde(rename_all = "snake_case")]
+pub enum AutoReconnect {
+    Always,
+    #[default]
+    Never,
+    /// Reconnect only when the last target was a console over FTP.
+    FtpOnly,
+    /// Reconnect only when the last target was a local (USB) drive.
+    UsbOnly,
 }

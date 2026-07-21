@@ -13,11 +13,11 @@ use std::{
     fs,
     path::{Path, PathBuf},
     rc::Rc,
-    sync::Mutex,
+    sync::{Arc, Mutex, atomic::AtomicBool},
 };
 use txbm_core::{
-    config::TargetKind, conversion_queue::QueuedConversion, data_dir::DATA_DIR,
-    drive_info::DriveInfo, ftp::FtpSession, game::Game, target::Target,
+    badavatar::UrlField, config::TargetKind, conversion_queue::QueuedConversion,
+    data_dir::DATA_DIR, drive_info::DriveInfo, ftp::FtpSession, game::Game, target::Target,
 };
 
 const NEW_DRIVE_TEXT: &str = "New drive detected\nOnce the games are on the console, remember to add the content paths in Aurora\n(Settings > Content Paths: Hdd1:\\Content\\0000000000000000 and Hdd1:\\Games, Scan Depth 3+)";
@@ -25,6 +25,11 @@ const NEW_DRIVE_TEXT: &str = "New drive detected\nOnce the games are on the cons
 /// Result of the asynchronous scan of the target, deposited by the scan thread
 /// then retrieved in the ScanFinished handler.
 static SCAN_RESULT: Mutex<Option<anyhow::Result<(Vec<Game>, DriveInfo)>>> = Mutex::new(None);
+
+/// Result of the asynchronous network scan started from the FTP modal:
+/// `Some(ip)` when a console was found, `None` when the scan finished without
+/// a match. Deposited by the scan thread, retrieved in FtpScanFinished.
+static FTP_SCAN_RESULT: Mutex<Option<Option<String>>> = Mutex::new(None);
 
 /// Result of the asynchronous disc/DLC fetch for the game shown in the
 /// info modal, deposited by the fetch thread then retrieved in the
@@ -60,6 +65,7 @@ impl State {
 
                 let ui_state = app.global::<UiState<'_>>();
                 ui_state.set_config(DisplayedConfig::from(&self.config));
+                ui_state.set_badavatar(crate::config::displayed_badavatar(&self.config));
                 ui_state.set_recent_locations(ModelRc::from(Rc::new(VecModel::from(
                     crate::config::recent_locations(&self.config),
                 ))));
@@ -105,6 +111,13 @@ impl State {
                     .collect::<Vec<_>>();
 
                 self.displayed_games.set_vec(displayed_games);
+
+                // Whether the (unfiltered) library holds any game at all, so the
+                // grid can tell "empty library" apart from "everything filtered
+                // out" (see game-grid-page.slint).
+                let app = weak.upgrade().unwrap();
+                app.global::<UiState<'_>>()
+                    .set_has_games(!self.games.is_empty());
             }
             Message::ToggleShowX360 => {
                 self.config.contents.show_x360 = !self.config.contents.show_x360;
@@ -140,6 +153,12 @@ impl State {
                 } else if value == txbm_core::config::ThemePreference::Dark {
                     crate::window_color::set(true);
                 }
+
+                message_queue.push_back((Message::SyncConfig, SharedString::new()));
+            }
+            Message::SetAutoReconnect => {
+                let value = payload.parse().unwrap();
+                self.config.contents.auto_reconnect = value;
 
                 message_queue.push_back((Message::SyncConfig, SharedString::new()));
             }
@@ -539,6 +558,76 @@ impl State {
                     });
                 });
             }
+            Message::StartFtpScan => {
+                // Fresh scan: hand this run its own cancel flag. A previous run's
+                // flag (already true if it was cancelled) is thus left untouched,
+                // so an in-flight older thread stays cancelled instead of being
+                // revived by a shared `store(false)`.
+                self.ftp_scan_cancel = Arc::new(AtomicBool::new(false));
+
+                let app = weak.upgrade().unwrap();
+                let ui = app.global::<UiState<'_>>();
+                ui.set_ftp_scanning(true);
+                ui.set_ftp_scan_found_ip(SharedString::new());
+
+                let cfg = self.config.contents.ftp_config();
+                let cancel = self.ftp_scan_cancel.clone();
+                let weak = weak.clone();
+                std::thread::spawn(move || {
+                    let res = txbm_core::ftp::scan_network(
+                        cfg.port,
+                        &cfg.user,
+                        &cfg.password,
+                        &cancel,
+                    );
+
+                    // A cancelled run stays silent: it neither publishes its
+                    // (aborted) result nor wakes FtpScanFinished, so it can't
+                    // clobber a newer scan that replaced its cancel flag.
+                    if cancel.load(std::sync::atomic::Ordering::Relaxed) {
+                        return;
+                    }
+                    *FTP_SCAN_RESULT.lock().unwrap() = Some(res);
+
+                    let _ = weak.upgrade_in_event_loop(move |app| {
+                        app.global::<Dispatcher<'_>>()
+                            .invoke_dispatch(Message::FtpScanFinished, SharedString::new());
+                    });
+                });
+            }
+            Message::CancelFtpScan => {
+                self.ftp_scan_cancel
+                    .store(true, std::sync::atomic::Ordering::Relaxed);
+                let app = weak.upgrade().unwrap();
+                app.global::<UiState<'_>>().set_ftp_scanning(false);
+            }
+            Message::FtpScanFinished => {
+                let app = weak.upgrade().unwrap();
+                let ui = app.global::<UiState<'_>>();
+                ui.set_ftp_scanning(false);
+
+                // Cancelled (user switched to manual entry or closed the modal):
+                // ignore whatever the thread found.
+                if self
+                    .ftp_scan_cancel
+                    .load(std::sync::atomic::Ordering::Relaxed)
+                {
+                    return;
+                }
+
+                match FTP_SCAN_RESULT.lock().unwrap().take() {
+                    Some(Some(ip)) => {
+                        // Prefill the config (and thus the manual form) with the
+                        // discovered IP, and surface it in the scan view.
+                        self.config.contents.console_ip = ip.clone();
+                        ui.set_ftp_scan_found_ip(ip.into());
+                        message_queue.push_back((Message::SyncConfig, SharedString::new()));
+                    }
+                    _ => {
+                        ui.set_ftp_scan_found_ip(SharedString::new());
+                    }
+                }
+            }
             Message::RestartAurora => {
                 let ftp_config = self.config.contents.ftp_config();
 
@@ -588,7 +677,9 @@ impl State {
                 }
 
                 let app = weak.upgrade().unwrap();
-                app.global::<UiState<'_>>().set_fetching_aurora_paths(true);
+                let ui_state = app.global::<UiState<'_>>();
+                ui_state.set_fetching_aurora_paths(true);
+                ui_state.set_aurora_paths_error(SharedString::new());
 
                 let weak = weak.clone();
                 std::thread::spawn(move || {
@@ -601,9 +692,11 @@ impl State {
                     let _ = weak.upgrade_in_event_loop(move |app| {
                         let ui_state = app.global::<UiState<'_>>();
                         ui_state.set_fetching_aurora_paths(false);
+                        ui_state.set_aurora_paths_loaded(true);
 
                         match res {
                             Ok(lines) => {
+                                ui_state.set_aurora_paths_error(SharedString::new());
                                 ui_state.set_aurora_scan_paths(slint::ModelRc::from(
                                     std::rc::Rc::new(slint::VecModel::from(
                                         lines
@@ -614,9 +707,12 @@ impl State {
                                 ));
                             }
                             Err(e) => {
-                                let text = slint::format!("Failed to read Aurora paths: {e:#}");
-                                app.global::<Dispatcher<'_>>()
-                                    .invoke_dispatch(Message::NotifyError, text);
+                                // Reported inside the toolbox card, not as a
+                                // toast notification.
+                                ui_state.set_aurora_scan_paths(slint::ModelRc::from(
+                                    std::rc::Rc::new(slint::VecModel::<SharedString>::default()),
+                                ));
+                                ui_state.set_aurora_paths_error(slint::format!("{e:#}"));
                             }
                         }
                     });
@@ -918,6 +1014,103 @@ impl State {
                 if !path.is_empty() {
                     message_queue.push_back((Message::FetchTitleUpdates, path));
                 }
+            }
+            Message::SetBadAvatarUrl => {
+                // Payload: "<key>\n<url>", key being the BadAvatar component.
+                if let Some((key, value)) = payload.split_once('\n')
+                    && let Some(field) = UrlField::from_key(key)
+                {
+                    self.config.contents.badavatar.set_url(field, value.to_string());
+                    message_queue.push_back((Message::SyncConfig, SharedString::new()));
+                }
+            }
+            Message::ResetBadAvatarUrl => {
+                if let Some(field) = UrlField::from_key(payload.as_str()) {
+                    self.config.contents.badavatar.reset_url(field);
+                    message_queue.push_back((Message::SyncConfig, SharedString::new()));
+                }
+            }
+            Message::ToggleBadAvatarSystemUpdate => {
+                let flag = &mut self.config.contents.badavatar.include_system_update;
+                *flag = !*flag;
+                message_queue.push_back((Message::SyncConfig, SharedString::new()));
+            }
+            Message::CreateBadAvatar => {
+                if self.is_creating_badavatar {
+                    return;
+                }
+
+                let app = weak.upgrade().unwrap();
+                let window_handle = app.window().window_handle();
+                let Some(dest) = dialogs::pick_mount_point(&window_handle) else {
+                    return;
+                };
+
+                let cfg = self.config.contents.badavatar.clone();
+                self.is_creating_badavatar = true;
+                self.badavatar_cancel
+                    .store(false, std::sync::atomic::Ordering::Relaxed);
+                let cancel = self.badavatar_cancel.clone();
+                app.global::<UiState<'_>>().set_creating_badavatar(true);
+
+                let weak = weak.clone();
+                std::thread::spawn(move || {
+                    let weak_status = weak.clone();
+                    let status = move |line: &str| {
+                        let text = SharedString::from(line);
+                        let _ = weak_status.upgrade_in_event_loop(move |app| {
+                            app.global::<UiState<'_>>().set_status(text);
+                        });
+                    };
+
+                    status("Creating the BadAvatar USB key…");
+
+                    let res =
+                        txbm_core::badavatar::create_badavatar(&dest, &cfg, &cancel, &status);
+
+                    let _ = weak.upgrade_in_event_loop(move |app| {
+                        let dispatcher = app.global::<Dispatcher<'_>>();
+
+                        dispatcher.invoke_dispatch(Message::SetStatus, SharedString::new());
+                        dispatcher.invoke_dispatch(Message::BadAvatarCreated, SharedString::new());
+
+                        match res {
+                            Ok(()) => {
+                                dispatcher.invoke_dispatch(
+                                    Message::NotifyInfo,
+                                    "BadAvatar USB key ready 🎉".to_shared_string(),
+                                );
+                            }
+                            Err(e)
+                                if e.to_string()
+                                    .contains(txbm_core::badavatar::BADAVATAR_CANCELLED) =>
+                            {
+                                dispatcher.invoke_dispatch(
+                                    Message::NotifyInfo,
+                                    "BadAvatar creation cancelled".to_shared_string(),
+                                );
+                            }
+                            Err(e) => {
+                                let text =
+                                    slint::format!("Failed to create BadAvatar key: {e:#}");
+                                dispatcher.invoke_dispatch(Message::NotifyError, text);
+                            }
+                        }
+                    });
+                });
+            }
+            Message::CancelBadAvatar => {
+                if self.is_creating_badavatar {
+                    self.badavatar_cancel
+                        .store(true, std::sync::atomic::Ordering::Relaxed);
+                    message_queue
+                        .push_back((Message::SetStatus, "⟳  Cancelling…".to_shared_string()));
+                }
+            }
+            Message::BadAvatarCreated => {
+                self.is_creating_badavatar = false;
+                let app = weak.upgrade().unwrap();
+                app.global::<UiState<'_>>().set_creating_badavatar(false);
             }
             #[cfg(windows)]
             Message::SetWindowColorLight => {
