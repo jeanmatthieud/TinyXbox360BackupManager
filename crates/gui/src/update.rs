@@ -961,8 +961,6 @@ impl State {
                 let cfg = self.config.contents.badavatar.clone();
                 self.is_creating_badavatar = true;
                 app.global::<UiState<'_>>().set_creating_badavatar(true);
-                self.notifications
-                    .push(Notification::info("Creating the BadAvatar USB key…"));
 
                 let weak = weak.clone();
                 std::thread::spawn(move || {
@@ -973,6 +971,8 @@ impl State {
                             app.global::<UiState<'_>>().set_status(text);
                         });
                     };
+
+                    status("Creating the BadAvatar USB key…");
 
                     // No cancel button yet; the flag is here for a future one.
                     let cancel = AtomicBool::new(false);

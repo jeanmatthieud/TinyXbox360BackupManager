@@ -156,13 +156,13 @@ export component ToolboxPage inherits VerticalLayout {
                             }
                         }
 
-                        if UiState.fetching-aurora-paths: Spinner {
+                        if UiState.creating-badavatar: Spinner {
                             width: 27px;
                             height: 27px;
                             indeterminate: true;
                         }
 
-                        if !UiState.fetching-aurora-paths: IconButton {
+                        if !UiState.creating-badavatar: IconButton {
                             icon: IconSet.Settings2;
                             width: self.height;
                             clicked => {
@@ -232,8 +232,9 @@ export component ToolboxPage inherits VerticalLayout {
                         spacing: 10px;
 
                         bBadUsb := IconButton {
+                            background: MyPalette.background;
                             disabled: UiState.creating-badavatar;
-                            icon: IconSet.Download;
+                            icon: IconSet.Hammer;
                             width: self.height;
                             clicked => Dispatcher.dispatch(Message.CreateBadAvatar, "");
                         }
