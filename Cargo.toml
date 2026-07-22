@@ -4,7 +4,7 @@ members = ["crates/core", "crates/gui"]
 default-members = ["crates/gui"]
 
 [workspace.package]
-version = "0.3.0"
+version = "0.4.0"
 rust-version = "1.96"
 edition = "2024"
 authors = ["Jean-Matthieu <jeanmatthieu@digital-balloon.fr>"]
