@@ -154,10 +154,14 @@ jobs:
         with:
           components: rust-src
 
-      - name: Download UPX
-        if: matrix.arch == 'x64' || matrix.arch == 'x86'
-        shell: pwsh
-        run: choco install upx
+      # UPX packing disabled: it triggers Windows Defender false positives
+      # (Trojan:Win32/Wacatac.B!ml) because packed executables have high entropy
+      # and atypical section layout typical of malware. Only benefit was download
+      # size; not worth the "your app is a trojan" cost.
+      # - name: Download UPX
+      #   if: matrix.arch == 'x64' || matrix.arch == 'x86'
+      #   shell: pwsh
+      #   run: choco install upx
 
       - name: Build binary
         shell: pwsh
@@ -178,10 +182,11 @@ jobs:
           CARGO_TARGET_AARCH64_PC_WINDOWS_MSVC_LINKER: lld-link
           CARGO_TARGET_I686_WIN7_WINDOWS_MSVC_LINKER: lld-link
 
-      - name: Compress binary (UPX)
-        if: matrix.arch == 'x64' || matrix.arch == 'x86'
-        shell: pwsh
-        run: upx --best --lzma "TinyXbox360BackupManager.exe"
+      # UPX packing disabled — see note on the "Download UPX" step above.
+      # - name: Compress binary (UPX)
+      #   if: matrix.arch == 'x64' || matrix.arch == 'x86'
+      #   shell: pwsh
+      #   run: upx --best --lzma "TinyXbox360BackupManager.exe"
 
       - name: Rename binary
         shell: pwsh
