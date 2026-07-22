@@ -29,7 +29,7 @@ pub(crate) fn is_cancelled(cancel: &AtomicBool) -> bool {
 pub enum InputKind {
     /// Optical disc image (360 game, OG game or content disc).
     Iso(IsoInfo),
-    /// .7z / .zip archive expected to contain XBLA (STFS) packages.
+    /// .7z / .zip archive: either XBLA (STFS) packages or a wrapped ISO.
     Archive,
     /// Bare STFS package (CON / LIVE / PIRS).
     StfsPackage(StfsInfo),
@@ -384,8 +384,10 @@ fn install_stfs_package(
     Ok(())
 }
 
-/// Extracts a .7z/.zip archive and installs the XBLA packages it contains
-/// (plus any DLC / title updates). Fails if no Arcade package is found.
+/// Extracts a .7z/.zip archive and installs what it contains. Two shapes are
+/// supported: an archive wrapping a single ISO (plus optional .txt/.md notes),
+/// which is converted like a normal ISO import; or a set of XBLA/DLC/title-
+/// update STFS packages, in which case an Arcade package is required.
 fn install_archive(
     in_path: &Path,
     root: &Path,
@@ -404,33 +406,87 @@ fn install_archive(
     }
 
     let result = (|| -> Result<()> {
-        // Extraction: 0-80%.
+        // Extraction: 0-50%.
         archive::extract_to(in_path, &tmp, &mut |done, total| {
-            update_progress((done * 80 / total.max(1)) as u32);
+            update_progress((done * 50 / total.max(1)) as u32);
         })?;
         if is_cancelled(cancel) {
             bail!(CONVERSION_CANCELLED);
         }
 
+        // Archive wrapping a single ISO: convert it as a normal ISO import
+        // (0-50% extraction already done, conversion runs on 50-100%). This
+        // saves the user from manually unpacking the ISO first.
+        if let Some(iso) = single_iso_in(&tmp)? {
+            return convert_into(&iso, root, cancel, &|p| update_progress(50 + p * 50 / 100));
+        }
+
+        // Otherwise: a set of XBLA/DLC/title-update packages.
         let packages = find_installable_packages(&tmp)?;
         if !packages
             .iter()
             .any(|p| p.content_type == stfs::CONTENT_TYPE_ARCADE)
         {
             bail!(
-                "no Arcade package (content type 000D0000) found in this archive: \
-                 is it really an XBLA game?"
+                "no ISO and no Arcade package (content type 000D0000) found in this \
+                 archive: is it really an XBLA game or an ISO archive?"
             );
         }
 
-        // Installation: 80-100%, weighted by package size.
-        install_packages(&packages, root, cancel, &|p| update_progress(80 + p * 20 / 100))?;
+        // Installation: 50-100%, weighted by package size.
+        install_packages(&packages, root, cancel, &|p| update_progress(50 + p * 50 / 100))?;
         update_progress(100);
         Ok(())
     })();
 
     let _ = std::fs::remove_dir_all(&tmp);
     result
+}
+
+/// Detects the "archive wrapping an ISO" case among the files under `dir`.
+///
+/// - No ISO at all → `Ok(None)` (the archive is treated as XBLA packages).
+/// - Exactly one ISO, every other file being a `.txt`/`.md` note (directories
+///   are ignored) → `Ok(Some(iso))`.
+/// - More than one ISO, or an ISO alongside any other kind of file → error,
+///   so the ambiguous archive is rejected rather than silently mishandled.
+fn single_iso_in(dir: &Path) -> Result<Option<PathBuf>> {
+    let has_ext = |p: &Path, ext: &str| {
+        p.extension().is_some_and(|e| e.eq_ignore_ascii_case(ext))
+    };
+
+    let mut files = Vec::new();
+    collect_files(dir, &[], &mut files)?;
+
+    let isos: Vec<&PathBuf> = files.iter().filter(|f| has_ext(f, "iso")).collect();
+    if isos.is_empty() {
+        return Ok(None);
+    }
+    if isos.len() > 1 {
+        bail!(
+            "archive contains {} ISO images; only a single ISO (plus optional \
+             .txt/.md notes) is supported",
+            isos.len()
+        );
+    }
+
+    // Every remaining file must be a text note; anything else is unexpected.
+    let extra: Vec<&PathBuf> = files
+        .iter()
+        .filter(|f| !has_ext(f, "iso") && !has_ext(f, "txt") && !has_ext(f, "md"))
+        .collect();
+    if let Some(unexpected) = extra.first() {
+        bail!(
+            "archive contains an ISO alongside an unexpected file ({}); only \
+             .txt/.md notes may accompany the ISO",
+            unexpected
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_default()
+        );
+    }
+
+    Ok(Some(isos[0].clone()))
 }
 
 /// Recursively finds every DLC / title-update / Arcade STFS package under
@@ -622,6 +678,34 @@ mod tests {
         let root = dir.join("root");
         let err = convert_into(&zip_path, &root, &AtomicBool::new(false), &|_| {}).unwrap_err();
         assert!(err.to_string().contains("no Arcade package"));
+
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn single_iso_detection() {
+        let dir = std::env::temp_dir().join("txbm-single-iso");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("sub")).unwrap();
+
+        // No ISO → None (falls back to the XBLA flow).
+        std::fs::write(dir.join("readme.txt"), b"hi").unwrap();
+        assert!(single_iso_in(&dir).unwrap().is_none());
+
+        // One ISO + notes (nested) → Some(iso).
+        let iso = dir.join("sub/Game.iso");
+        std::fs::write(&iso, b"fake").unwrap();
+        std::fs::write(dir.join("notes.md"), b"# notes").unwrap();
+        assert_eq!(single_iso_in(&dir).unwrap().as_deref(), Some(iso.as_path()));
+
+        // ISO alongside a non-note file → error.
+        std::fs::write(dir.join("extra.bin"), b"x").unwrap();
+        assert!(single_iso_in(&dir).is_err());
+        std::fs::remove_file(dir.join("extra.bin")).unwrap();
+
+        // A second ISO → error.
+        std::fs::write(dir.join("Other.ISO"), b"fake").unwrap();
+        assert!(single_iso_in(&dir).is_err());
 
         std::fs::remove_dir_all(&dir).unwrap();
     }
