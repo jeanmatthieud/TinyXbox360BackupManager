@@ -66,6 +66,7 @@ impl From<&Config> for DisplayedConfig {
                 .to_string_lossy()
                 .to_shared_string(),
             remove_sources_games: config.contents.remove_sources_games.to_shared_string(),
+            xbox360_format: config.contents.xbox360_format.to_shared_string(),
             sort_by: config.contents.sort_by.to_shared_string(),
             view_as: config.contents.view_as.to_shared_string(),
             theme_preference: config.contents.theme_preference.to_shared_string(),

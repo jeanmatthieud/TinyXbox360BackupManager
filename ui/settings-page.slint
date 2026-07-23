@@ -46,6 +46,17 @@ export component SettingsPage inherits VerticalLayout {
             }
 
             SettingCard {
+                icon: IconSet.Package;
+                label: "Xbox 360 storage format";
+                items: [
+                    { value: "God", label: "GOD (Games On Demand, recommended)" },
+                    { value: "Xex", label: "XEX (extracted game folder)" }
+                ];
+                active-item: UiState.config.xbox360-format;
+                set-property: Message.SetXbox360Format;
+            }
+
+            SettingCard {
                 icon: IconSet.SunMoon;
                 label: "Theme";
                 items: [

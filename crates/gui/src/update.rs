@@ -150,6 +150,12 @@ impl State {
 
                 message_queue.push_back((Message::SyncConfig, SharedString::new()));
             }
+            Message::SetXbox360Format => {
+                let value = payload.parse().unwrap();
+                self.config.contents.xbox360_format = value;
+
+                message_queue.push_back((Message::SyncConfig, SharedString::new()));
+            }
             Message::SetThemePreference => {
                 let value = payload.parse().unwrap();
                 self.config.contents.theme_preference = value;

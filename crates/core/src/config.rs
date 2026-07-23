@@ -56,6 +56,7 @@ pub struct ConfigContents {
     pub target_kind: TargetKind,
     pub mount_point: PathBuf,
     pub remove_sources_games: bool,
+    pub xbox360_format: Xbox360Format,
     pub sort_by: SortBy,
     pub view_as: ViewAs,
     pub theme_preference: ThemePreference,
@@ -84,6 +85,7 @@ impl Default for ConfigContents {
             target_kind: TargetKind::Local,
             mount_point: PathBuf::new(),
             remove_sources_games: false,
+            xbox360_format: Xbox360Format::God,
             sort_by: SortBy::NameDescending,
             view_as: ViewAs::Grid,
             theme_preference: ThemePreference::System,
@@ -239,6 +241,18 @@ pub enum TargetKind {
     #[default]
     Local,
     Ftp,
+}
+
+/// Storage format used when importing an Xbox 360 game: converted to a GOD
+/// container (default) or extracted to a `default.xex` game folder.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default, Display, FromStr)]
+#[serde(rename_all = "lowercase")]
+pub enum Xbox360Format {
+    /// Convert to a Games-On-Demand container.
+    #[default]
+    God,
+    /// Extract to a folder holding `default.xex`.
+    Xex,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default, Display, FromStr)]
