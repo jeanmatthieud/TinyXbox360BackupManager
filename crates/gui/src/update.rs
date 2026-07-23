@@ -858,7 +858,10 @@ impl State {
                 match Target::from_config(&self.config.contents) {
                     None => return,
                     // Local drive: read the layout (and any Aurora install on
-                    // the drive itself) synchronously — it's local disk I/O.
+                    // the drive itself) synchronously. This is fast local disk
+                    // I/O (a manifest read plus two small SQLite opens and a
+                    // few `is_dir` checks), so it is run inline rather than on a
+                    // worker thread like the FTP branch below.
                     Some(Target::Local(mount)) => {
                         app.global::<UiState<'_>>().set_fetching_aurora_paths(true);
                         let status = txbm_core::target::local_storage_status(&mount);

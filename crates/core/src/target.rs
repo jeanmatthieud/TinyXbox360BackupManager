@@ -270,10 +270,7 @@ impl TxbmManifest {
 /// format is always detected from its actual content. The GUI lets the user
 /// override the suggestion.
 fn looks_like_god_dir(path: &str) -> bool {
-    path.to_lowercase()
-        .replace('\\', "/")
-        .trim_end_matches('/')
-        .ends_with("content/0000000000000000")
+    normalize_path(path).ends_with("content/0000000000000000")
 }
 
 /// Finds the root of the console's internal hard drive (Hdd1).
@@ -649,12 +646,28 @@ pub struct StorageStatus {
 }
 
 /// True when `app_path` is scanned by Aurora, either directly or via an
-/// ancestor scan path (Aurora recurses into it).
+/// ancestor scan path whose scan depth actually reaches into it.
+///
+/// Games are installed as *direct children* of `app_path`, so Aurora sees them
+/// only if it scans `app_path` itself (depth ≥ 1, always true) or an ancestor
+/// deep enough to reach `app_path`'s children. If `app_path` sits `k` folder
+/// levels below an Aurora location, those children are at level `k + 1`, so the
+/// location's `depth` must be at least `k + 1` (i.e. `k < depth`).
 fn path_covered(aurora: &[ScanLocation], app_path: &str) -> bool {
     let a = normalize_path(app_path);
     aurora.iter().any(|loc| {
         let l = normalize_path(&loc.path);
-        !l.is_empty() && (a == l || a.starts_with(&format!("{l}/")))
+        if l.is_empty() {
+            return false;
+        }
+        if a == l {
+            return true;
+        }
+        // How far `app_path` sits below this Aurora location, in folder levels.
+        match a.strip_prefix(&format!("{l}/")) {
+            Some(rest) => rest.split('/').count() as u32 <= loc.depth.saturating_sub(1),
+            None => false,
+        }
     })
 }
 
@@ -1165,19 +1178,19 @@ fn scan_ftp(ftp: &FtpConfig, cancel: &AtomicBool) -> Result<(Vec<Game>, DriveInf
     let hdd = ftp_hdd_root(&mut session);
     let layout = ftp_layout(&mut session, &hdd);
 
-    let mut games = Vec::new();
-    let mut games_bytes: u64 = 0;
-
+    let mut scanner = FtpScanner {
+        session: &mut session,
+        cancel: &check_cancel,
+        games: Vec::new(),
+        games_bytes: 0,
+    };
     for location in &layout.scan_locations {
-        scan_location_ftp(
-            &mut session,
-            &location.path,
-            location.depth,
-            &check_cancel,
-            &mut games,
-            &mut games_bytes,
-        )?;
+        crate::scan::walk(&mut scanner, &location.path, location.depth)?;
     }
+    // Release the borrow on `session` before quitting it.
+    let FtpScanner {
+        games, games_bytes, ..
+    } = scanner;
 
     session.quit();
 
@@ -1193,47 +1206,69 @@ fn scan_ftp(ftp: &FtpConfig, cancel: &AtomicBool) -> Result<(Vec<Game>, DriveInf
     Ok((games, drive_info))
 }
 
-/// Scans one FTP location, detecting the format of every game found (GOD /
-/// Arcade under `<TitleID>` folders, extracted under folders holding a
-/// `default.xex`/`default.xbe`), and descending up to `depth` levels for
-/// anything that is neither.
-fn scan_location_ftp(
-    session: &mut FtpSession,
-    dir: &str,
-    depth: u32,
-    check_cancel: &dyn Fn() -> Result<()>,
-    games: &mut Vec<Game>,
-    games_bytes: &mut u64,
-) -> Result<()> {
-    for entry in session.list_dir(dir) {
-        check_cancel()?;
-        if !entry.is_dir {
-            continue;
-        }
-        let child = format!("{dir}/{}", entry.name);
-        let children = session.list_dir(&child);
+/// FTP [`DirScanner`], detecting the format of every game found (GOD/Arcade
+/// under `<TitleID>` folders, extracted under folders holding a
+/// `default.xex`/`default.xbe`) via the shared walk. Games accumulate as
+/// internal state; the scan depth and recursion are handled by [`crate::scan`].
+struct FtpScanner<'a> {
+    session: &'a mut FtpSession,
+    cancel: &'a dyn Fn() -> Result<()>,
+    games: Vec<Game>,
+    games_bytes: u64,
+}
+
+impl crate::scan::DirScanner for FtpScanner<'_> {
+    type Path = String;
+
+    fn child_dirs(&mut self, dir: &String) -> Result<Vec<(String, String)>> {
+        (self.cancel)()?;
+        Ok(self
+            .session
+            .list_dir(dir)
+            .into_iter()
+            .filter(|e| e.is_dir)
+            .map(|e| (format!("{dir}/{}", e.name), e.name))
+            .collect())
+    }
+
+    fn classify(&mut self, path: &String, name: &str) -> Result<crate::scan::ChildAction> {
+        use crate::scan::ChildAction;
+
+        (self.cancel)()?;
+        let children = self.session.list_dir(path);
 
         // GOD / Arcade: an 8-hex TitleID folder holding a content package
         // (and/or orphaned DLC / a title update).
-        if game::is_title_id(&entry.name)
-            && push_god_games_ftp(session, &child, &entry.name, &children, games, games_bytes)
+        if game::is_title_id(name)
+            && push_god_games_ftp(
+                self.session,
+                path,
+                name,
+                &children,
+                &mut self.games,
+                &mut self.games_bytes,
+            )
         {
-            continue;
+            return Ok(ChildAction::Handled);
         }
 
         // Extracted game: a folder directly holding default.xex / default.xbe.
         if let Some(format) = detect_extracted(&children) {
-            push_extracted_ftp(session, &child, &entry.name, format, games, games_bytes);
-            continue;
+            push_extracted_ftp(
+                self.session,
+                path,
+                name,
+                format,
+                &mut self.games,
+                &mut self.games_bytes,
+            );
+            return Ok(ChildAction::Handled);
         }
 
-        // Neither: descend if the scan depth allows (handles nested
+        // Neither: let the walk descend (handles nested
         // Content/0000000000000000 folders and arbitrary scan roots).
-        if depth > 1 {
-            scan_location_ftp(session, &child, depth - 1, check_cancel, games, games_bytes)?;
-        }
+        Ok(ChildAction::Recurse)
     }
-    Ok(())
 }
 
 /// Detects an extracted-game folder from its direct children.

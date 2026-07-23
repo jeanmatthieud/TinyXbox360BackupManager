@@ -18,6 +18,7 @@ pub mod game_details;
 pub mod god;
 pub mod iso_info;
 pub mod mobcat;
+pub mod scan;
 pub mod stfs;
 pub mod target;
 pub mod title_updates;

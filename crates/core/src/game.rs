@@ -92,43 +92,52 @@ pub fn split_title_id_suffix(name: &str) -> (String, Option<String>) {
 /// resolved layout (its `.txbm.json` manifest, otherwise the defaults).
 pub fn scan_drive(drive_dir: &Path) -> Vec<Game> {
     let layout = crate::target::local_layout(drive_dir);
-    let mut games = Vec::new();
+    let mut scanner = LocalScanner { games: Vec::new() };
     for location in &layout.scan_locations {
-        scan_location_local(Path::new(&location.path), location.depth, &mut games);
+        // Local listing failures are non-fatal (an unreadable folder is just
+        // skipped), so this walk never returns an error.
+        let _ = crate::scan::walk(&mut scanner, &PathBuf::from(&location.path), location.depth);
     }
-    games
+    scanner.games
 }
 
-/// Scans one local location, detecting the format of every game found and
-/// descending up to `depth` levels for anything that is neither a GOD/Arcade
-/// TitleID folder nor an extracted-game folder.
-fn scan_location_local(dir: &Path, depth: u32, games: &mut Vec<Game>) {
-    let Ok(entries) = std::fs::read_dir(dir) else {
-        return;
-    };
-    for entry in entries.flatten() {
-        let child = entry.path();
-        if !child.is_dir() {
-            continue;
-        }
-        let name = entry.file_name().to_string_lossy().to_string();
+/// Local-filesystem [`DirScanner`], detecting the format of every game found
+/// (GOD/Arcade TitleID folders and extracted-game folders) via the shared walk.
+struct LocalScanner {
+    games: Vec<Game>,
+}
+
+impl crate::scan::DirScanner for LocalScanner {
+    type Path = PathBuf;
+
+    fn child_dirs(&mut self, dir: &PathBuf) -> anyhow::Result<Vec<(PathBuf, String)>> {
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            return Ok(Vec::new());
+        };
+        Ok(entries
+            .flatten()
+            .filter(|e| e.path().is_dir())
+            .map(|e| (e.path(), e.file_name().to_string_lossy().to_string()))
+            .collect())
+    }
+
+    fn classify(&mut self, path: &PathBuf, name: &str) -> anyhow::Result<crate::scan::ChildAction> {
+        use crate::scan::ChildAction;
 
         // GOD / Arcade: an 8-hex TitleID folder.
-        if is_title_id(&name) && push_god_games_local(&child, &name, games) {
-            continue;
+        if is_title_id(name) && push_god_games_local(path, name, &mut self.games) {
+            return Ok(ChildAction::Handled);
         }
 
         // Extracted game: a folder directly holding default.xex / default.xbe.
-        if let Some(format) = detect_extracted_local(&child) {
-            push_extracted_local(&child, &name, format, games);
-            continue;
+        if let Some(format) = detect_extracted_local(path) {
+            push_extracted_local(path, name, format, &mut self.games);
+            return Ok(ChildAction::Handled);
         }
 
-        // Neither: descend if the scan depth allows (handles nested
+        // Neither: let the walk descend (handles nested
         // Content/0000000000000000 folders and arbitrary scan roots).
-        if depth > 1 {
-            scan_location_local(&child, depth - 1, games);
-        }
+        Ok(ChildAction::Recurse)
     }
 }
 
