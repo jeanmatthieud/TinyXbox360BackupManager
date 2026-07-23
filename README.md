@@ -25,12 +25,12 @@
 ## Put your game backups on your Xbox 360 — the easy way
 
 You have a modded **Xbox 360** (running the [Aurora](https://phoenix.xboxunity.net) dashboard) and some game backups on your computer.
-This app copies them onto your console (or a USB drive) in the format the console understands — **you don't need to know how any of it works.**
+This app copies them onto your Xbox360 (or a USB drive) in the format the console understands — **you don't need to know how any of it works.**
 
 - :package: **Drop in your game file, it does the rest** — it figures out the type and prepares it automatically.
-- :compass: **It guides you** — when you connect your console or USB drive, it looks at what's already there and suggests where to put your games. You just click **Confirm**.
+- :compass: **It guides you** — it detects your plugged-in USB drives or remote Xbox360, and once connected, looks at what's already there to suggest where to put your games.
 - :framed_picture: **Covers appear on their own** — box art is downloaded for you.
-- :arrows_counterclockwise: **Works both ways** — send games to your console over Wi‑Fi (FTP) or to a USB drive plugged into your PC.
+- :arrows_counterclockwise: **Works both ways** — send games to your Xbox360 over Wi‑Fi (FTP) or to a USB drive plugged into your PC.
 - :feather: **Tiny and self-contained** — one small app, nothing else to install.
 
 It also handles **original Xbox** games, just like the Wii plays GameCube games.
@@ -38,11 +38,11 @@ Inspired by [TinyWiiBackupManager](https://github.com/mq1/TinyWiiBackupManager).
 
 ## :rocket: Get started in 3 steps
 
-1. **Open the app and pick where your games go.** Click the **hard-drive icon** (bottom-left) and choose your **USB drive** or your **console over Wi‑Fi** (its IP + Aurora login — the defaults `xboxftp` / `xboxftp` usually just work).
+1. **Open the app and pick where your games go.** Click the **connect icon** (bottom-left), choose **Local USB drive** or **Remote Xbox360 over network**. For a USB drive, pick it from the list of detected removable drives (FAT32 only); for the remote Xbox360, enter its IP + Aurora login — the defaults `xboxftp` / `xboxftp` usually just work.
 2. **Confirm the setup.** A short **Content analysis** window opens, looks at your drive/console, and pre-fills where games should be stored. In most cases you can just click **Confirm** — it remembers your choice, so you only do this once.
 3. **Add your games.** Click the **+** button (or drag & drop your files). The app converts/copies each one to the right place. That's it — your games show up in the grid with their covers.
 
-> :bulb: On the console side, Aurora needs to be told which folders to scan. The app checks this for you in the **Toolbox** and, if something is missing, shows you exactly what to add.
+> :bulb: Aurora needs to be told which folders to scan. The app checks this for you in the **Toolbox** and, if something is missing, shows you exactly what to add.
 
 <br>
 
@@ -95,7 +95,7 @@ Inspired by [TinyWiiBackupManager](https://github.com/mq1/TinyWiiBackupManager).
   - :penguin: Linux (glibc 2.31+) | x86 (32-bit), x86_64 (64-bit), arm64 (Raspberry Pis etc.)
 
 > [!WARNING]
-> Title updates for original Xbox (OG) games are not yet supported. Extracting Xbox 360 games (rather than converting them to GOD) is planned but not implemented yet. Homebrew management is intentionally out of scope for now.
+> Title updates for original Xbox (OG) games are not yet supported. Homebrew management is intentionally out of scope for now.
 
 <br>
 
@@ -111,13 +111,15 @@ Provide an **ISO** image or an **Arcade (XBLA) game** (a `.7z`/`.zip` archive or
 
 | Detected input type | Processing | Goes to |
 |---|---|---|
-| Xbox 360 game ISO (`default.xex`) | Conversion to **GOD** (Games on Demand) | GOD folder → `<TitleID>/00007000/` |
+| Xbox 360 game ISO (`default.xex`) | Conversion to **GOD** (Games on Demand)<br />*or*<br />**Extraction** of the content | GOD folder → `<TitleID>/00007000/`<br />*or*<br />Extracted-XEX folder → `<Game Name>/` |
 | Original Xbox game ISO (`default.xbe`) | **Extraction** of the content | Extracted-XBE folder → `<Game Name>/` |
 | Install / **Expansion Installer** disc (no executable; contains DLC and title updates) | Extraction and merge of the `Content` folder | GOD folder → `<TitleID>/<type>/` |
 | **Arcade (XBLA) game** (`.7z`/`.zip` archive) | Extraction, verification of the **Arcade** STFS package (title, TitleID) | GOD folder → `<TitleID>/000D0000/` |
 | STFS package (`LIVE`/`CON `/`PIRS`, usually no extension) | Installed as-is per its content type | GOD folder → `<TitleID>/<type>/` |
 
 **DLC and title updates** bundled with an Arcade game in an archive are installed too (respectively in `00000002/` and `000B0000/`), so unlocks work out of the box. They can also be added individually as bare STFS packages.
+
+For Xbox 360 games, the choice between **GOD conversion** and **XEX extraction** is not automatic — it's a user setting. On the Settings page, a dropdown lets you pick the target format.
 
 ### Storage folders (guided setup + `.txbm.json`)
 
@@ -139,8 +141,8 @@ You confirm (or adjust) the three folders, and the app writes a small **`.txbm.j
 
 ### Targets
 
-- **USB drive / local folder (FAT32):** games are written directly in the correct format.
-- **Console over FTP (Aurora):** the game list is read from the console, added games are converted locally then pushed to the console; deletion is done remotely. Only **one FTP connection at a time** is used, as required by the console's FTP server.
+- **USB drive / local folder (FAT32):** plugged-in removable drives are auto-detected and listed, with non-FAT32 ones flagged as unsupported; games are then written directly in the correct format.
+- **Xbox360 over FTP (Aurora):** the game list is read from the console, added games are converted locally then pushed to the console; deletion is done remotely. Only **one FTP connection at a time** is used, as required by the console's FTP server.
 
 ### Aurora scan paths
 

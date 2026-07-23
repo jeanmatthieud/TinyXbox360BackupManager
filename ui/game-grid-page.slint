@@ -10,7 +10,7 @@ import { GamesToolbar } from "components/games-toolbar.slint";
 import { GamesOtherToolbar } from "components/games-other-toolbar.slint";
 import { UiState } from "ui-state.slint";
 import { DisplayedGame } from "types.slint";
-import { NoDrive } from "components/no-drive.slint";
+import { NoTarget } from "components/no-target.slint";
 import { NoGames } from "components/no-games.slint";
 
 export component GameGridPage inherits VerticalLayout {
@@ -22,7 +22,7 @@ export component GameGridPage inherits VerticalLayout {
         GamesToolbar { }
     }
 
-    if UiState.config.target.is-empty: NoDrive { }
+    if UiState.config.target.is-empty: NoTarget { }
 
     // Filters / count bar: visible whenever the library holds games, kept
     // outside the games ScrollView below so the search box stays reachable

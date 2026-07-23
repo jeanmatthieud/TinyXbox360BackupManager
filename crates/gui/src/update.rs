@@ -51,6 +51,26 @@ static TITLE_UPDATES_RESULT: Mutex<
 > = Mutex::new(None);
 
 impl State {
+    /// Switches the target to the local drive mounted at `path`, records it in
+    /// the recent locations, and queues a config sync + target analysis. Shared
+    /// by the removable-drive picker and the debug folder picker.
+    fn select_local_mount(
+        &mut self,
+        path: PathBuf,
+        message_queue: &mut VecDeque<(Message, SharedString)>,
+    ) {
+        self.config.contents.target_kind = TargetKind::Local;
+        self.config.contents.mount_point = path;
+
+        if self.config.check_mount_point() {
+            self.notifications.push(Notification::info(NEW_DRIVE_TEXT));
+        }
+        self.config.contents.record_recent_location();
+
+        message_queue.push_back((Message::SyncConfig, SharedString::new()));
+        message_queue.push_back((Message::StartTargetAnalysis, SharedString::new()));
+    }
+
     pub fn update(
         &mut self,
         message: Message,
@@ -85,18 +105,23 @@ impl State {
                 let window_handle = app.window().window_handle();
 
                 if let Some(path) = dialogs::pick_mount_point(&window_handle) {
-                    self.config.contents.target_kind = TargetKind::Local;
-                    self.config.contents.mount_point = path;
-
-                    if self.config.check_mount_point() {
-                        self.notifications.push(Notification::info(NEW_DRIVE_TEXT));
-                    }
-                    self.config.contents.record_recent_location();
-
-                    message_queue.push_back((Message::SyncConfig, SharedString::new()));
-                    message_queue
-                        .push_back((Message::StartTargetAnalysis, SharedString::new()));
+                    self.select_local_mount(path, message_queue);
                 }
+            }
+            Message::RefreshRemovableDrives => {
+                let app = weak.upgrade().unwrap();
+                app.global::<UiState<'_>>().set_removable_drives(ModelRc::from(
+                    Rc::new(VecModel::from(crate::config::removable_drives())),
+                ));
+            }
+            Message::SelectRemovableDrive => {
+                let path = PathBuf::from(payload.as_str());
+                if !path.is_dir() {
+                    self.notifications
+                        .push(Notification::error("This drive is no longer available"));
+                    return;
+                }
+                self.select_local_mount(path, message_queue);
             }
             Message::RefreshDisplayedGames => {
                 let displayed_games = self
@@ -312,6 +337,16 @@ impl State {
 
                 match loc.kind {
                     TargetKind::Local => {
+                        // The drive may have been unplugged since it was
+                        // recorded: bail out and re-open the target selection.
+                        if !loc.mount_point.is_dir() {
+                            self.notifications.push(Notification::error(
+                                "This location is no longer available (drive unplugged?)",
+                            ));
+                            let app = weak.upgrade().unwrap();
+                            app.global::<UiState<'_>>().set_selecting_target(true);
+                            return;
+                        }
                         self.config.contents.target_kind = TargetKind::Local;
                         self.config.contents.mount_point = loc.mount_point;
                     }

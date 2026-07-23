@@ -56,6 +56,24 @@ export struct DisplayedRecentLocation {
     is-ftp: bool,
 }
 
+// A local drive offered in the target-selection modal: a removable device or
+// any non-system disk. See `txbm_core::drives`.
+export struct DisplayedRemovableDrive {
+    // Volume label / mount name.
+    name: string,
+    // Mount root, used as the library location (dispatched on selection).
+    mount-point: string,
+    // Preformatted "X free of Y", empty when the size is unknown.
+    size-text: string,
+    // True when the OS flags the drive as removable (drives the shown icon).
+    is-removable: bool,
+    // Filesystem name ("FAT32", "exFAT", "NTFS", …).
+    fs-label: string,
+    // True only for FAT32: the sole filesystem the console reads. Non-FAT32
+    // drives are shown but disabled.
+    is-fat32: bool,
+}
+
 export struct DisplayedGame {
     path: string,
     is-x360: bool,

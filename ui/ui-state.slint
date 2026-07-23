@@ -8,6 +8,7 @@ import {
     DisplayedDriveInfo,
     DisplayedGame,
     DisplayedRecentLocation,
+    DisplayedRemovableDrive,
     DisplayedStoragePath,
     DisplayedTitleUpdate,
     Notification,
@@ -62,6 +63,9 @@ export global UiState {
     // Most-recently-used library locations (most recent first, max 5),
     // shown in the target-selection modal.
     in-out property <[DisplayedRecentLocation]> recent-locations;
+    // Local drives offered when picking a removable target (populated on
+    // demand by the RefreshRemovableDrives message).
+    in-out property <[DisplayedRemovableDrive]> removable-drives;
 
     in-out property <DisplayedConfig> config;
     in-out property <string> app-version;

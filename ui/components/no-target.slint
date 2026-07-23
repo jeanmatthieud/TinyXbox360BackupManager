@@ -5,7 +5,7 @@
 import { IconSet, IconDisplay } from "@lucide";
 import { MyPalette } from "../styling.slint";
 
-export component NoDrive inherits VerticalLayout {
+export component NoTarget inherits VerticalLayout {
     alignment: center;
 
     HorizontalLayout {
@@ -24,13 +24,13 @@ export component NoDrive inherits VerticalLayout {
         }
 
         IconDisplay {
-            icon: IconSet.HardDrive;
+            icon: IconSet.Zap;
             stroke: MyPalette.foreground;
             size: 14px;
         }
 
         Text {
-            text: "to select a drive or a console (FTP)";
+            text: "to select a target";
         }
     }
 }
