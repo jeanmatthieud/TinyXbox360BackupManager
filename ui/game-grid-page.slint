@@ -90,20 +90,18 @@ export component GameGridPage inherits VerticalLayout {
         width: parent.width;
         viewport-height: v.preferred-height;
 
-        v := VerticalLayout {
+        v := GridLayout {
             padding: 10px;
-            padding-top: 0px;
+                // Room for the first row's hover glow (16px blur) so the ScrollView
+                // doesn't crop the top of the halo.
+                padding-top: 8px;
             spacing: 10px;
 
-            GridLayout {
-                spacing: 10px;
+            for game[i] in UiState.games: GameCard {
+                row: i / col-count;
+                col: mod(i, col-count);
 
-                for game[i] in UiState.games: GameCard {
-                    row: i / col-count;
-                    col: mod(i, col-count);
-
-                    game: game;
-                }
+                game: game;
             }
         }
     }

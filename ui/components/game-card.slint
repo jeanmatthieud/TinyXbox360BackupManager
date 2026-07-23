@@ -3,9 +3,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 import { Card } from "card.slint";
-import { Spinner, VerticalBox } from "std-widgets.slint";
+import { Spinner } from "std-widgets.slint";
 import { DisplayedGame } from "../types.slint";
-import { IconButton } from "icon-button.slint";
 import { CoverImage } from "cover-image.slint";
 import { IconSet, IconDisplay } from "@lucide";
 import { MyPalette } from "../styling.slint";
@@ -15,94 +14,166 @@ import { Message, Dispatcher } from "../messages.slint";
 export component GameCard inherits Card {
     in property <DisplayedGame> game;
 
+    property <bool> hovered: card-touch.has-hover;
+
+    function open-info() {
+        UiState.current-game = game;
+        Dispatcher.dispatch(Message.FetchGameDetails, game.path);
+    }
+
     width: 172px;
     height: self.min-height;
-    border-color: game.incomplete ? MyPalette.destructive : MyPalette.border;
+
+    // Highlight on hover: accent border. Falls back to the destructive colour
+    // for incomplete installs while at rest.
+    border-width: hovered ? 2px : 1px;
+    border-color: hovered
+        ? MyPalette.accent-background
+        : (game.incomplete ? MyPalette.destructive : MyPalette.border);
+
+    // Accent glow on hover. IMPORTANT: kept on an INTERNAL Rectangle, never on
+    // the root — a drop-shadow/animate on the root turns it into a render layer
+    // and makes the parent GridLayout ignore our row/col hints (grid collapses
+    // onto one line).
+    //
+    // The fill is OPAQUE (card background) and inset 2px inside the root border:
+    // an opaque body occludes the inner half of its own drop-shadow, so only the
+    // outer halo (bleeding into the grid gutter) shows — no glow leaking over the
+    // content. The card's real content renders on top of this rect.
+    Rectangle {
+        x: 2px;
+        y: 2px;
+        width: parent.width - 4px;
+        height: parent.height - 4px;
+        border-radius: parent.border-radius - 2px;
+        background: MyPalette.background;
+        drop-shadow-color: hovered ? MyPalette.accent-background.transparentize(0.3) : transparent;
+        drop-shadow-blur: hovered ? 16px : 0px;
+        animate drop-shadow-blur, drop-shadow-color {
+            duration: 350ms;
+            easing: ease-out;
+        }
+    }
+
+    // Background click target: opens the details window. Renders below the
+    // content; the overlaid buttons keep their own clicks.
+    card-touch := TouchArea {
+        mouse-cursor: pointer;
+        clicked => {
+            open-info();
+        }
+    }
 
     VerticalLayout {
-        padding: 10px;
-        spacing: 10px;
+        padding: 6px;
+        spacing: 6px;
 
-        HorizontalLayout {
-            alignment: space-between;
-            cross-axis-alignment: CrossAxisAlignment.center;
-
-            HorizontalLayout {
-                spacing: 5px;
-                cross-axis-alignment: CrossAxisAlignment.center;
-
-                IconDisplay {
-                    icon: IconSet.Tag;
-                    size: 13px;
-                    stroke: MyPalette.foreground;
-                }
-
-                Text {
-                    text: game.id.is-empty ? game.format : game.id;
-                    wrap: no-wrap;
-                }
-            }
-
-            Text {
-                text: "\{game.size-gib.to-fixed(2)} GiB";
-                wrap: no-wrap;
-                horizontal-alignment: right;
-            }
-        }
-
-        VerticalLayout {
-            height: 93px;
-            alignment: center;
-
-            HorizontalLayout {
-                alignment: center;
-
-                if game.cover.width > 0: CoverImage {
-                    source: game.cover;
-                    height: 93px;
-                }
-
-                // Cover currently downloading: circular indicator.
-                if game.cover.width == 0 && !game.id.is-empty && UiState.downloading-covers: Spinner {
-                    width: 48px;
-                    height: 48px;
-                    indeterminate: true;
-                }
-
-                // No cover available: neutral icon.
-                if game.cover.width == 0 && (game.id.is-empty || !UiState.downloading-covers): IconDisplay {
-                    icon: IconSet.Image;
-                    size: 48px;
-                    stroke: MyPalette.foreground.transparentize(0.6);
-                }
-            }
-        }
-
+        // Header: centred title, elided when too long.
         Text {
             text: game.title;
             horizontal-alignment: center;
             wrap: no-wrap;
             overflow: elide;
+            font-weight: 500;
         }
 
-        HorizontalLayout {
-            spacing: 5px;
+        // Cover zone: fixed 160×200 (4:5) inset from the 172px card, rounded on
+        // every corner. Dimensions are fixed (no content-derived sizing) so the
+        // Image below cannot leak its intrinsic size into the layout.
+        Rectangle {
+            width: 160px;
+            height: 196px;
+            border-radius: 6px;
+            clip: true;
+            background: MyPalette.alternate-background;
 
-            IconButton {
-                label: "Info";
-                icon: IconSet.Info;
-                clicked => {
-                    UiState.current-game = game;
-                    Dispatcher.dispatch(Message.FetchGameDetails, game.path);
-                }
+            // Full-width cover, anchored to the bottom of the zone: the height
+            // follows the (clipped front-panel) aspect ratio, and any overflow
+            // at the top is clipped away.
+            if game.cover.width > 0: CoverImage {
+                source: game.cover;
+                image-fit: fill;
+                width: 160px;
+                height: self.source-clip-width > 0
+                    ? 160px * self.source-clip-height / self.source-clip-width
+                    : 200px;
+                y: parent.height - self.height;
             }
 
-            IconButton {
-                width: self.height + 1px;
-                icon: IconSet.Trash;
-                tooltip: "Delete game";
-                clicked => {
-                    UiState.game-to-delete = game;
+            // Cover currently downloading: circular indicator, centred.
+            if game.cover.width == 0 && !game.id.is-empty && UiState.downloading-covers: Spinner {
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+                width: 48px;
+                height: 48px;
+                indeterminate: true;
+            }
+
+            // No cover available: neutral icon, centred.
+            if game.cover.width == 0 && (game.id.is-empty || !UiState.downloading-covers): IconDisplay {
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+                icon: IconSet.Image;
+                size: 48px;
+                stroke: MyPalette.foreground.transparentize(0.6);
+            }
+
+            // Overlaid size + TitleId pills, stacked at the bottom-right. Sized
+            // to their content (preferred-*) so they don't spread apart.
+            VerticalLayout {
+                x: parent.width - self.width - 6px;
+                y: parent.height - self.height - 6px;
+                width: self.preferred-width;
+                height: self.preferred-height;
+                spacing: 3px;
+
+                HorizontalLayout {
+                    alignment: end;
+                    Rectangle {
+                        background: #000000.transparentize(0.35);
+                        border-radius: 6px;
+                        HorizontalLayout {
+                            padding-left: 7px;
+                            padding-right: 7px;
+                            padding-top: 2px;
+                            padding-bottom: 2px;
+                            Text {
+                                text: "\{game.size-gib.to-fixed(2)} GiB";
+                                color: white;
+                                font-size: 11px;
+                                font-weight: 600;
+                            }
+                        }
+                    }
+                }
+
+                if !game.id.is-empty || !game.format.is-empty: HorizontalLayout {
+                    alignment: end;
+                    Rectangle {
+                        background: #000000.transparentize(0.35);
+                        border-radius: 6px;
+                        HorizontalLayout {
+                            spacing: 4px;
+                            padding-left: 7px;
+                            padding-right: 7px;
+                            padding-top: 2px;
+                            padding-bottom: 2px;
+                            cross-axis-alignment: CrossAxisAlignment.center;
+
+                            IconDisplay {
+                                icon: IconSet.Tag;
+                                size: 11px;
+                                stroke: white;
+                            }
+
+                            Text {
+                                text: game.id.is-empty ? game.format : game.id;
+                                color: white;
+                                font-size: 11px;
+                                font-weight: 600;
+                            }
+                        }
+                    }
                 }
             }
         }
