@@ -92,9 +92,9 @@ export component GameGridPage inherits VerticalLayout {
 
         v := GridLayout {
             padding: 10px;
-                // Room for the first row's hover glow (16px blur) so the ScrollView
-                // doesn't crop the top of the halo.
-                padding-top: 8px;
+            // Room for the first row's hover glow (16px blur) so the ScrollView
+            // doesn't crop the top of the halo.
+            padding-top: 8px;
             spacing: 10px;
 
             for game[i] in UiState.games: GameCard {
