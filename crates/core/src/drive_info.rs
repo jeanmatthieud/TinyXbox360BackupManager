@@ -2,7 +2,6 @@
 // SPDX-FileContributor: Modified by Jean-Matthieu Dechriste (TinyXbox360BackupManager)
 // SPDX-License-Identifier: GPL-3.0-only
 
-use crate::{CONTENT_DIR, GAMES_DIR};
 use anyhow::{Result, bail};
 use std::path::Path;
 use which_fs::FsKind;
@@ -34,17 +33,14 @@ impl DriveInfo {
 
         let fs_kind = FsKind::try_from_path(path).unwrap_or(FsKind::Unknown);
 
-        let god_games_dir = path.join(CONTENT_DIR);
-        let god_games_bytes = fs_extra::dir::get_size(&god_games_dir).unwrap_or(0);
-        let extracted_games_dir = path.join(GAMES_DIR);
-        let extracted_games_bytes = fs_extra::dir::get_size(&extracted_games_dir).unwrap_or(0);
-        let games_bytes = god_games_bytes + extracted_games_bytes;
-
+        // `games_bytes` is filled by the caller from the scanned games, so it
+        // reflects the target's resolved storage locations rather than the
+        // hard-coded default folders.
         Ok(Self {
             label,
             used_bytes,
             total_bytes,
-            games_bytes,
+            games_bytes: 0,
             fs_kind,
             allocation_granularity,
         })

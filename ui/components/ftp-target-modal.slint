@@ -156,7 +156,7 @@ export component FtpTargetModal inherits Modal {
             }
 
             HorizontalLayout {
-                alignment: end;
+                alignment: space-between;
                 spacing: 10px;
 
                 IconButton {
@@ -167,28 +167,33 @@ export component FtpTargetModal inherits Modal {
                     }
                 }
 
-                // In the scan view, the manual-entry button sits just left of
-                // the primary button.
-                if !UiState.ftp-show-manual: IconButton {
-                    icon: IconSet.Keyboard;
-                    label: "Enter manually";
-                    clicked => {
-                        Dispatcher.dispatch(Message.CancelFtpScan, "");
-                        UiState.ftp-show-manual = true;
-                    }
-                }
+                HorizontalLayout {
+                    alignment: end;
+                    spacing: 10px;
 
-                // Always shown; disabled until a console is available (found by
-                // the scan, or entered manually).
-                IconButton {
-                    icon: IconSet.MonitorUp;
-                    label: "Use this console";
-                    kind: IconButtonKind.Primary;
-                    disabled: !UiState.ftp-show-manual && UiState.ftp-scan-found-ip == "";
-                    clicked => {
-                        Dispatcher.dispatch(Message.CancelFtpScan, "");
-                        UiState.editing-ftp-target = false;
-                        Dispatcher.dispatch(Message.SetTargetFtp, "");
+                    // In the scan view, the manual-entry button sits just left of
+                    // the primary button.
+                    if !UiState.ftp-show-manual: IconButton {
+                        icon: IconSet.Keyboard;
+                        label: "Enter manually";
+                        clicked => {
+                            Dispatcher.dispatch(Message.CancelFtpScan, "");
+                            UiState.ftp-show-manual = true;
+                        }
+                    }
+
+                    // Always shown; disabled until a console is available (found by
+                    // the scan, or entered manually).
+                    IconButton {
+                        icon: IconSet.MonitorUp;
+                        label: "Use this console";
+                        kind: IconButtonKind.Primary;
+                        disabled: !UiState.ftp-show-manual && UiState.ftp-scan-found-ip == "";
+                        clicked => {
+                            Dispatcher.dispatch(Message.CancelFtpScan, "");
+                            UiState.editing-ftp-target = false;
+                            Dispatcher.dispatch(Message.SetTargetFtp, "");
+                        }
                     }
                 }
             }

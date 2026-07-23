@@ -70,7 +70,7 @@ export component ToolboxPage inherits VerticalLayout {
     private property <bool> show-badavatar-settings: false;
 
     init => {
-        if UiState.config.target-kind == TargetKind.Ftp && !UiState.config.target.is-empty && !UiState.fetching-aurora-paths {
+        if !UiState.config.target.is-empty && !UiState.fetching-aurora-paths {
             Dispatcher.dispatch(Message.FetchAuroraPaths, "");
         }
     }
@@ -136,8 +136,7 @@ export component ToolboxPage inherits VerticalLayout {
             spacing: 10px;
             alignment: start;
 
-            // Always available, regardless of the connected target.
-            Card {
+            if UiState.config.target.is-empty: Card {
                 VerticalLayout {
                     padding: 10px;
                     spacing: 10px;
@@ -183,6 +182,14 @@ export component ToolboxPage inherits VerticalLayout {
                         wrap: word-wrap;
                     }
 
+                    CheckBox {
+                        text: "Also download and add the official system update";
+                        checked: UiState.badavatar.include-system-update;
+                        toggled => {
+                            Dispatcher.dispatch(Message.ToggleBadAvatarSystemUpdate, "");
+                        }
+                    }
+
                     if show-badavatar-settings: VerticalLayout {
                         spacing: 8px;
 
@@ -213,14 +220,6 @@ export component ToolboxPage inherits VerticalLayout {
                             url: UiState.badavatar.aurora-url;
                             default-url: UiState.badavatar.aurora-default-url;
                             field-key: "aurora";
-                        }
-
-                        CheckBox {
-                            text: "Also download and add the official system update";
-                            checked: UiState.badavatar.include-system-update;
-                            toggled => {
-                                Dispatcher.dispatch(Message.ToggleBadAvatarSystemUpdate, "");
-                            }
                         }
 
                         if UiState.badavatar.include-system-update: BadAvatarUrlField {
@@ -371,7 +370,160 @@ export component ToolboxPage inherits VerticalLayout {
                 }
             }
 
-            if UiState.config.target-kind == TargetKind.Ftp && !UiState.config.target.is-empty: Card {
+            // App storage folders (and, on a console, their Aurora coverage).
+            if !UiState.config.target.is-empty: Card {
+                VerticalLayout {
+                    padding: 10px;
+                    spacing: 10px;
+
+                    HorizontalLayout {
+                        alignment: LayoutAlignment.space-between;
+                        cross-axis-alignment: CrossAxisAlignment.center;
+
+                        HorizontalLayout {
+                            spacing: 5px;
+                            cross-axis-alignment: CrossAxisAlignment.center;
+
+                            IconDisplay {
+                                icon: IconSet.FolderCog;
+                                stroke: MyPalette.foreground;
+                                size: 14px;
+                            }
+
+                            Text {
+                                text: "Library storage";
+                            }
+                        }
+
+                        if UiState.fetching-aurora-paths: Spinner {
+                            width: 27px;
+                            height: 27px;
+                            indeterminate: true;
+                        }
+
+                        if UiState.config.target-kind == TargetKind.Ftp && !UiState.fetching-aurora-paths: IconButton {
+                            icon: IconSet.RefreshCcw;
+                            width: self.height;
+                            clicked => {
+                                if !UiState.fetching-aurora-paths {
+                                    Dispatcher.dispatch(Message.FetchAuroraPaths, "");
+                                }
+                            }
+                        }
+                    }
+
+                    HorizontalLine { }
+
+                    Text {
+                        text: "Folders where this app installs and scans your games.";
+                        font-size: 12px;
+                        wrap: word-wrap;
+                        color: MyPalette.foreground.transparentize(0.4);
+                    }
+
+                    if UiState.fetching-aurora-paths && !UiState.aurora-paths-loaded: Text {
+                        text: "Reading the storage configuration…";
+                    }
+
+                    if UiState.app-storage-paths.length > 0: VerticalLayout {
+                        spacing: 10px;
+
+                        for p in UiState.app-storage-paths: HorizontalLayout {
+                            spacing: 8px;
+                            cross-axis-alignment: CrossAxisAlignment.start;
+
+                            IconDisplay {
+                                // Neutral folder on a local drive (no Aurora
+                                // comparison); coverage badge on a console.
+                                icon: !UiState.storage-aurora-compared
+                                    ? IconSet.Folder
+                                    : (p.covered ? IconSet.Check : IconSet.TriangleAlert);
+                                stroke: !UiState.storage-aurora-compared
+                                    ? MyPalette.foreground
+                                    : (p.covered ? MyPalette.foreground : #e0a12f);
+                                size: 15px;
+                            }
+
+                            VerticalLayout {
+                                spacing: 2px;
+                                horizontal-stretch: 1;
+
+                                Text {
+                                    text: p.label;
+                                }
+
+                                Text {
+                                    text: p.aurora-path;
+                                    font-size: 12px;
+                                    wrap: char-wrap;
+                                    color: MyPalette.foreground.transparentize(0.4);
+                                }
+
+                                if UiState.storage-aurora-compared && !p.covered: Text {
+                                    text: "Not scanned by Aurora yet.";
+                                    font-size: 11px;
+                                    color: #e0a12f;
+                                }
+                            }
+                        }
+                    }
+
+                    // At least one folder isn't covered: guide the user.
+                    if UiState.storage-has-uncovered: VerticalLayout {
+                        spacing: 8px;
+                        height: self.preferred-height;
+
+                        HorizontalLine { }
+
+                        Text {
+                            text: "Add the folders marked above to Aurora (Settings > Content Paths, Scan Depth 3+) so your games show up on the console, then rescan.";
+                            wrap: word-wrap;
+                            color: #e0a12f;
+                        }
+
+                        HorizontalLine { }
+
+                        HorizontalLayout {
+                            spacing: 10px;
+
+                            bStorageHelp := IconButton {
+                                icon: IconSet.CircleQuestionMark;
+                                width: self.height;
+                                clicked => { UiState.showing-aurora-help = true };
+                            }
+
+                            Text {
+                                height: bStorageHelp.height;
+                                vertical-alignment: center;
+                                text: "Help me add the content paths to Aurora";
+                            }
+                        }
+                    }
+
+                    if !UiState.storage-has-uncovered: HorizontalLine { }
+
+                    HorizontalLayout {
+                        spacing: 10px;
+
+                        bEditStorage := IconButton {
+                            icon: IconSet.FolderCog;
+                            width: self.height;
+                            disabled: UiState.fetching-aurora-paths;
+                            clicked => Dispatcher.dispatch(Message.EditStorageConfig, "");
+                        }
+
+                        Text {
+                            height: bEditStorage.height;
+                            vertical-alignment: center;
+                            text: "Change storage folders";
+                        }
+                    }
+                }
+            }
+
+            // Aurora scan paths: always for a console; for a local drive only
+            // when it carries an Aurora install (otherwise nothing to show).
+            if !UiState.config.target.is-empty && (UiState.config.target-kind == TargetKind.Ftp || UiState.aurora-scan-paths.length > 0): Card {
                 VerticalLayout {
                     padding: 10px;
                     spacing: 10px;
@@ -401,7 +553,7 @@ export component ToolboxPage inherits VerticalLayout {
                             indeterminate: true;
                         }
 
-                        if !UiState.fetching-aurora-paths: IconButton {
+                        if UiState.config.target-kind == TargetKind.Ftp && !UiState.fetching-aurora-paths: IconButton {
                             icon: IconSet.RefreshCcw;
                             width: self.height;
                             clicked => {
@@ -477,14 +629,14 @@ export component ToolboxPage inherits VerticalLayout {
                         HorizontalLayout {
                             spacing: 10px;
 
-                            b3 := IconButton {
+                            bHelpContentPathAurora := IconButton {
                                 icon: IconSet.CircleQuestionMark;
                                 width: self.height;
                                 clicked => { UiState.showing-aurora-help = true };
                             }
 
                             Text {
-                                height: b3.height;
+                                height: bHelpContentPathAurora.height;
                                 vertical-alignment: center;
                                 text: "Help me add the content paths to Aurora";
                             }
@@ -542,47 +694,6 @@ export component ToolboxPage inherits VerticalLayout {
                             height: b.height;
                             vertical-alignment: center;
                             text: "Redownload all covers (clears the local cache first)";
-                        }
-                    }
-                }
-            }
-
-            if Platform.os == OperatingSystemType.macos && UiState.config.target-kind == TargetKind.Local && !UiState.config.target.is-empty: Card {
-                VerticalLayout {
-                    padding: 10px;
-                    spacing: 10px;
-
-                    HorizontalLayout {
-                        spacing: 5px;
-                        cross-axis-alignment: CrossAxisAlignment.center;
-
-                        IconDisplay {
-                            icon: IconSet.Apple;
-                            stroke: MyPalette.foreground;
-                            size: 14px;
-                        }
-
-                        Text {
-                            text: "macOS";
-                        }
-                    }
-
-                    HorizontalLine { }
-
-                    HorizontalLayout {
-                        spacing: 10px;
-                        cross-axis-alignment: CrossAxisAlignment.center;
-
-                        b2 := IconButton {
-                            icon: IconSet.Play;
-                            width: self.height;
-                            clicked => Dispatcher.dispatch(Message.RunDotClean, "");
-                        }
-
-                        Text {
-                            height: b2.height;
-                            vertical-alignment: center;
-                            text: "Run dot_clean (removes ._ files that confuse the console)";
                         }
                     }
                 }

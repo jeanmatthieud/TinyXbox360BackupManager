@@ -83,6 +83,17 @@ export struct DisplayedTitleUpdate {
     is-cached: bool,
 }
 
+// One folder this app installs/scans on the console, and whether Aurora is
+// configured to scan it (or an ancestor).
+export struct DisplayedStoragePath {
+    label: string,
+    // FTP path (/Device/dir/…).
+    path: string,
+    // Same location in Aurora's "Manage Paths" format (Device:\dir\…).
+    aurora-path: string,
+    covered: bool,
+}
+
 export struct DisplayedDriveInfo {
     label: string,
     used-gib: float,

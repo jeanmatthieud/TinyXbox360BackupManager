@@ -4,7 +4,6 @@
 
 use crate::config::SortBy;
 use crate::util::dir_size;
-use crate::{CONTENT_DIR, GAMES_DIR};
 use std::cmp::Ordering;
 use std::path::{Path, PathBuf};
 
@@ -26,8 +25,8 @@ impl GameFormat {
         match self {
             GameFormat::God => "GOD",
             GameFormat::Arcade => "XBLA",
-            GameFormat::ExtractedXex => "Extracted (360)",
-            GameFormat::ExtractedXbe => "Xbox OG",
+            GameFormat::ExtractedXex => "XEX",
+            GameFormat::ExtractedXbe => "XBE",
         }
     }
 }
@@ -70,6 +69,12 @@ pub fn og_folder_name(title: &str, title_id: &str) -> String {
     format!("{}{suffix}", title.trim_end())
 }
 
+/// True when `name` is an 8-hex-character TitleID folder (e.g. `58410889`),
+/// as found directly under a `Content/0000000000000000` directory.
+pub(crate) fn is_title_id(name: &str) -> bool {
+    name.len() == 8 && name.chars().all(|c| c.is_ascii_hexdigit())
+}
+
 /// Splits a folder name into (title, TitleID) if it carries
 /// a ` [XXXXXXXX]` suffix.
 pub fn split_title_id_suffix(name: &str) -> (String, Option<String>) {
@@ -83,112 +88,157 @@ pub fn split_title_id_suffix(name: &str) -> (String, Option<String>) {
     (name.to_string(), None)
 }
 
-/// Scan the drive (mount point) for installed games.
+/// Scan the drive (mount point) for installed games, honoring the target's
+/// resolved layout (its `.txbm.json` manifest, otherwise the defaults).
 pub fn scan_drive(drive_dir: &Path) -> Vec<Game> {
-    let mut games = Vec::new();
+    let layout = crate::target::local_layout(drive_dir);
+    let mut scanner = LocalScanner { games: Vec::new() };
+    for location in &layout.scan_locations {
+        // Local listing failures are non-fatal (an unreadable folder is just
+        // skipped), so this walk never returns an error.
+        let _ = crate::scan::walk(&mut scanner, &PathBuf::from(&location.path), location.depth);
+    }
+    scanner.games
+}
 
-    // GOD: <drive>/Content/0000000000000000/<TitleID>/0000[57]000/<MediaID>
-    let content_dir = drive_dir.join(CONTENT_DIR);
-    if let Ok(entries) = std::fs::read_dir(&content_dir) {
-        for entry in entries.flatten() {
-            let title_dir = entry.path();
-            let title_id = entry.file_name().to_string_lossy().to_uppercase();
-            if !title_dir.is_dir() || title_id.len() != 8 {
-                continue;
-            }
-            let mut found_package = false;
-            for (content_type, format, is_x360) in INSTALLED_CONTENT_TYPES {
-                let type_dir = title_dir.join(content_type);
-                if !type_dir.is_dir() {
-                    continue;
-                }
-                found_package = true;
-                let title = crate::stfs::title_from_dir(&type_dir)
-                    .or_else(|| {
-                        u32::from_str_radix(&title_id, 16)
-                            .ok()
-                            .and_then(iso2god::game_list::find_title_by_id)
-                    })
-                    .unwrap_or_else(|| title_id.clone());
-                let search_term = format!("{title}\0{title_id}").to_lowercase();
-                games.push(Game {
-                    id: title_id.clone(),
-                    title,
-                    format,
-                    path: title_dir.clone(),
-                    size: dir_size(&type_dir)
-                        + dir_size(&title_dir.join(crate::stfs::dlc_dir_name())),
-                    is_x360,
-                    search_term,
-                    incomplete: false,
-                });
-            }
+/// Local-filesystem [`DirScanner`], detecting the format of every game found
+/// (GOD/Arcade TitleID folders and extracted-game folders) via the shared walk.
+struct LocalScanner {
+    games: Vec<Game>,
+}
 
-            // No game package: only DLC and/or a title update sit here,
-            // orphaned from a base install that was removed or never
-            // completed. Still surface it, flagged incomplete.
-            if !found_package {
-                let dlc_dir = title_dir.join(crate::stfs::dlc_dir_name());
-                let title_update_dir = title_dir.join(crate::stfs::title_update_dir_name());
-                if dlc_dir.is_dir() || title_update_dir.is_dir() {
-                    let title = u32::from_str_radix(&title_id, 16)
-                        .ok()
-                        .and_then(iso2god::game_list::find_title_by_id)
-                        .unwrap_or_else(|| title_id.clone());
-                    let search_term = format!("{title}\0{title_id}").to_lowercase();
-                    games.push(Game {
-                        id: title_id.clone(),
-                        title,
-                        format: GameFormat::God,
-                        path: title_dir.clone(),
-                        size: dir_size(&dlc_dir) + dir_size(&title_update_dir),
-                        is_x360: true,
-                        search_term,
-                        incomplete: true,
-                    });
-                }
-            }
-        }
+impl crate::scan::DirScanner for LocalScanner {
+    type Path = PathBuf;
+
+    fn child_dirs(&mut self, dir: &PathBuf) -> anyhow::Result<Vec<(PathBuf, String)>> {
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            return Ok(Vec::new());
+        };
+        Ok(entries
+            .flatten()
+            .filter(|e| e.path().is_dir())
+            .map(|e| (e.path(), e.file_name().to_string_lossy().to_string()))
+            .collect())
     }
 
-    // Extracted games: <drive>/Games/<Name>/default.xex or default.xbe
-    let games_dir = drive_dir.join(GAMES_DIR);
-    if let Ok(entries) = std::fs::read_dir(&games_dir) {
-        for entry in entries.flatten() {
-            let game_dir = entry.path();
-            if !game_dir.is_dir() {
-                continue;
-            }
-            let format = if game_dir.join("default.xex").is_file() {
-                GameFormat::ExtractedXex
-            } else if game_dir.join("default.xbe").is_file() {
-                GameFormat::ExtractedXbe
-            } else {
-                continue;
-            };
-            let folder_name = entry.file_name().to_string_lossy().to_string();
-            let (title, mut id) = split_title_id_suffix(&folder_name);
-            // Game added by hand (no TitleID suffix): read it from the
-            // XBE, which is cheap on a local target.
-            if id.is_none() && format == GameFormat::ExtractedXbe {
-                id = crate::xbe::title_id_from_file(&game_dir.join("default.xbe")).ok();
-            }
-            let id = id.unwrap_or_default();
-            let search_term = format!("{title}\0{id}").to_lowercase();
-            games.push(Game {
-                id,
-                title,
-                format,
-                path: game_dir.clone(),
-                size: dir_size(&game_dir),
-                is_x360: format == GameFormat::ExtractedXex,
-                search_term,
-                incomplete: false,
-            });
+    fn classify(&mut self, path: &PathBuf, name: &str) -> anyhow::Result<crate::scan::ChildAction> {
+        use crate::scan::ChildAction;
+
+        // GOD / Arcade: an 8-hex TitleID folder.
+        if is_title_id(name) && push_god_games_local(path, name, &mut self.games) {
+            return Ok(ChildAction::Handled);
         }
+
+        // Extracted game: a folder directly holding default.xex / default.xbe.
+        if let Some(format) = detect_extracted_local(path) {
+            push_extracted_local(path, name, format, &mut self.games);
+            return Ok(ChildAction::Handled);
+        }
+
+        // Neither: let the walk descend (handles nested
+        // Content/0000000000000000 folders and arbitrary scan roots).
+        Ok(ChildAction::Recurse)
+    }
+}
+
+/// Handles a GOD/Arcade `<TitleID>` folder locally. Returns true when a game
+/// (or an incomplete DLC/title-update-only entry) was pushed.
+fn push_god_games_local(title_dir: &Path, title_id_raw: &str, games: &mut Vec<Game>) -> bool {
+    let title_id = title_id_raw.to_uppercase();
+    let mut found_package = false;
+
+    for (content_type, format, is_x360) in INSTALLED_CONTENT_TYPES {
+        let type_dir = title_dir.join(content_type);
+        if !type_dir.is_dir() {
+            continue;
+        }
+        found_package = true;
+        let title = crate::stfs::title_from_dir(&type_dir)
+            .or_else(|| {
+                u32::from_str_radix(&title_id, 16)
+                    .ok()
+                    .and_then(iso2god::game_list::find_title_by_id)
+            })
+            .unwrap_or_else(|| title_id.clone());
+        let search_term = format!("{title}\0{title_id}").to_lowercase();
+        games.push(Game {
+            id: title_id.clone(),
+            title,
+            format,
+            path: title_dir.to_path_buf(),
+            size: dir_size(&type_dir) + dir_size(&title_dir.join(crate::stfs::dlc_dir_name())),
+            is_x360,
+            search_term,
+            incomplete: false,
+        });
     }
 
-    games
+    if found_package {
+        return true;
+    }
+
+    // No game package: only DLC and/or a title update sit here, orphaned from
+    // a base install that was removed or never completed. Still surface it,
+    // flagged incomplete.
+    let dlc_dir = title_dir.join(crate::stfs::dlc_dir_name());
+    let title_update_dir = title_dir.join(crate::stfs::title_update_dir_name());
+    if !dlc_dir.is_dir() && !title_update_dir.is_dir() {
+        return false;
+    }
+    let title = u32::from_str_radix(&title_id, 16)
+        .ok()
+        .and_then(iso2god::game_list::find_title_by_id)
+        .unwrap_or_else(|| title_id.clone());
+    let search_term = format!("{title}\0{title_id}").to_lowercase();
+    games.push(Game {
+        id: title_id.clone(),
+        title,
+        format: GameFormat::God,
+        path: title_dir.to_path_buf(),
+        size: dir_size(&dlc_dir) + dir_size(&title_update_dir),
+        is_x360: true,
+        search_term,
+        incomplete: true,
+    });
+    true
+}
+
+/// Detects an extracted-game folder from its default executable.
+fn detect_extracted_local(game_dir: &Path) -> Option<GameFormat> {
+    if game_dir.join("default.xex").is_file() {
+        Some(GameFormat::ExtractedXex)
+    } else if game_dir.join("default.xbe").is_file() {
+        Some(GameFormat::ExtractedXbe)
+    } else {
+        None
+    }
+}
+
+/// Pushes an extracted game found locally.
+fn push_extracted_local(
+    game_dir: &Path,
+    folder_name: &str,
+    format: GameFormat,
+    games: &mut Vec<Game>,
+) {
+    let (title, mut id) = split_title_id_suffix(folder_name);
+    // Game added by hand (no TitleID suffix): read it from the XBE, which is
+    // cheap on a local target.
+    if id.is_none() && format == GameFormat::ExtractedXbe {
+        id = crate::xbe::title_id_from_file(&game_dir.join("default.xbe")).ok();
+    }
+    let id = id.unwrap_or_default();
+    let search_term = format!("{title}\0{id}").to_lowercase();
+    games.push(Game {
+        id,
+        title,
+        format,
+        path: game_dir.to_path_buf(),
+        size: dir_size(game_dir),
+        is_x360: format == GameFormat::ExtractedXex,
+        search_term,
+        incomplete: false,
+    });
 }
 
 pub fn get_compare_fn(sort_by: SortBy) -> impl FnMut(&Game, &Game) -> Ordering {

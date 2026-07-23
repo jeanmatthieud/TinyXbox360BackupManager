@@ -49,22 +49,23 @@ export component AuroraHelpModal inherits Modal {
             }
 
             Text {
-                text: "2.  Add a scan path for your Xbox 360 games, pointing to\n     'Hdd1:\\Content\\0000000000000000'.";
+                text: "2.  Add a scan path for each folder this app uses:";
+                wrap: word-wrap;
+            }
+
+            for p in UiState.app-storage-paths: Text {
+                text: "        • " + p.aurora-path;
+                font-size: 12px;
+                wrap: char-wrap;
+            }
+
+            Text {
+                text: "3.  Enable 'AutoScan'.";
                 wrap: word-wrap;
             }
 
             Text {
-                text: "3.  Add a scan path for your OG Xbox games, pointing to\n     'Hdd1:\\Games'.";
-                wrap: word-wrap;
-            }
-
-            Text {
-                text: "4.  Enable 'AutoScan'.";
-                wrap: word-wrap;
-            }
-
-            Text {
-                text: "5.  Save, then let Aurora rescan with 'Scan now'.";
+                text: "4.  Save, then let Aurora rescan with 'Scan now'.";
                 wrap: word-wrap;
             }
         }

@@ -8,6 +8,7 @@ import {
     DisplayedDriveInfo,
     DisplayedGame,
     DisplayedRecentLocation,
+    DisplayedStoragePath,
     DisplayedTitleUpdate,
     Notification,
     Page,
@@ -35,6 +36,23 @@ export global UiState {
 
     in-out property <bool> selecting-target: false;
     in-out property <bool> editing-ftp-target: false;
+
+    // Storage-configuration modal, shown after connecting to a target that has
+    // no `.txbm.json` yet: lets the user confirm where GOD and extracted games
+    // are stored before scanning.
+    in-out property <bool> configuring-storage: false;
+    // True while the target is being analyzed, or the choice applied (spinner).
+    in-out property <bool> analyzing-target: false;
+    // True when the current target is a console over FTP (free-text entry) vs a
+    // local drive (system folder picker) for the "other location" case.
+    in-out property <bool> storage-is-ftp: false;
+    // Candidate directories discovered on the target, offered in the drop-downs.
+    in-out property <[string]> storage-candidates;
+    // Chosen install destinations (the source of truth on confirm).
+    in-out property <string> storage-god-dir;
+    // Extracted Original Xbox (XBE) and Xbox 360 (XEX) destinations.
+    in-out property <string> storage-xbe-dir;
+    in-out property <string> storage-xex-dir;
     // FTP modal: true while the local network is being scanned for a console.
     in-out property <bool> ftp-scanning: false;
     // FTP modal: IP of the console found by the scan (empty if none/not yet).
@@ -81,8 +99,21 @@ export global UiState {
     // True while the "how to add Aurora scan paths" help modal is shown.
     in-out property <bool> showing-aurora-help: false;
 
+    // Folders this app installs/scans on the console (from .txbm.json), each
+    // flagged with whether Aurora is configured to scan it. Filled by the same
+    // fetch as aurora-scan-paths.
+    in-out property <[DisplayedStoragePath]> app-storage-paths;
+    // True when at least one app storage path is not covered by Aurora.
+    in-out property <bool> storage-has-uncovered: false;
+    // True when the Aurora coverage comparison applies (FTP console). False for
+    // a local drive, where storage paths are only listed.
+    in-out property <bool> storage-aurora-compared: false;
+
     // BadAvatar USB-key creation (Toolbox), independent of the target.
     in-out property <DisplayedBadAvatarConfig> badavatar;
     // True while a BadAvatar key is being created.
     in-out property <bool> creating-badavatar: false;
+    // Non-empty while the destination-confirmation modal is shown, holding
+    // the path picked for the BadAvatar key.
+    in-out property <string> badavatar-pending-path: "";
 }
