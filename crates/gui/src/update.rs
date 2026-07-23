@@ -119,6 +119,10 @@ impl State {
                 if !path.is_dir() {
                     self.notifications
                         .push(Notification::error("This drive is no longer available"));
+                    // The confirm button already closed the modal; re-open it so
+                    // the user can pick another drive instead of being stuck.
+                    let app = weak.upgrade().unwrap();
+                    app.global::<UiState<'_>>().set_selecting_target(true);
                     return;
                 }
                 self.select_local_mount(path, message_queue);

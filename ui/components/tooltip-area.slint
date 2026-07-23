@@ -67,8 +67,13 @@ export component TooltipArea inherits Rectangle {
                 Tooltip.mouse-x = self.absolute-position.x + self.mouse-x;
                 Tooltip.mouse-y = self.absolute-position.y + self.mouse-y;
             } else if event.kind == PointerEventKind.down {
+                // Always clear the swallow flag on a fresh press so a previous
+                // long-press that ended outside the area (no `clicked` to reset
+                // it) can never make the next real click be swallowed. The reset
+                // is deliberately ungated: it must run even when this press won't
+                // arm the timer (disabled, or no long-press configured).
+                long-fired = false;
                 if long-press-duration > 0ms && !disabled {
-                    long-fired = false;
                     long-press-timer.running = true;
                 }
             } else if event.kind == PointerEventKind.up || event.kind == PointerEventKind.cancel {

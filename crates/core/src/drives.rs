@@ -120,6 +120,15 @@ fn is_selectable(disk: &Disk, system_mount: Option<&Path>) -> bool {
     let mount = disk.mount_point();
     let mount_str = mount.to_string_lossy();
 
+    // A removable device is always offered, wherever it is mounted. This must
+    // come before the system-prefix filter below: udisks2 mounts removable
+    // media under `/run/media/<user>/LABEL`, so filtering `/run` first would
+    // hide the most common case. We'd rather list a spurious drive than miss a
+    // real USB stick.
+    if disk.is_removable() {
+        return true;
+    }
+
     // The Unix root filesystem always holds the OS.
     if mount == Path::new("/") {
         return false;
@@ -128,9 +137,6 @@ fn is_selectable(disk: &Disk, system_mount: Option<&Path>) -> bool {
         return false;
     }
 
-    if disk.is_removable() {
-        return true;
-    }
     // Non-removable: accept only when it isn't the system disk.
     Some(mount) != system_mount
 }
