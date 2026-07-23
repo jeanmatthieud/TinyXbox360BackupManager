@@ -25,6 +25,7 @@ import { ConversionQueuePage } from "conversion-queue.slint";
 import { SelectTargetModal } from "components/select-target-modal.slint";
 import { FtpTargetModal } from "components/ftp-target-modal.slint";
 import { AuroraHelpModal } from "components/aurora-help-modal.slint";
+import { StorageConfigModal } from "components/storage-config-modal.slint";
 import { UiState } from "ui-state.slint";
 
 export * from "types.slint";
@@ -120,6 +121,7 @@ export component AppWindow inherits Window {
     if UiState.selecting-target: SelectTargetModal { }
     if UiState.editing-ftp-target: FtpTargetModal { }
     if UiState.showing-aurora-help: AuroraHelpModal { }
+    if UiState.configuring-storage: StorageConfigModal { }
 
     if !UiState.game-to-delete.path.is-empty: ConfirmationModal {
         Text {
@@ -146,6 +148,16 @@ export component AppWindow inherits Window {
 
         cancelled => Dispatcher.dispatch(Message.ClearGamesToAdd, "");
         confirmed => Dispatcher.dispatch(Message.ConfirmGamesToAdd, "");
+    }
+
+    if UiState.badavatar-pending-path != "": ConfirmationModal {
+        Text {
+            text: "Create the BadAvatar USB key at \{UiState.badavatar-pending-path}?\nAny existing content at this location may be overwritten.";
+            wrap: word-wrap;
+        }
+        btn-icon: IconSet.Hammer;
+        cancelled => Dispatcher.dispatch(Message.CancelCreateBadAvatar, "");
+        confirmed => Dispatcher.dispatch(Message.ConfirmCreateBadAvatar, "");
     }
 
     if UiState.confirming-cancel-all: ConfirmationModal {

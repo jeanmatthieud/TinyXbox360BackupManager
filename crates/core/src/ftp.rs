@@ -468,6 +468,11 @@ impl FtpSession {
         Ok(())
     }
 
+    /// Ensures a remote directory exists, creating every missing level.
+    pub fn ensure_dir(&mut self, remote_dir: &str) -> Result<()> {
+        self.cwd_create(remote_dir)
+    }
+
     /// Removes a single file from a remote directory.
     pub fn remove_file(&mut self, remote_dir: &str, file_name: &str) -> Result<()> {
         self.cwd(remote_dir)

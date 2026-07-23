@@ -29,6 +29,9 @@ pub struct State {
     pub is_downloading_covers: bool,
     pub is_scanning: bool,
     pub is_creating_badavatar: bool,
+    /// Destination picked for the BadAvatar key, awaiting confirmation in the
+    /// modal before the creation thread actually starts.
+    pub badavatar_pending_dest: Option<PathBuf>,
     /// Flag shared with the scan thread to cancel it.
     pub scan_cancel: Arc<AtomicBool>,
     /// Flag shared with the network-discovery thread (FTP modal) to cancel it.
@@ -38,6 +41,10 @@ pub struct State {
     /// Flag shared with the BadAvatar creation thread to cancel it.
     pub badavatar_cancel: Arc<AtomicBool>,
     pub games_filter: String,
+    /// True when the storage-configuration modal was opened to *edit* an
+    /// already-configured target (from the Toolbox), so it is shown even though
+    /// a `.txbm.json` already exists.
+    pub editing_storage: bool,
 }
 
 impl State {
@@ -63,11 +70,13 @@ impl State {
             is_downloading_covers: false,
             is_scanning: false,
             is_creating_badavatar: false,
+            badavatar_pending_dest: None,
             scan_cancel: Arc::new(AtomicBool::new(false)),
             ftp_scan_cancel: Arc::new(AtomicBool::new(false)),
             conversion_cancel: Arc::new(AtomicBool::new(false)),
             badavatar_cancel: Arc::new(AtomicBool::new(false)),
             games_filter: String::new(),
+            editing_storage: false,
         }
     }
 }

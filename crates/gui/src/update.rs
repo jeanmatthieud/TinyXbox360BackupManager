@@ -4,8 +4,8 @@
 
 use crate::{
     AppWindow, Dispatcher, DisplayedConfig, DisplayedDriveInfo, DisplayedGame,
-    DisplayedTitleUpdate, Message, Notification, Page, UiState, convert::perform_conversion,
-    covers, dialogs, game_details, state::State, title_updates, util,
+    DisplayedStoragePath, DisplayedTitleUpdate, Message, Notification, Page, UiState,
+    convert::perform_conversion, covers, dialogs, game_details, state::State, title_updates, util,
 };
 use slint::{ComponentHandle, ModelRc, SharedString, ToSharedString, VecModel, Weak};
 use std::{
@@ -17,14 +17,19 @@ use std::{
 };
 use txbm_core::{
     badavatar::UrlField, config::TargetKind, conversion_queue::QueuedConversion,
-    data_dir::DATA_DIR, drive_info::DriveInfo, ftp::FtpSession, game::Game, target::Target,
+    data_dir::DATA_DIR, drive_info::DriveInfo, ftp::FtpSession, game::Game,
+    target::{StorageConfig, Target, TargetAnalysis},
 };
 
-const NEW_DRIVE_TEXT: &str = "New drive detected\nOnce the games are on the console, remember to add the content paths in Aurora\n(Settings > Content Paths: Hdd1:\\Content\\0000000000000000 and Hdd1:\\Games, Scan Depth 3+)";
+const NEW_DRIVE_TEXT: &str = "New drive detected\nOnce the games are on the console, remember to add the content paths in Aurora\n(Settings > Content Paths)";
 
 /// Result of the asynchronous scan of the target, deposited by the scan thread
 /// then retrieved in the ScanFinished handler.
 static SCAN_RESULT: Mutex<Option<anyhow::Result<(Vec<Game>, DriveInfo)>>> = Mutex::new(None);
+
+/// Result of the asynchronous target analysis started when connecting to a
+/// target with no `.txbm.json` yet, retrieved in TargetAnalysisFinished.
+static ANALYSIS_RESULT: Mutex<Option<anyhow::Result<TargetAnalysis>>> = Mutex::new(None);
 
 /// Result of the asynchronous network scan started from the FTP modal:
 /// `Some(ip)` when a console was found, `None` when the scan finished without
@@ -87,9 +92,11 @@ impl State {
                         self.notifications.push(Notification::info(NEW_DRIVE_TEXT));
                     }
                     self.config.contents.record_recent_location();
+
+                    message_queue.push_back((Message::SyncConfig, SharedString::new()));
+                    message_queue
+                        .push_back((Message::StartTargetAnalysis, SharedString::new()));
                 }
-                message_queue.push_back((Message::SyncConfig, SharedString::new()));
-                message_queue.push_back((Message::RefreshAll, SharedString::new()));
             }
             Message::RefreshDisplayedGames => {
                 let displayed_games = self
@@ -289,7 +296,7 @@ impl State {
                 self.config.contents.record_recent_location();
 
                 message_queue.push_back((Message::SyncConfig, SharedString::new()));
-                message_queue.push_back((Message::RefreshAll, SharedString::new()));
+                message_queue.push_back((Message::StartTargetAnalysis, SharedString::new()));
             }
             Message::ConnectRecentLocation => {
                 let i: usize = payload.parse().unwrap();
@@ -314,7 +321,7 @@ impl State {
                 self.config.contents.record_recent_location();
 
                 message_queue.push_back((Message::SyncConfig, SharedString::new()));
-                message_queue.push_back((Message::RefreshAll, SharedString::new()));
+                message_queue.push_back((Message::StartTargetAnalysis, SharedString::new()));
             }
             Message::RemoveRecentLocation => {
                 let i: usize = payload.parse().unwrap();
@@ -331,6 +338,185 @@ impl State {
 
                 message_queue.push_back((Message::SyncConfig, SharedString::new()));
                 message_queue.push_back((Message::RefreshAll, SharedString::new()));
+            }
+            Message::EditStorageConfig => {
+                // Re-open the storage modal on an already-configured target: the
+                // analysis runs again (pre-filling the current paths) but the
+                // form is shown instead of being skipped.
+                self.editing_storage = true;
+                message_queue.push_back((Message::StartTargetAnalysis, SharedString::new()));
+            }
+            Message::StartTargetAnalysis => {
+                let Some(target) = Target::from_config(&self.config.contents) else {
+                    return;
+                };
+
+                let app = weak.upgrade().unwrap();
+                let ui = app.global::<UiState<'_>>();
+                ui.set_configuring_storage(true);
+                ui.set_analyzing_target(true);
+                ui.set_storage_is_ftp(matches!(target, Target::Ftp(_)));
+
+                let weak = weak.clone();
+                std::thread::spawn(move || {
+                    let res = target.analyze();
+                    *ANALYSIS_RESULT.lock().unwrap() = Some(res);
+
+                    let _ = weak.upgrade_in_event_loop(|app| {
+                        app.global::<Dispatcher<'_>>().invoke_dispatch(
+                            Message::TargetAnalysisFinished,
+                            SharedString::new(),
+                        );
+                    });
+                });
+            }
+            Message::TargetAnalysisFinished => {
+                let app = weak.upgrade().unwrap();
+                let ui = app.global::<UiState<'_>>();
+                ui.set_analyzing_target(false);
+
+                match ANALYSIS_RESULT.lock().unwrap().take() {
+                    Some(Ok(analysis)) => {
+                        if analysis.already_configured && !self.editing_storage {
+                            // Target already carries a manifest and we're just
+                            // connecting: skip the modal and scan straight away.
+                            ui.set_configuring_storage(false);
+                            message_queue.push_back((Message::RefreshAll, SharedString::new()));
+                        } else {
+                            let mut candidates: Vec<SharedString> = analysis
+                                .candidates
+                                .iter()
+                                .map(|s| SharedString::from(s.as_str()))
+                                .collect();
+                            // Sentinel appended for the "custom path" case; the
+                            // modal reveals a free-text / browse field for it.
+                            // Must match the OTHER literal in the Slint modal.
+                            candidates.push(SharedString::from("Other…"));
+                            ui.set_storage_candidates(ModelRc::from(Rc::new(VecModel::from(
+                                candidates,
+                            ))));
+                            ui.set_storage_god_dir(analysis.suggested.god_dir.as_str().into());
+                            ui.set_storage_xbe_dir(
+                                analysis.suggested.xbe_dir.as_str().into(),
+                            );
+                            ui.set_storage_xex_dir(
+                                analysis.suggested.xex_dir.as_str().into(),
+                            );
+                            // The modal stays open, now showing the form.
+                        }
+                    }
+                    Some(Err(e)) => {
+                        ui.set_configuring_storage(false);
+                        let text = slint::format!("Failed to analyze the target: {e:#}");
+                        self.notifications.push(Notification::error(text));
+                        message_queue.push_back((Message::Disconnect, SharedString::new()));
+                    }
+                    None => {}
+                }
+            }
+            Message::ConfirmStorageConfig => {
+                let Some(target) = Target::from_config(&self.config.contents) else {
+                    return;
+                };
+                self.editing_storage = false;
+
+                let app = weak.upgrade().unwrap();
+                let ui = app.global::<UiState<'_>>();
+                // UI values are in manifest form (relative for a USB drive);
+                // resolve them to absolute paths before applying.
+                let storage = StorageConfig {
+                    god_dir: target.resolve_path(ui.get_storage_god_dir().as_str()),
+                    xbe_dir: target.resolve_path(ui.get_storage_xbe_dir().as_str()),
+                    xex_dir: target.resolve_path(ui.get_storage_xex_dir().as_str()),
+                };
+                // Reuse the spinner while the folders are created and the
+                // manifest is written.
+                ui.set_analyzing_target(true);
+
+                let weak = weak.clone();
+                std::thread::spawn(move || {
+                    let res = target.apply_storage(&storage);
+
+                    let _ = weak.upgrade_in_event_loop(move |app| {
+                        let ui = app.global::<UiState<'_>>();
+                        ui.set_analyzing_target(false);
+                        ui.set_configuring_storage(false);
+
+                        let dispatcher = app.global::<Dispatcher<'_>>();
+                        match res {
+                            Ok(()) => {
+                                // Rescan the library and refresh the Toolbox
+                                // storage cards with the new paths.
+                                dispatcher
+                                    .invoke_dispatch(Message::RefreshAll, SharedString::new());
+                                dispatcher.invoke_dispatch(
+                                    Message::FetchAuroraPaths,
+                                    SharedString::new(),
+                                );
+                            }
+                            Err(e) => {
+                                dispatcher.invoke_dispatch(
+                                    Message::NotifyError,
+                                    slint::format!("Failed to save the storage configuration: {e:#}"),
+                                );
+                                dispatcher
+                                    .invoke_dispatch(Message::Disconnect, SharedString::new());
+                            }
+                        }
+                    });
+                });
+            }
+            Message::CancelStorageConfig => {
+                let app = weak.upgrade().unwrap();
+                app.global::<UiState<'_>>().set_configuring_storage(false);
+                if self.editing_storage {
+                    // Editing an already-connected target: just close the modal,
+                    // keep the current configuration and connection.
+                    self.editing_storage = false;
+                } else {
+                    // Abandoning the initial configuration abandons the
+                    // connection.
+                    message_queue.push_back((Message::Disconnect, SharedString::new()));
+                }
+            }
+            Message::PickStorageGodDir => {
+                let app = weak.upgrade().unwrap();
+                let window_handle = app.window().window_handle();
+                let start = self.config.contents.mount_point.clone();
+                if let Some(path) = dialogs::pick_storage_folder(&window_handle, &start) {
+                    match self.storage_relative(&path) {
+                        Some(form) => app
+                            .global::<UiState<'_>>()
+                            .set_storage_god_dir(SharedString::from(form.as_str())),
+                        None => self.notifications.push(Notification::error(self.off_drive_text())),
+                    }
+                }
+            }
+            Message::PickStorageXbeDir => {
+                let app = weak.upgrade().unwrap();
+                let window_handle = app.window().window_handle();
+                let start = self.config.contents.mount_point.clone();
+                if let Some(path) = dialogs::pick_storage_folder(&window_handle, &start) {
+                    match self.storage_relative(&path) {
+                        Some(form) => app
+                            .global::<UiState<'_>>()
+                            .set_storage_xbe_dir(SharedString::from(form.as_str())),
+                        None => self.notifications.push(Notification::error(self.off_drive_text())),
+                    }
+                }
+            }
+            Message::PickStorageXexDir => {
+                let app = weak.upgrade().unwrap();
+                let window_handle = app.window().window_handle();
+                let start = self.config.contents.mount_point.clone();
+                if let Some(path) = dialogs::pick_storage_folder(&window_handle, &start) {
+                    match self.storage_relative(&path) {
+                        Some(form) => app
+                            .global::<UiState<'_>>()
+                            .set_storage_xex_dir(SharedString::from(form.as_str())),
+                        None => self.notifications.push(Notification::error(self.off_drive_text())),
+                    }
+                }
             }
             Message::DownloadCovers => {
                 if !self.is_downloading_covers {
@@ -668,55 +854,53 @@ impl State {
                 });
             }
             Message::FetchAuroraPaths => {
-                let ftp_config = self.config.contents.ftp_config();
-
-                if ftp_config.host.is_empty() {
-                    let text = "No console IP configured";
-                    self.notifications.push(Notification::error(text));
-                    return;
-                }
-
                 let app = weak.upgrade().unwrap();
-                let ui_state = app.global::<UiState<'_>>();
-                ui_state.set_fetching_aurora_paths(true);
-                ui_state.set_aurora_paths_error(SharedString::new());
-
-                let weak = weak.clone();
-                std::thread::spawn(move || {
-                    let res = FtpSession::connect(&ftp_config).and_then(|mut session| {
-                        let lines = txbm_core::target::aurora_paths(&mut session)?.display_lines();
-                        session.quit();
-                        Ok(lines)
-                    });
-
-                    let _ = weak.upgrade_in_event_loop(move |app| {
+                match Target::from_config(&self.config.contents) {
+                    None => return,
+                    // Local drive: read the layout (and any Aurora install on
+                    // the drive itself) synchronously — it's local disk I/O.
+                    Some(Target::Local(mount)) => {
+                        app.global::<UiState<'_>>().set_fetching_aurora_paths(true);
+                        let status = txbm_core::target::local_storage_status(&mount);
+                        set_storage_status(&app, status);
+                    }
+                    // Console over FTP: read over the network on a thread.
+                    Some(Target::Ftp(ftp)) => {
                         let ui_state = app.global::<UiState<'_>>();
-                        ui_state.set_fetching_aurora_paths(false);
-                        ui_state.set_aurora_paths_loaded(true);
+                        ui_state.set_fetching_aurora_paths(true);
+                        ui_state.set_aurora_paths_error(SharedString::new());
 
-                        match res {
-                            Ok(lines) => {
-                                ui_state.set_aurora_paths_error(SharedString::new());
-                                ui_state.set_aurora_scan_paths(slint::ModelRc::from(
-                                    std::rc::Rc::new(slint::VecModel::from(
-                                        lines
-                                            .into_iter()
-                                            .map(SharedString::from)
-                                            .collect::<Vec<_>>(),
-                                    )),
-                                ));
-                            }
-                            Err(e) => {
-                                // Reported inside the toolbox card, not as a
-                                // toast notification.
-                                ui_state.set_aurora_scan_paths(slint::ModelRc::from(
-                                    std::rc::Rc::new(slint::VecModel::<SharedString>::default()),
-                                ));
-                                ui_state.set_aurora_paths_error(slint::format!("{e:#}"));
-                            }
-                        }
-                    });
-                });
+                        let weak = weak.clone();
+                        std::thread::spawn(move || {
+                            // One connection feeds both Toolbox cards.
+                            let res = FtpSession::connect(&ftp).map(|mut session| {
+                                let hdd = txbm_core::target::ftp_hdd_root(&mut session);
+                                let status =
+                                    txbm_core::target::ftp_storage_status(&mut session, &hdd);
+                                session.quit();
+                                status
+                            });
+
+                            let _ = weak.upgrade_in_event_loop(move |app| match res {
+                                Ok(status) => set_storage_status(&app, status),
+                                Err(e) => {
+                                    let ui_state = app.global::<UiState<'_>>();
+                                    ui_state.set_fetching_aurora_paths(false);
+                                    ui_state.set_aurora_paths_loaded(true);
+                                    ui_state.set_aurora_scan_paths(ModelRc::from(Rc::new(
+                                        VecModel::<SharedString>::default(),
+                                    )));
+                                    ui_state.set_aurora_paths_error(slint::format!("{e:#}"));
+                                    ui_state.set_app_storage_paths(ModelRc::from(Rc::new(
+                                        VecModel::<DisplayedStoragePath>::default(),
+                                    )));
+                                    ui_state.set_storage_has_uncovered(false);
+                                    ui_state.set_storage_aurora_compared(false);
+                                }
+                            });
+                        });
+                    }
+                }
             }
             Message::DeleteGame => {
                 let path = Path::new(&payload);
@@ -1046,6 +1230,29 @@ impl State {
                     return;
                 };
 
+                let path_text = dest.to_string_lossy().to_shared_string();
+                self.badavatar_pending_dest = Some(dest);
+                app.global::<UiState<'_>>()
+                    .set_badavatar_pending_path(path_text);
+            }
+            Message::CancelCreateBadAvatar => {
+                self.badavatar_pending_dest = None;
+                let app = weak.upgrade().unwrap();
+                app.global::<UiState<'_>>()
+                    .set_badavatar_pending_path(SharedString::new());
+            }
+            Message::ConfirmCreateBadAvatar => {
+                if self.is_creating_badavatar {
+                    return;
+                }
+                let Some(dest) = self.badavatar_pending_dest.take() else {
+                    return;
+                };
+
+                let app = weak.upgrade().unwrap();
+                app.global::<UiState<'_>>()
+                    .set_badavatar_pending_path(SharedString::new());
+
                 let cfg = self.config.contents.badavatar.clone();
                 self.is_creating_badavatar = true;
                 self.badavatar_cancel
@@ -1122,30 +1329,52 @@ impl State {
             }
             #[cfg(not(windows))]
             Message::SetWindowColorLight | Message::SetWindowColorDark => {}
-            #[cfg(target_os = "macos")]
-            Message::RunDotClean => {
-                let res = std::process::Command::new("dot_clean")
-                    .arg("-m")
-                    .arg(&self.config.contents.mount_point)
-                    .status();
-
-                match res {
-                    Ok(status) if status.success() => {
-                        let text = "Successfully ran dot_clean";
-                        self.notifications.push(Notification::info(text));
-                    }
-                    Ok(status) => {
-                        let text = slint::format!("dot_clean exited with {status}");
-                        self.notifications.push(Notification::error(text));
-                    }
-                    Err(e) => {
-                        let text = slint::format!("Failed to run dot_clean: {e}");
-                        self.notifications.push(Notification::error(text));
-                    }
-                }
-            }
-            #[cfg(not(target_os = "macos"))]
-            Message::RunDotClean => {}
         }
+    }
+}
+
+/// Populates the two Toolbox storage cards (Aurora scan paths + Library
+/// storage) from a resolved [`StorageStatus`]. Runs on the UI thread.
+fn set_storage_status(app: &AppWindow, status: txbm_core::target::StorageStatus) {
+    let ui = app.global::<UiState<'_>>();
+    ui.set_fetching_aurora_paths(false);
+    ui.set_aurora_paths_loaded(true);
+    ui.set_aurora_paths_error(status.aurora_error.clone().unwrap_or_default().into());
+    ui.set_aurora_scan_paths(ModelRc::from(Rc::new(VecModel::from(
+        status
+            .aurora_lines
+            .iter()
+            .map(|l| SharedString::from(l.as_str()))
+            .collect::<Vec<_>>(),
+    ))));
+
+    let paths: Vec<DisplayedStoragePath> = status
+        .paths
+        .iter()
+        .map(|p| DisplayedStoragePath {
+            label: p.label.as_str().into(),
+            path: p.path.as_str().into(),
+            aurora_path: p.aurora_path.as_str().into(),
+            covered: p.covered_by_aurora,
+        })
+        .collect();
+    ui.set_app_storage_paths(ModelRc::from(Rc::new(VecModel::from(paths))));
+    ui.set_storage_has_uncovered(status.has_uncovered);
+    ui.set_storage_aurora_compared(status.aurora_compared);
+}
+
+impl State {
+    /// Manifest-form (mount-relative for a USB drive) of a picked folder, or
+    /// `None` when it lies outside the selected drive.
+    fn storage_relative(&self, path: &Path) -> Option<String> {
+        Target::from_config(&self.config.contents).and_then(|t| t.relative_within(path))
+    }
+
+    /// Error shown when a picked storage folder is not on the selected drive.
+    fn off_drive_text(&self) -> SharedString {
+        slint::format!(
+            "That folder is not on the selected drive ({}).\nPick a folder inside it.",
+            self.config.contents.mount_point.display()
+        )
     }
 }

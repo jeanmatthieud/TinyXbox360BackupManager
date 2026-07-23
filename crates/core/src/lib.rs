@@ -27,6 +27,8 @@ pub mod util;
 pub mod xbe;
 
 /// Standard folder of GOD / official content on the console.
-pub const CONTENT_DIR: &str = "Content/0000000000000000";
-/// Folder for extracted games (default.xex / default.xbe).
-pub const GAMES_DIR: &str = "Games";
+pub const DEFAULT_GOD_DIR: &str = "Content/0000000000000000";
+/// Folder for Xbox OG games (default.xbe).
+pub const DEFAULT_XBE_DIR: &str = "Games Xbox";
+/// Folder for Xbox360 extracted games (default.xex).
+pub const DEFAULT_XEX_DIR: &str = "Games Xbox360";

@@ -1,0 +1,192 @@
+// SPDX-License-Identifier: GPL-3.0-only
+
+import { LineEdit, ComboBox, Spinner, ScrollView } from "std-widgets.slint";
+import { Modal } from "modal.slint";
+import { HorizontalLine } from "horizontal-line.slint";
+import { IconButton, IconButtonKind } from "icon-button.slint";
+import { IconSet } from "@lucide";
+import { MyPalette } from "../styling.slint";
+import { UiState } from "../ui-state.slint";
+import { Message, Dispatcher } from "../messages.slint";
+import { MyLineEdit } from "my-line-edit.slint";
+
+// One labeled location chooser: a drop-down of detected folders plus an
+// "Other…" entry that reveals a free-text / browsable field.
+component LocationField inherits VerticalLayout {
+    in property <string> title;
+    in property <string> subtitle;
+    in-out property <string> value;
+    in property <Message> pick-message;
+
+    // Sentinel value of the last drop-down entry (kept in sync with the one
+    // appended to storage-candidates in update.rs).
+    property <string> OTHER: "Other…";
+    // True while the user is entering a path not in the detected list.
+    property <bool> other-mode: false;
+
+    spacing: 6px;
+
+    Text {
+        text: title;
+        font-weight: 700;
+    }
+
+    Text {
+        text: subtitle;
+        color: MyPalette.foreground.transparentize(0.35);
+        font-size: 12px;
+        wrap: word-wrap;
+    }
+
+    ComboBox {
+        height: 34px;
+        model: UiState.storage-candidates;
+        current-value: other-mode ? OTHER : value;
+        selected(v) => {
+            if v == OTHER {
+                other-mode = true;
+            } else {
+                other-mode = false;
+                value = v;
+            }
+        }
+    }
+
+    if other-mode: HorizontalLayout {
+        spacing: 8px;
+
+        LineEdit {
+            height: 34px;
+            horizontal-stretch: 1;
+            text: value;
+            placeholder-text: UiState.storage-is-ftp ? "/Hdd1/…" : "e.g. Games or a sub-folder";
+            edited => {
+                value = self.text;
+            }
+        }
+
+        // Local drives get a system folder picker; consoles use free text.
+        if !UiState.storage-is-ftp: IconButton {
+            icon: IconSet.FolderOpen;
+            tooltip: "Browse…";
+            width: 34px;
+            height: self.width;
+            clicked => {
+                Dispatcher.dispatch(pick-message, "");
+            }
+        }
+    }
+}
+
+export component StorageConfigModal inherits Modal {
+    min-w: 620px;
+    max-w: 760px;
+    max-h: 600px;
+
+    // ── Header ───────────────────────────────────────────────────────
+    VerticalLayout {
+        padding: 20px;
+        padding-bottom: 0px;
+
+        Text {
+            text: "Content analysis";
+            font-size: 18px;
+        }
+    }
+
+    // ── Body (scrolls if needed) ─────────────────────────────────────
+    ScrollView {
+        height: min(body.preferred-height, 400px);
+
+        body := VerticalLayout {
+            padding: 20px;
+            padding-top: 12px;
+            spacing: 16px;
+
+            // Analyzing / applying.
+            if UiState.analyzing-target: HorizontalLayout {
+                spacing: 12px;
+
+                Spinner {
+                    width: 22px;
+                    height: 22px;
+                    indeterminate: true;
+                }
+
+                VerticalLayout {
+                    alignment: center;
+                    Text {
+                        text: "Looking at what is already on this location…";
+                        wrap: word-wrap;
+                    }
+                }
+            }
+
+            // Confirmation form.
+            if !UiState.analyzing-target: VerticalLayout {
+                spacing: 16px;
+
+                Text {
+                    text: "Choose where your games are stored. The defaults work for a fresh drive.";
+                    color: MyPalette.foreground.transparentize(0.35);
+                    wrap: word-wrap;
+                    height: self.preferred-height;
+                }
+
+                LocationField {
+                    title: "GOD Storage";
+                    subtitle: "Folder holding Xbox 360 games, one sub-folder per game ID.\nUsually ends with Content/0000000000000000.";
+                    value <=> UiState.storage-god-dir;
+                    pick-message: Message.PickStorageGodDir;
+                }
+
+                LocationField {
+                    title: "XEX Storage";
+                    subtitle: "Folder holding extracted Xbox 360 games (default.xex), one sub-folder each.";
+                    value <=> UiState.storage-xex-dir;
+                    pick-message: Message.PickStorageXexDir;
+                }
+
+                LocationField {
+                    title: "XBE Storage";
+                    subtitle: "Folder holding extracted Original Xbox games (default.xbe), one sub-folder each.";
+                    value <=> UiState.storage-xbe-dir;
+                    pick-message: Message.PickStorageXbeDir;
+                }
+            }
+        }
+    }
+
+    // ── Footer ───────────────────────────────────────────────────────
+    VerticalLayout {
+        height: self.min-height;
+
+        HorizontalLine { }
+
+        HorizontalLayout {
+            alignment: end;
+            padding: 10px;
+            spacing: 10px;
+
+            IconButton {
+                label: "Cancel";
+                clicked => {
+                    Dispatcher.dispatch(Message.CancelStorageConfig, "");
+                }
+            }
+
+            IconButton {
+                label: "Confirm";
+                icon: IconSet.Check;
+                kind: IconButtonKind.Primary;
+                disabled: UiState.analyzing-target
+                    || UiState.storage-god-dir == ""
+                    || UiState.storage-xbe-dir == ""
+                    || UiState.storage-xex-dir == "";
+                clicked => {
+                    Dispatcher.dispatch(Message.ConfirmStorageConfig, "");
+                }
+            }
+        }
+    }
+}

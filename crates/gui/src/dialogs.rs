@@ -4,7 +4,7 @@
 
 use rfd::FileDialog;
 use slint::WindowHandle;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
 const INPUT_DIALOG_FILTER: &[&str] = &["iso", "7z", "zip"];
@@ -13,6 +13,16 @@ pub fn pick_mount_point(window_handle: &WindowHandle) -> Option<PathBuf> {
     FileDialog::new()
         .set_parent(window_handle)
         .set_title("Select Drive/Mount Point")
+        .pick_folder()
+}
+
+/// Folder picker for a storage location, opening inside `start_dir` (the
+/// selected drive's root) so the user stays on the right drive.
+pub fn pick_storage_folder(window_handle: &WindowHandle, start_dir: &Path) -> Option<PathBuf> {
+    FileDialog::new()
+        .set_parent(window_handle)
+        .set_title("Select storage folder")
+        .set_directory(start_dir)
         .pick_folder()
 }
 

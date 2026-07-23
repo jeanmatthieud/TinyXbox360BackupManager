@@ -8,12 +8,42 @@ use crate::data_dir::DATA_DIR;
 use crate::ftp::FtpSession;
 use crate::iso_info::{self, IsoInfo, IsoKind};
 use crate::stfs::{self, StfsInfo};
-use crate::target::{AuroraPaths, Target, aurora_paths, ftp_hdd_root};
+use crate::target::{Target, ftp_hdd_root, ftp_layout, local_layout};
 use crate::util::sanitize_name;
-use crate::{CONTENT_DIR, GAMES_DIR, archive, extract, god, unity};
+use crate::{DEFAULT_GOD_DIR, DEFAULT_XBE_DIR, DEFAULT_XEX_DIR, archive, extract, god, unity};
 use anyhow::{Context, Result, bail};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
+
+/// Install destinations for a conversion, decoupled from any fixed folder
+/// layout: `god_dir` receives `<TitleID>` GOD/Arcade folders, the two
+/// `extracted_*_dir` receive `<Name>` extracted-game folders (Original Xbox /
+/// Xbox 360), and `work_dir` is scratch space for intermediate extraction
+/// (kept on the same filesystem for cheap moves).
+struct ConvertDest {
+    god_dir: PathBuf,
+    xbe_dir: PathBuf,
+    // Reserved for the future "extract Xbox 360 game" path; the destination is
+    // already wired end-to-end (config, manifest, upload) so only the
+    // extraction branch remains to be added.
+    #[allow(dead_code)]
+    xex_dir: PathBuf,
+    work_dir: PathBuf,
+}
+
+impl ConvertDest {
+    /// Standard staging layout under `root` (`Content/0000000000000000`,
+    /// `Games Xbox`, `Games Xbox360`), used for the FTP staging folder and archive
+    /// recursion.
+    fn under(root: &Path) -> Self {
+        Self {
+            god_dir: root.join(DEFAULT_GOD_DIR),
+            xbe_dir: root.join(DEFAULT_XBE_DIR),
+            xex_dir: root.join(DEFAULT_XEX_DIR),
+            work_dir: root.to_path_buf(),
+        }
+    }
+}
 
 /// Error message used to signal that a conversion was cancelled by the user
 /// (mirrors [`crate::target::SCAN_CANCELLED`]). Recognized by the GUI to show
@@ -68,7 +98,14 @@ pub fn perform(
 
     match &target {
         Target::Local(root) => {
-            convert_into(&in_path, root, cancel, &|p| update_progress(p, None))?;
+            let storage = local_layout(root).storage;
+            let dest = ConvertDest {
+                god_dir: PathBuf::from(&storage.god_dir),
+                xbe_dir: PathBuf::from(&storage.xbe_dir),
+                xex_dir: PathBuf::from(&storage.xex_dir),
+                work_dir: root.clone(),
+            };
+            convert_into(&in_path, &dest, cancel, &|p| update_progress(p, None))?;
         }
         Target::Ftp(ftp) => {
             let stem = sanitize_name(
@@ -85,16 +122,15 @@ pub fn perform(
 
             let result = (|| -> Result<()> {
                 // Local conversion in staging folder: 0-50%.
-                convert_into(&in_path, &staging, cancel, &|p| update_progress(p * 50 / 100, None))?;
+                convert_into(&in_path, &ConvertDest::under(&staging), cancel, &|p| {
+                    update_progress(p * 50 / 100, None)
+                })?;
 
-                // Direct upload to the console, to locations
-                // scanned by Aurora: 50-100%.
+                // Direct upload to the console, to its resolved storage
+                // locations: 50-100%.
                 let mut session = FtpSession::connect(ftp)?;
                 let hdd = ftp_hdd_root(&mut session);
-                let paths = aurora_paths(&mut session)
-                    .ok()
-                    .filter(|p| !p.is_empty())
-                    .unwrap_or_else(|| AuroraPaths::defaults(&hdd));
+                let storage = ftp_layout(&mut session, &hdd).storage;
 
                 let upload = (|| -> Result<()> {
                     let total = crate::util::dir_size(&staging);
@@ -108,32 +144,19 @@ pub fn perform(
                         update_progress(pct, speed);
                     };
 
-                    // GOD / content: staging/Content/0000000000000000/* →
-                    // first Content path of Aurora.
-                    let staging_content = staging.join(CONTENT_DIR);
-                    if staging_content.is_dir() {
-                        let remote = paths.install_content_dir(&hdd);
-                        for entry in std::fs::read_dir(&staging_content)?.flatten() {
-                            if is_cancelled(cancel) {
-                                bail!(CONVERSION_CANCELLED);
-                            }
-                            let name = entry.file_name().to_string_lossy().to_string();
-                            let base = sent_before;
-                            session.upload_dir(
-                                &entry.path(),
-                                &format!("{remote}/{name}"),
-                                &mut |sent, _, speed| report(base, sent, speed),
-                            )?;
-                            sent_before += crate::util::dir_size(&entry.path());
+                    // Each staging sub-tree is uploaded to its own storage
+                    // directory: GOD containers, extracted Original Xbox (XBE)
+                    // and extracted Xbox 360 (XEX) games.
+                    let uploads: [(PathBuf, &String); 3] = [
+                        (staging.join(DEFAULT_GOD_DIR), &storage.god_dir),
+                        (staging.join(DEFAULT_XBE_DIR), &storage.xbe_dir),
+                        (staging.join(DEFAULT_XEX_DIR), &storage.xex_dir),
+                    ];
+                    for (staging_sub, remote) in &uploads {
+                        if !staging_sub.is_dir() {
+                            continue;
                         }
-                    }
-
-                    // Extracted games: staging/Games/* → first
-                    // "extracted" path of Aurora (e.g. \Xbox OG).
-                    let staging_games = staging.join(GAMES_DIR);
-                    if staging_games.is_dir() {
-                        let remote = paths.install_extracted_dir(&hdd);
-                        for entry in std::fs::read_dir(&staging_games)?.flatten() {
+                        for entry in std::fs::read_dir(staging_sub)?.flatten() {
                             if is_cancelled(cancel) {
                                 bail!(CONVERSION_CANCELLED);
                             }
@@ -166,22 +189,21 @@ pub fn perform(
     Ok(())
 }
 
-/// Converts/extracts `in_path` to `root`, a local folder organized like
-/// an Xbox drive (Content/0000000000000000 + Games).
+/// Converts/extracts `in_path` into `dest`'s storage folders.
 fn convert_into(
     in_path: &Path,
-    root: &Path,
+    dest: &ConvertDest,
     cancel: &AtomicBool,
     update_progress: &dyn Fn(u32),
 ) -> Result<()> {
     let info = match inspect_input(in_path)? {
         InputKind::StfsPackage(package) => {
-            install_stfs_package(&package, root, cancel, &mut |done, total| {
+            install_stfs_package(&package, &dest.god_dir, cancel, &mut |done, total| {
                 update_progress((done * 100 / total.max(1)) as u32);
             })?;
             return Ok(());
         }
-        InputKind::Archive => return install_archive(in_path, root, cancel, update_progress),
+        InputKind::Archive => return install_archive(in_path, dest, cancel, update_progress),
         InputKind::Iso(info) => info,
     };
 
@@ -195,10 +217,10 @@ fn convert_into(
                     .next()
                     .map(|t| t.name)
             });
-            let content_dir = root.join(CONTENT_DIR);
-            std::fs::create_dir_all(&content_dir)?;
+            let content_dir = &dest.god_dir;
+            std::fs::create_dir_all(content_dir)?;
 
-            god::convert_to_god(in_path, &content_dir, title.as_deref(), cancel, &mut |done, total| {
+            god::convert_to_god(in_path, content_dir, title.as_deref(), cancel, &mut |done, total| {
                 update_progress((done * 100 / total.max(1)) as u32);
             })?;
         }
@@ -215,18 +237,18 @@ fn convert_into(
                 Some(tid) => crate::game::og_folder_name(&name, tid),
                 None => name,
             };
-            let dest = root.join(GAMES_DIR).join(&name);
-            if dest.exists() {
-                bail!("the folder {} already exists", dest.display());
+            let game_dir = dest.xbe_dir.join(&name);
+            if game_dir.exists() {
+                bail!("the folder {} already exists", game_dir.display());
             }
 
-            let res = extract::extract_iso(in_path, &dest, cancel, &mut |done, total| {
+            let res = extract::extract_iso(in_path, &game_dir, cancel, &mut |done, total| {
                 update_progress((done * 100 / total.max(1)) as u32);
             });
             // On cancellation, drop the partially-extracted folder (it is a
             // fresh folder — we bailed above if it already existed).
             if res.is_err() && is_cancelled(cancel) {
-                let _ = std::fs::remove_dir_all(&dest);
+                let _ = std::fs::remove_dir_all(&game_dir);
             }
             res?;
         }
@@ -237,7 +259,7 @@ fn convert_into(
                     .and_then(|s| s.to_str())
                     .unwrap_or("disc"),
             );
-            let tmp = root.join(".txbm-tmp").join(&stem);
+            let tmp = dest.work_dir.join(".txbm-tmp").join(&stem);
             if tmp.exists() {
                 std::fs::remove_dir_all(&tmp)?;
             }
@@ -255,8 +277,8 @@ fn convert_into(
                          in this image (is it really an install disc / DLC?)",
                     )?;
 
-                let content_target = root.join(CONTENT_DIR);
-                std::fs::create_dir_all(&content_target)?;
+                let content_target = &dest.god_dir;
+                std::fs::create_dir_all(content_target)?;
                 for entry in std::fs::read_dir(&extracted_content)?.flatten() {
                     let name = entry.file_name().to_string_lossy().to_string();
                     merge_move(&entry.path(), &content_target.join(&name))?;
@@ -264,7 +286,7 @@ fn convert_into(
                 Ok(())
             })();
 
-            let _ = std::fs::remove_dir_all(root.join(".txbm-tmp"));
+            let _ = std::fs::remove_dir_all(dest.work_dir.join(".txbm-tmp"));
             result?;
         }
         IsoKind::BundledContent => {
@@ -274,7 +296,7 @@ fn convert_into(
                     .and_then(|s| s.to_str())
                     .unwrap_or("disc"),
             );
-            let tmp = root.join(".txbm-tmp").join(&stem);
+            let tmp = dest.work_dir.join(".txbm-tmp").join(&stem);
             if tmp.exists() {
                 std::fs::remove_dir_all(&tmp)?;
             }
@@ -300,12 +322,14 @@ fn convert_into(
                 }
 
                 // Installation: 80-100%.
-                install_packages(&packages, root, cancel, &|p| update_progress(80 + p * 20 / 100))?;
+                install_packages(&packages, &dest.god_dir, cancel, &|p| {
+                    update_progress(80 + p * 20 / 100)
+                })?;
                 update_progress(100);
                 Ok(())
             })();
 
-            let _ = std::fs::remove_dir_all(root.join(".txbm-tmp"));
+            let _ = std::fs::remove_dir_all(dest.work_dir.join(".txbm-tmp"));
             result?;
         }
     }
@@ -319,7 +343,7 @@ fn convert_into(
 /// `update_progress` receives (copied bytes, total bytes).
 fn install_stfs_package(
     info: &StfsInfo,
-    root: &Path,
+    god_dir: &Path,
     cancel: &AtomicBool,
     update_progress: &mut dyn FnMut(u64, u64),
 ) -> Result<()> {
@@ -351,8 +375,7 @@ fn install_stfs_package(
         file_name.chars().take(crate::game::FATX_MAX_NAME).collect()
     };
 
-    let dest_dir = root
-        .join(CONTENT_DIR)
+    let dest_dir = god_dir
         .join(&info.title_id)
         .join(info.content_type_dir());
     std::fs::create_dir_all(&dest_dir)?;
@@ -390,7 +413,7 @@ fn install_stfs_package(
 /// update STFS packages, in which case an Arcade package is required.
 fn install_archive(
     in_path: &Path,
-    root: &Path,
+    dest: &ConvertDest,
     cancel: &AtomicBool,
     update_progress: &dyn Fn(u32),
 ) -> Result<()> {
@@ -418,7 +441,7 @@ fn install_archive(
         // (0-50% extraction already done, conversion runs on 50-100%). This
         // saves the user from manually unpacking the ISO first.
         if let Some(iso) = single_iso_in(&tmp)? {
-            return convert_into(&iso, root, cancel, &|p| update_progress(50 + p * 50 / 100));
+            return convert_into(&iso, dest, cancel, &|p| update_progress(50 + p * 50 / 100));
         }
 
         // Otherwise: a set of XBLA/DLC/title-update packages.
@@ -434,7 +457,9 @@ fn install_archive(
         }
 
         // Installation: 50-100%, weighted by package size.
-        install_packages(&packages, root, cancel, &|p| update_progress(50 + p * 50 / 100))?;
+        install_packages(&packages, &dest.god_dir, cancel, &|p| {
+            update_progress(50 + p * 50 / 100)
+        })?;
         update_progress(100);
         Ok(())
     })();
@@ -520,7 +545,7 @@ fn find_installable_packages_excluding(dir: &Path, exclude: &[&str]) -> Result<V
 /// folder), weighting `update_progress` (0-100) by package size.
 fn install_packages(
     packages: &[StfsInfo],
-    root: &Path,
+    god_dir: &Path,
     cancel: &AtomicBool,
     update_progress: &dyn Fn(u32),
 ) -> Result<()> {
@@ -530,7 +555,7 @@ fn install_packages(
         .sum();
     let mut done_before: u64 = 0;
     for package in packages {
-        install_stfs_package(package, root, cancel, &mut |done, _| {
+        install_stfs_package(package, god_dir, cancel, &mut |done, _| {
             update_progress(((done_before + done) * 100 / total.max(1)) as u32);
         })?;
         done_before += std::fs::metadata(&package.path).map(|m| m.len()).unwrap_or(0);
@@ -625,9 +650,9 @@ mod tests {
         zip.finish().unwrap();
 
         let root = dir.join("root");
-        convert_into(&zip_path, &root, &AtomicBool::new(false), &|_| {}).unwrap();
+        convert_into(&zip_path, &ConvertDest::under(&root), &AtomicBool::new(false), &|_| {}).unwrap();
 
-        let title_dir = root.join(CONTENT_DIR).join("58410889");
+        let title_dir = root.join(DEFAULT_GOD_DIR).join("58410889");
         assert!(title_dir.join("000D0000/ArcadeGamePackage").is_file());
         assert!(title_dir.join("00000002/DlcPackage").is_file());
 
@@ -649,9 +674,9 @@ mod tests {
         std::fs::write(&package, stfs_package(stfs::CONTENT_TYPE_ARCADE, 0x584108A1)).unwrap();
 
         let root = dir.join("root");
-        convert_into(&package, &root, &AtomicBool::new(false), &|_| {}).unwrap();
+        convert_into(&package, &ConvertDest::under(&root), &AtomicBool::new(false), &|_| {}).unwrap();
         assert!(
-            root.join(CONTENT_DIR)
+            root.join(DEFAULT_GOD_DIR)
                 .join("584108A1/000D0000/SomeArcadeGame")
                 .is_file()
         );
@@ -676,7 +701,7 @@ mod tests {
         zip.finish().unwrap();
 
         let root = dir.join("root");
-        let err = convert_into(&zip_path, &root, &AtomicBool::new(false), &|_| {}).unwrap_err();
+        let err = convert_into(&zip_path, &ConvertDest::under(&root), &AtomicBool::new(false), &|_| {}).unwrap_err();
         assert!(err.to_string().contains("no Arcade package"));
 
         std::fs::remove_dir_all(&dir).unwrap();
