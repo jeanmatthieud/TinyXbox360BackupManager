@@ -140,6 +140,10 @@ export component BadAvatarCard inherits ToolboxCard {
         icon: IconSet.Hammer;
         disabled: UiState.creating-badavatar;
         text: !UiState.creating-badavatar ? "Create the BadAvatar USB key" : "Working… see the status bar below.";
+        // Opens the in-app removable-drive picker. Hidden escape hatch: a long
+        // press falls back to the native folder picker (any arbitrary path).
+        long-press-duration: 1500ms;
         clicked => Dispatcher.dispatch(Message.CreateBadAvatar, "");
+        long-pressed => Dispatcher.dispatch(Message.PickBadAvatarMountPoint, "");
     }
 }

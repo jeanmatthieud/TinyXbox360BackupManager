@@ -113,6 +113,9 @@ export global UiState {
     // a local drive, where storage paths are only listed.
     in-out property <bool> storage-aurora-compared: false;
 
+    // True while the BadAvatar USB-key drive-picker modal is shown.
+    in-out property <bool> selecting-badavatar-target: false;
+
     // BadAvatar USB-key creation (Toolbox), independent of the target.
     in-out property <DisplayedBadAvatarConfig> badavatar;
     // True while a BadAvatar key is being created.

@@ -1,0 +1,60 @@
+// SPDX-License-Identifier: GPL-3.0-only
+
+import { Modal } from "modal.slint";
+import { HorizontalLine } from "horizontal-line.slint";
+import { IconButton, IconButtonKind } from "icon-button.slint";
+import { RemovableDrivePicker } from "removable-drive-picker.slint";
+import { UiState } from "../ui-state.slint";
+import { Message, Dispatcher } from "../messages.slint";
+
+// Removable-drive chooser for the BadAvatar USB key, reusing the same picker as
+// the target-selection modal. Confirming hands the chosen mount point back to
+// the BadAvatar flow (which then shows the overwrite-confirmation modal).
+export component BadAvatarTargetModal inherits Modal {
+    max-h: 600px;
+
+    // Index into UiState.removable-drives, -1 until the user picks one.
+    property <int> selected-drive: -1;
+
+    VerticalLayout {
+        padding: 20px;
+        spacing: 15px;
+
+        RemovableDrivePicker {
+            title: "Select the USB key for BadAvatar";
+            selected-drive <=> root.selected-drive;
+        }
+    }
+
+    VerticalLayout {
+        height: self.min-height;
+
+        HorizontalLine { }
+
+        HorizontalLayout {
+            padding: 10px;
+            spacing: 8px;
+
+            IconButton {
+                label: "Close";
+                clicked => {
+                    UiState.selecting-badavatar-target = false;
+                }
+            }
+
+            Rectangle {
+                horizontal-stretch: 1;
+            }
+
+            IconButton {
+                label: "Next";
+                kind: IconButtonKind.Primary;
+                disabled: selected-drive < 0;
+                clicked => {
+                    UiState.selecting-badavatar-target = false;
+                    Dispatcher.dispatch(Message.SelectBadAvatarDrive, UiState.removable-drives[selected-drive].mount-point);
+                }
+            }
+        }
+    }
+}

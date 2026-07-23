@@ -3,8 +3,8 @@
 import { Modal } from "modal.slint";
 import { HorizontalLine } from "horizontal-line.slint";
 import { IconButton, IconButtonKind } from "icon-button.slint";
-import { TooltipArea } from "tooltip-area.slint";
-import { Icon, IconSet, IconDisplay } from "@lucide";
+import { SelectableCard, RemovableDrivePicker } from "removable-drive-picker.slint";
+import { IconSet, IconDisplay } from "@lucide";
 import { MyPalette } from "../styling.slint";
 import { UiState } from "../ui-state.slint";
 import { Message, Dispatcher } from "../messages.slint";
@@ -15,55 +15,6 @@ enum TargetChoice {
     usb,
     network,
     history,
-}
-
-// A large, selectable storage-type tile (icon + title + subtitle). Selecting it
-// (a click) does not advance on its own: it lights up and enables "Next".
-// Inherits TooltipArea to reuse its click / long-press handling.
-component SelectableCard inherits TooltipArea {
-    in property <Icon> icon;
-    in property <string> title;
-    in property <string> subtitle;
-    in property <bool> selected: false;
-
-    height: 62px;
-    border-radius: 10px;
-    border-width: selected ? 2px : 1px;
-    border-color: selected ? MyPalette.accent-background : MyPalette.border;
-    background: selected ? MyPalette.selection-background
-        : (self.has-hover ? MyPalette.alternate-background : MyPalette.background);
-
-    HorizontalLayout {
-        padding: 14px;
-        spacing: 14px;
-        cross-axis-alignment: center;
-
-        IconDisplay {
-            icon: root.icon;
-            stroke: MyPalette.foreground;
-            size: 26px;
-        }
-
-        VerticalLayout {
-            alignment: center;
-            spacing: 2px;
-            horizontal-stretch: 1;
-
-            Text {
-                text: title;
-                font-size: 15px;
-                font-weight: 600;
-                overflow: elide;
-            }
-
-            Text {
-                text: subtitle;
-                font-size: 12px;
-                color: MyPalette.foreground.transparentize(0.4);
-                overflow: elide;
-            }
-        }
-    }
 }
 
 // Discreet outline delete button: red border + red icon over the plain
@@ -215,64 +166,8 @@ export component SelectTargetModal inherits Modal {
         }
 
         // ---- Step 2: pick one of the detected removable drives -------------
-        if picking-drives: VerticalLayout {
-            spacing: 10px;
-
-            HorizontalLayout {
-                spacing: 8px;
-                padding-bottom: 10px;
-
-                VerticalLayout {
-                    alignment: center;
-                    horizontal-stretch: 1;
-
-                    Text {
-                        text: "Select a removable drive";
-                        font-size: 18px;
-                        overflow: elide;
-                    }
-                }
-
-                IconButton {
-                    icon: IconSet.RefreshCw;
-                    tooltip: "Refresh";
-                    width: 30px;
-                    clicked => {
-                        selected-drive = -1;
-                        Dispatcher.dispatch(Message.RefreshRemovableDrives, "");
-                    }
-                }
-            }
-
-            if UiState.removable-drives.length == 0: VerticalLayout {
-                spacing: 6px;
-
-                Text {
-                    text: "No removable drive detected.";
-                    color: MyPalette.foreground.transparentize(0.3);
-                }
-
-                Text {
-                    text: "Plug in a USB stick or external disk, then tap Refresh.";
-                    color: MyPalette.foreground.transparentize(0.5);
-                    font-size: 12px;
-                    wrap: word-wrap;
-                }
-            }
-
-            for drive[i] in UiState.removable-drives: SelectableCard {
-                icon: drive.is-removable ? IconSet.Usb : IconSet.HardDrive;
-                title: drive.name;
-                subtitle: drive.is-fat32
-                    ? (drive.size-text == "" ? "FAT32" : drive.size-text + "  ·  FAT32")
-                    : drive.fs-label + " — not supported (FAT32 required)";
-                selected: selected-drive == i;
-                // Only FAT32 drives are usable by the console.
-                disabled: !drive.is-fat32;
-                clicked => {
-                    selected-drive = i;
-                }
-            }
+        if picking-drives: RemovableDrivePicker {
+            selected-drive <=> root.selected-drive;
         }
     }
 

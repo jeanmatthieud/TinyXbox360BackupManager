@@ -1272,6 +1272,36 @@ impl State {
                     return;
                 }
 
+                // Open the in-app removable-drive picker (same one used for
+                // target selection), pre-populated with the detected drives.
+                let app = weak.upgrade().unwrap();
+                let ui_state = app.global::<UiState<'_>>();
+                ui_state.set_removable_drives(ModelRc::from(Rc::new(VecModel::from(
+                    crate::config::removable_drives(),
+                ))));
+                ui_state.set_selecting_badavatar_target(true);
+            }
+            Message::SelectBadAvatarDrive => {
+                // Payload: the mount point picked in the drive-picker modal.
+                let dest = PathBuf::from(payload.as_str());
+                if !dest.is_dir() {
+                    self.notifications
+                        .push(Notification::error("This drive is no longer available"));
+                    return;
+                }
+                let path_text = dest.to_string_lossy().to_shared_string();
+                self.badavatar_pending_dest = Some(dest);
+                let app = weak.upgrade().unwrap();
+                app.global::<UiState<'_>>()
+                    .set_badavatar_pending_path(path_text);
+            }
+            Message::PickBadAvatarMountPoint => {
+                // Hidden escape hatch (long press): pick any folder with the
+                // native OS picker instead of a detected removable drive.
+                if self.is_creating_badavatar {
+                    return;
+                }
+
                 let app = weak.upgrade().unwrap();
                 let window_handle = app.window().window_handle();
                 let Some(dest) = dialogs::pick_mount_point(&window_handle) else {

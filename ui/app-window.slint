@@ -23,6 +23,7 @@ import { Tooltip } from "tooltip.slint";
 import { ToolboxPage } from "toolbox-page.slint";
 import { ConversionQueuePage } from "conversion-queue.slint";
 import { SelectTargetModal } from "components/select-target-modal.slint";
+import { BadAvatarTargetModal } from "components/badavatar-target-modal.slint";
 import { FtpTargetModal } from "components/ftp-target-modal.slint";
 import { AuroraHelpModal } from "components/aurora-help-modal.slint";
 import { StorageConfigModal } from "components/storage-config-modal.slint";
@@ -119,6 +120,7 @@ export component AppWindow inherits Window {
     if UiState.showing-title-updates: TitleUpdatesModal { }
 
     if UiState.selecting-target: SelectTargetModal { }
+    if UiState.selecting-badavatar-target: BadAvatarTargetModal { }
     if UiState.editing-ftp-target: FtpTargetModal { }
     if UiState.showing-aurora-help: AuroraHelpModal { }
     if UiState.configuring-storage: StorageConfigModal { }
