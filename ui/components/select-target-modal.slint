@@ -3,73 +3,171 @@
 import { Modal } from "modal.slint";
 import { HorizontalLine } from "horizontal-line.slint";
 import { IconButton, IconButtonKind } from "icon-button.slint";
+import { SelectableCard, RemovableDrivePicker } from "removable-drive-picker.slint";
 import { IconSet, IconDisplay } from "@lucide";
 import { MyPalette } from "../styling.slint";
 import { UiState } from "../ui-state.slint";
 import { Message, Dispatcher } from "../messages.slint";
 
+// What the user has currently selected on the first step.
+enum TargetChoice {
+    none,
+    usb,
+    network,
+    history,
+}
+
+// Discreet outline delete button: red border + red icon over the plain
+// background, tinted red on hover.
+component OutlineDeleteButton inherits Rectangle {
+    callback clicked;
+
+    width: 24px;
+    height: 24px;
+    border-radius: 8px;
+    border-width: 1px;
+    border-color: MyPalette.destructive;
+    background: dta.has-hover ? MyPalette.destructive.transparentize(0.85) : MyPalette.background;
+
+    HorizontalLayout {
+        alignment: center;
+        VerticalLayout {
+            alignment: center;
+            IconDisplay {
+                icon: IconSet.Trash2;
+                stroke: MyPalette.destructive;
+                size: 16px;
+            }
+        }
+    }
+
+    dta := TouchArea {
+        clicked => {
+            root.clicked();
+        }
+    }
+}
+
 export component SelectTargetModal inherits Modal {
+    max-h: 600px;
+
+    // Transient sub-view: false shows the target choices, true shows the
+    // detected removable drives. Reset for free because the modal component is
+    // recreated each time it opens.
+    property <bool> picking-drives: false;
+    // Current selection on the first step, and the picked history index.
+    property <TargetChoice> choice: TargetChoice.none;
+    property <int> history-index: -1;
+    // Index of the drive picked on step 2 (into removable-drives), -1 until the
+    // user makes an explicit choice.
+    property <int> selected-drive: -1;
+
     VerticalLayout {
         padding: 20px;
         spacing: 15px;
 
-        Text {
-            text: "Where is your game library?";
-            font-size: 18px;
-        }
+        // ---- Step 1: pick a storage type or a history entry ----------------
+        if !picking-drives: VerticalLayout {
+            spacing: 10px;
 
-        IconButton {
-            icon: IconSet.HardDrive;
-            label: "Local drive / folder (USB FAT32)";
-            clicked => {
-                UiState.selecting-target = false;
-                Dispatcher.dispatch(Message.PickMountPoint, "");
-            }
-        }
-
-        IconButton {
-            icon: IconSet.MonitorUp;
-            label: "Console over FTP (Aurora)";
-            clicked => {
-                UiState.selecting-target = false;
-                UiState.editing-ftp-target = true;
-            }
-        }
-
-        if UiState.recent-locations.length > 0: HorizontalLine { }
-
-        for loc[i] in UiState.recent-locations: HorizontalLayout {
-            spacing: 8px;
-
-            VerticalLayout {
-                alignment: center;
-                horizontal-stretch: 1;
-
-                Text {
-                    text: loc.name;
-                    overflow: elide;
-                }
+            Text {
+                text: "Where is your game library?";
+                font-size: 18px;
             }
 
-            IconButton {
-                icon: loc.is-ftp ? IconSet.MonitorUp : IconSet.HardDrive;
-                tooltip: "Connect";
-                width: 30px;
+            Rectangle { } // Spacing
+
+            SelectableCard {
+                icon: IconSet.Usb;
+                title: "Local Removable USB Drive";
+                subtitle: "Plug in your storage to scan games.";
+                selected: choice == TargetChoice.usb;
+                // Hidden debug escape hatch: browse to any folder (e.g. an
+                // internal path) instead of a removable device.
+                long-press-duration: 1500ms;
                 clicked => {
+                    choice = TargetChoice.usb;
+                }
+                long-pressed => {
                     UiState.selecting-target = false;
-                    Dispatcher.dispatch(Message.ConnectRecentLocation, i);
+                    Dispatcher.dispatch(Message.PickMountPoint, "");
                 }
             }
 
-            IconButton {
-                icon: IconSet.Trash;
-                kind: IconButtonKind.Destructive;
-                tooltip: "Remove from history";
-                width: 30px;
+            SelectableCard {
+                icon: IconSet.Network;
+                title: "Remote Xbox 360 over Network (WiFi / Ethernet)";
+                subtitle: "Access shared folders or FTP on your console.";
+                selected: choice == TargetChoice.network;
                 clicked => {
-                    Dispatcher.dispatch(Message.RemoveRecentLocation, i);
+                    choice = TargetChoice.network;
                 }
             }
+
+            if UiState.recent-locations.length > 0: Text {
+                text: "Your history:";
+                color: MyPalette.foreground.transparentize(0.3);
+                font-size: 13px;
+            }
+
+            for loc[i] in UiState.recent-locations: Rectangle {
+                property <bool> selected: choice == TargetChoice.history && history-index == i;
+
+                height: 40px;
+                border-radius: 8px;
+                border-width: selected ? 2px : 1px;
+                border-color: selected ? MyPalette.accent-background : MyPalette.border;
+                background: selected ? MyPalette.selection-background
+                    : (row-ta.has-hover ? MyPalette.alternate-background : transparent);
+
+                // Declared before the content so the delete button (on top)
+                // still receives its own clicks, while clicks on the icon/name
+                // fall through to here and select the row.
+                row-ta := TouchArea {
+                    clicked => {
+                        choice = TargetChoice.history;
+                        history-index = i;
+                    }
+                }
+
+                HorizontalLayout {
+                    padding-left: 10px;
+                    padding-right: 8px;
+                    spacing: 10px;
+
+                    VerticalLayout {
+                        alignment: center;
+                        IconDisplay {
+                            icon: loc.is-ftp ? IconSet.Network : IconSet.Usb;
+                            stroke: MyPalette.foreground;
+                            size: 18px;
+                        }
+                    }
+
+                    VerticalLayout {
+                        alignment: center;
+                        horizontal-stretch: 1;
+                        Text {
+                            text: loc.name;
+                            overflow: elide;
+                        }
+                    }
+
+                    VerticalLayout {
+                        alignment: center;
+                        OutlineDeleteButton {
+                            clicked => {
+                                Dispatcher.dispatch(Message.RemoveRecentLocation, i);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // ---- Step 2: pick one of the detected removable drives -------------
+        if picking-drives: RemovableDrivePicker {
+            selected-drive <=> root.selected-drive;
         }
     }
 
@@ -79,13 +177,55 @@ export component SelectTargetModal inherits Modal {
         HorizontalLine { }
 
         HorizontalLayout {
-            alignment: end;
             padding: 10px;
+            spacing: 8px;
 
-            IconButton {
-                label: "Cancel";
+            // Step 1 dismisses the modal; step 2 goes back to the choices.
+            if !picking-drives: IconButton {
+                label: "Close";
                 clicked => {
                     UiState.selecting-target = false;
+                }
+            }
+            if picking-drives: IconButton {
+                label: "Previous";
+                clicked => {
+                    picking-drives = false;
+                }
+            }
+
+            Rectangle {
+                horizontal-stretch: 1;
+            }
+
+            // Step 1: act on the current selection.
+            if !picking-drives: IconButton {
+                label: "Next";
+                kind: IconButtonKind.Primary;
+                disabled: choice == TargetChoice.none;
+                clicked => {
+                    if choice == TargetChoice.usb {
+                        selected-drive = -1;
+                        Dispatcher.dispatch(Message.RefreshRemovableDrives, "");
+                        picking-drives = true;
+                    } else if choice == TargetChoice.network {
+                        UiState.selecting-target = false;
+                        UiState.editing-ftp-target = true;
+                    } else if choice == TargetChoice.history {
+                        UiState.selecting-target = false;
+                        Dispatcher.dispatch(Message.ConnectRecentLocation, history-index);
+                    }
+                }
+            }
+
+            // Step 2: confirm the selected drive.
+            if picking-drives: IconButton {
+                label: "Next";
+                kind: IconButtonKind.Primary;
+                disabled: selected-drive < 0;
+                clicked => {
+                    UiState.selecting-target = false;
+                    Dispatcher.dispatch(Message.SelectRemovableDrive, UiState.removable-drives[selected-drive].mount-point);
                 }
             }
         }

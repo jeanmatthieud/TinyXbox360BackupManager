@@ -11,6 +11,7 @@ pub mod convert;
 pub mod covers;
 pub mod data_dir;
 pub mod drive_info;
+pub mod drives;
 pub mod extract;
 pub mod ftp;
 pub mod game;

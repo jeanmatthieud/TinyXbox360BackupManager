@@ -1,0 +1,19 @@
+// SPDX-FileCopyrightText: 2026 Manuel Quarneti <mq1@ik.me> (TinyWiiBackupManager)
+// SPDX-FileContributor: Modified by Jean-Matthieu Dechriste (TinyXbox360BackupManager)
+// SPDX-License-Identifier: GPL-3.0-only
+
+import { Card } from "card.slint";
+
+// Outer shell shared by every Toolbox card: a full-width Card whose body is a
+// padded, evenly-spaced vertical stack. Drop the card content (header, lines,
+// body, action rows) straight in as children.
+export component ToolboxCard inherits Card {
+    width: 100%;
+
+    VerticalLayout {
+        padding: 10px;
+        spacing: 10px;
+
+        @children
+    }
+}

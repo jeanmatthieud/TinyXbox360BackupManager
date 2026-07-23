@@ -4,10 +4,10 @@
 
 import { ShowX360Og } from "show-x360-og.slint";
 import { IconButton, IconButtonKind } from "icon-button.slint";
-import { IconSet, IconDisplay } from "@lucide";
+import { IconSet } from "@lucide";
 import { SortGamesAndHomebrewApps } from "sort-games-and-homebrew-apps.slint";
 import { ViewAs } from "view-as.slint";
-import { MyPalette } from "../styling.slint";
+import { PageTitle } from "page-header.slint";
 import { UiState } from "../ui-state.slint";
 import { Message, Dispatcher } from "../messages.slint";
 
@@ -15,20 +15,8 @@ export component GamesToolbar inherits HorizontalLayout {
     alignment: LayoutAlignment.space-between;
     height: 38px;
 
-    HorizontalLayout {
-        spacing: 5px;
-        cross-axis-alignment: CrossAxisAlignment.center;
-
-        IconDisplay {
-            icon: IconSet.ChevronRight;
-            size: 18px;
-            stroke: MyPalette.foreground;
-        }
-
-        Text {
-            text: "Games";
-            font-size: 18px;
-        }
+    PageTitle {
+        title: "Games";
     }
 
     if !UiState.config.target.is-empty: HorizontalLayout {

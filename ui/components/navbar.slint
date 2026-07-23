@@ -66,8 +66,9 @@ export component Navbar inherits VerticalLayout {
         }
 
         if UiState.config.target.is-empty: NavbarButton {
-            icon: IconSet.HardDrive;
-            tooltip: "Select a drive or console";
+            icon: IconSet.Zap;
+            ping: true;
+            tooltip: "Select a target";
             clicked => {
                 UiState.selecting-target = true;
             }

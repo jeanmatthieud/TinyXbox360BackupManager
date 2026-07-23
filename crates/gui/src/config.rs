@@ -2,8 +2,12 @@
 // SPDX-FileContributor: Modified by Jean-Matthieu Dechriste (TinyXbox360BackupManager)
 // SPDX-License-Identifier: GPL-3.0-only
 
-use crate::{DisplayedBadAvatarConfig, DisplayedConfig, DisplayedRecentLocation, TargetKind};
-use slint::ToSharedString;
+use crate::{
+    DisplayedBadAvatarConfig, DisplayedConfig, DisplayedRecentLocation, DisplayedRemovableDrive,
+    TargetKind,
+};
+use crate::util::GIB;
+use slint::{SharedString, ToSharedString};
 use txbm_core::{
     badavatar::UrlField,
     config::{Config, TargetKind as CoreTargetKind},
@@ -41,6 +45,33 @@ pub fn recent_locations(config: &Config) -> Vec<DisplayedRecentLocation> {
         .collect()
 }
 
+/// Builds the model backing `UiState.removable-drives` from the currently
+/// attached drives (queried live, not from the config).
+pub fn removable_drives() -> Vec<DisplayedRemovableDrive> {
+    txbm_core::drives::list_removable_drives()
+        .into_iter()
+        .map(|d| {
+            let size_text = if d.total_bytes > 0 {
+                SharedString::from(format!(
+                    "{:.1} GiB free of {:.1} GiB",
+                    d.available_bytes as f32 / GIB,
+                    d.total_bytes as f32 / GIB
+                ))
+            } else {
+                SharedString::new()
+            };
+            DisplayedRemovableDrive {
+                name: d.name.to_shared_string(),
+                mount_point: d.mount_point.to_string_lossy().to_shared_string(),
+                size_text,
+                is_removable: d.is_removable,
+                fs_label: d.fs_label.to_shared_string(),
+                is_fat32: d.is_fat32,
+            }
+        })
+        .collect()
+}
+
 impl From<txbm_core::config::TargetKind> for TargetKind {
     fn from(kind: txbm_core::config::TargetKind) -> Self {
         match kind {
@@ -66,6 +97,7 @@ impl From<&Config> for DisplayedConfig {
                 .to_string_lossy()
                 .to_shared_string(),
             remove_sources_games: config.contents.remove_sources_games.to_shared_string(),
+            xbox360_format: config.contents.xbox360_format.to_shared_string(),
             sort_by: config.contents.sort_by.to_shared_string(),
             view_as: config.contents.view_as.to_shared_string(),
             theme_preference: config.contents.theme_preference.to_shared_string(),

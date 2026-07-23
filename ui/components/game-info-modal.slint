@@ -177,12 +177,20 @@ export component GameInfoModal inherits Modal {
 
             VerticalLayout {
                 alignment: center;
-                padding-left: 15px;
+                padding: 10px;
 
-                // if !UiState.current-game.id.is-empty: Link {
-                //     uri: "https://www.xboxunity.net/#/search/\{UiState.current-game.id}";
-                //     label: "XboxUnity page";
-                // }
+                IconButton {
+                    label: "Delete";
+                    icon: IconSet.Trash;
+                    kind: IconButtonKind.Destructive;
+                    clicked => {
+                        // Open the delete-confirmation modal for this game and
+                        // close the info modal so they don't stack.
+                        UiState.game-to-delete = UiState.current-game;
+                        UiState.current-game = { };
+                        UiState.showing-title-updates = false;
+                    }
+                }
             }
 
             HorizontalLayout {

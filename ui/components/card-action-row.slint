@@ -1,0 +1,39 @@
+// SPDX-FileCopyrightText: 2026 Manuel Quarneti <mq1@ik.me> (TinyWiiBackupManager)
+// SPDX-FileContributor: Modified by Jean-Matthieu Dechriste (TinyXbox360BackupManager)
+// SPDX-License-Identifier: GPL-3.0-only
+
+import { Icon } from "@lucide";
+import { IconButton } from "icon-button.slint";
+
+// A footer action: a square IconButton followed by its descriptive label,
+// vertically centred on the button.
+export component CardActionRow inherits HorizontalLayout {
+    in property <Icon> icon;
+    in property <string> text;
+    in property <bool> disabled;
+    // Optional long-press on the button; 0ms leaves the default behaviour.
+    in property <duration> long-press-duration: 0ms;
+
+    callback clicked();
+    callback long-pressed();
+
+    spacing: 10px;
+
+    IconButton {
+        icon: root.icon;
+        width: self.height;
+        disabled: root.disabled;
+        long-press-duration: root.long-press-duration;
+        clicked => {
+            root.clicked();
+        }
+        long-pressed => {
+            root.long-pressed();
+        }
+    }
+
+    Text {
+        vertical-alignment: center;
+        text: root.text;
+    }
+}

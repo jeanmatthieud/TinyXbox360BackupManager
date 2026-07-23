@@ -1,0 +1,127 @@
+// SPDX-License-Identifier: GPL-3.0-only
+
+import { IconButton } from "icon-button.slint";
+import { TooltipArea } from "tooltip-area.slint";
+import { Icon, IconSet, IconDisplay } from "@lucide";
+import { MyPalette } from "../styling.slint";
+import { UiState } from "../ui-state.slint";
+import { Message, Dispatcher } from "../messages.slint";
+
+// A large, selectable tile (icon + title + subtitle). Selecting it (a click)
+// does not act on its own: it lights up so the surrounding view can enable a
+// confirm action. Inherits TooltipArea to reuse its click / long-press handling.
+export component SelectableCard inherits TooltipArea {
+    in property <Icon> icon;
+    in property <string> title;
+    in property <string> subtitle;
+    in property <bool> selected: false;
+
+    height: 62px;
+    border-radius: 10px;
+    border-width: selected ? 2px : 1px;
+    border-color: selected ? MyPalette.accent-background : MyPalette.border;
+    background: selected ? MyPalette.selection-background
+        : (self.has-hover ? MyPalette.alternate-background : MyPalette.background);
+
+    HorizontalLayout {
+        padding: 14px;
+        spacing: 14px;
+        cross-axis-alignment: center;
+
+        IconDisplay {
+            icon: root.icon;
+            stroke: MyPalette.foreground;
+            size: 26px;
+        }
+
+        VerticalLayout {
+            alignment: center;
+            spacing: 2px;
+            horizontal-stretch: 1;
+
+            Text {
+                text: title;
+                font-size: 15px;
+                font-weight: 600;
+                overflow: elide;
+            }
+
+            Text {
+                text: subtitle;
+                font-size: 12px;
+                color: MyPalette.foreground.transparentize(0.4);
+                overflow: elide;
+            }
+        }
+    }
+}
+
+// The removable-drive chooser: a header with a Refresh button, an empty state,
+// and one SelectableCard per detected drive (non-FAT32 drives disabled, as the
+// console requires FAT32). Reads `UiState.removable-drives`; the parent view
+// owns `selected-drive` (an index into that list, -1 when nothing is picked)
+// and provides the surrounding confirm/cancel buttons.
+export component RemovableDrivePicker inherits VerticalLayout {
+    in property <string> title: "Select a removable drive";
+    // Index of the drive picked (into UiState.removable-drives), -1 until the
+    // user makes an explicit choice. Bound two-way by the parent.
+    in-out property <int> selected-drive: -1;
+
+    spacing: 10px;
+
+    HorizontalLayout {
+        spacing: 8px;
+        padding-bottom: 10px;
+
+        VerticalLayout {
+            alignment: center;
+            horizontal-stretch: 1;
+
+            Text {
+                text: root.title;
+                font-size: 18px;
+                overflow: elide;
+            }
+        }
+
+        IconButton {
+            icon: IconSet.RefreshCw;
+            tooltip: "Refresh";
+            width: 30px;
+            clicked => {
+                root.selected-drive = -1;
+                Dispatcher.dispatch(Message.RefreshRemovableDrives, "");
+            }
+        }
+    }
+
+    if UiState.removable-drives.length == 0: VerticalLayout {
+        spacing: 6px;
+
+        Text {
+            text: "No removable drive detected.";
+            color: MyPalette.foreground.transparentize(0.3);
+        }
+
+        Text {
+            text: "Plug in a USB stick or external disk, then tap Refresh.";
+            color: MyPalette.foreground.transparentize(0.5);
+            font-size: 12px;
+            wrap: word-wrap;
+        }
+    }
+
+    for drive[i] in UiState.removable-drives: SelectableCard {
+        icon: drive.is-removable ? IconSet.Usb : IconSet.HardDrive;
+        title: drive.name;
+        subtitle: drive.is-fat32
+            ? (drive.size-text == "" ? "FAT32" : drive.size-text + "  ·  FAT32")
+            : drive.fs-label + " — not supported (FAT32 required)";
+        selected: root.selected-drive == i;
+        // Only FAT32 drives are usable by the console.
+        disabled: !drive.is-fat32;
+        clicked => {
+            root.selected-drive = i;
+        }
+    }
+}

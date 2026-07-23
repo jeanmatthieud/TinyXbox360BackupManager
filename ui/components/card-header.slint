@@ -1,0 +1,34 @@
+// SPDX-FileCopyrightText: 2026 Manuel Quarneti <mq1@ik.me> (TinyWiiBackupManager)
+// SPDX-FileContributor: Modified by Jean-Matthieu Dechriste (TinyXbox360BackupManager)
+// SPDX-License-Identifier: GPL-3.0-only
+
+import { Icon, IconDisplay } from "@lucide";
+import { MyPalette } from "../styling.slint";
+
+// Card title row: leading icon + title on the left, optional trailing action(s)
+// (a Spinner, a refresh/settings IconButton, …) passed as children on the right.
+// With no children the title simply sits on the left.
+export component CardHeader inherits HorizontalLayout {
+    in property <Icon> icon;
+    in property <string> title;
+
+    alignment: space-between;
+    cross-axis-alignment: CrossAxisAlignment.center;
+
+    HorizontalLayout {
+        spacing: 5px;
+        cross-axis-alignment: CrossAxisAlignment.center;
+
+        IconDisplay {
+            icon: root.icon;
+            stroke: MyPalette.foreground;
+            size: 14px;
+        }
+
+        Text {
+            text: root.title;
+        }
+    }
+
+    @children
+}

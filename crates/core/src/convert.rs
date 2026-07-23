@@ -3,7 +3,7 @@
 //! High-level pipeline: from an ISO, does what is needed on the target
 //! (local drive or FTP console).
 
-use crate::config::Config;
+use crate::config::{Config, Xbox360Format};
 use crate::data_dir::DATA_DIR;
 use crate::ftp::FtpSession;
 use crate::iso_info::{self, IsoInfo, IsoKind};
@@ -23,10 +23,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 struct ConvertDest {
     god_dir: PathBuf,
     xbe_dir: PathBuf,
-    // Reserved for the future "extract Xbox 360 game" path; the destination is
-    // already wired end-to-end (config, manifest, upload) so only the
-    // extraction branch remains to be added.
-    #[allow(dead_code)]
+    /// Receives `<Name>` extracted Xbox 360 game folders (each with a
+    /// `default.xex`), used when the storage format is [`Xbox360Format::Xex`].
     xex_dir: PathBuf,
     work_dir: PathBuf,
 }
@@ -95,6 +93,7 @@ pub fn perform(
 ) -> Result<()> {
     let target =
         Target::from_config(&config.contents).context("no target selected")?;
+    let x360_format = config.contents.xbox360_format;
 
     match &target {
         Target::Local(root) => {
@@ -105,7 +104,7 @@ pub fn perform(
                 xex_dir: PathBuf::from(&storage.xex_dir),
                 work_dir: root.clone(),
             };
-            convert_into(&in_path, &dest, cancel, &|p| update_progress(p, None))?;
+            convert_into(&in_path, &dest, x360_format, cancel, &|p| update_progress(p, None))?;
         }
         Target::Ftp(ftp) => {
             let stem = sanitize_name(
@@ -122,7 +121,7 @@ pub fn perform(
 
             let result = (|| -> Result<()> {
                 // Local conversion in staging folder: 0-50%.
-                convert_into(&in_path, &ConvertDest::under(&staging), cancel, &|p| {
+                convert_into(&in_path, &ConvertDest::under(&staging), x360_format, cancel, &|p| {
                     update_progress(p * 50 / 100, None)
                 })?;
 
@@ -193,6 +192,7 @@ pub fn perform(
 fn convert_into(
     in_path: &Path,
     dest: &ConvertDest,
+    x360_format: Xbox360Format,
     cancel: &AtomicBool,
     update_progress: &dyn Fn(u32),
 ) -> Result<()> {
@@ -203,11 +203,52 @@ fn convert_into(
             })?;
             return Ok(());
         }
-        InputKind::Archive => return install_archive(in_path, dest, cancel, update_progress),
+        InputKind::Archive => {
+            return install_archive(in_path, dest, x360_format, cancel, update_progress);
+        }
         InputKind::Iso(info) => info,
     };
 
     match info.kind {
+        IsoKind::Xbox360Game if x360_format == Xbox360Format::Xex => {
+            // Extract the disc to a `default.xex` game folder instead of
+            // converting it to a GOD container. The name resolution mirrors
+            // the GOD branch (image name → XboxUnity → file stem); the
+            // TitleID is embedded in the folder name (` [XXXXXXXX]` suffix) so
+            // later scans can identify the game without reading its XEX.
+            let title = info
+                .name
+                .clone()
+                .or_else(|| {
+                    let tid = info.title_id.as_deref()?;
+                    unity::search_titles(tid)
+                        .ok()?
+                        .into_iter()
+                        .next()
+                        .map(|t| t.name)
+                })
+                .or_else(|| in_path.file_stem().and_then(|s| s.to_str()).map(str::to_owned))
+                .unwrap_or_else(|| "Xbox 360 game".to_string());
+            let name = sanitize_name(&title);
+            let name = match info.title_id.as_deref() {
+                Some(tid) => crate::game::og_folder_name(&name, tid),
+                None => name,
+            };
+            let game_dir = dest.xex_dir.join(&name);
+            if game_dir.exists() {
+                bail!("the folder {} already exists", game_dir.display());
+            }
+
+            let res = extract::extract_iso(in_path, &game_dir, cancel, &mut |done, total| {
+                update_progress((done * 100 / total.max(1)) as u32);
+            });
+            // On cancellation, drop the partially-extracted folder (it is a
+            // fresh folder — we bailed above if it already existed).
+            if res.is_err() && is_cancelled(cancel) {
+                let _ = std::fs::remove_dir_all(&game_dir);
+            }
+            res?;
+        }
         IsoKind::Xbox360Game => {
             let title = info.name.clone().or_else(|| {
                 let tid = info.title_id.as_deref()?;
@@ -414,6 +455,7 @@ fn install_stfs_package(
 fn install_archive(
     in_path: &Path,
     dest: &ConvertDest,
+    x360_format: Xbox360Format,
     cancel: &AtomicBool,
     update_progress: &dyn Fn(u32),
 ) -> Result<()> {
@@ -441,7 +483,9 @@ fn install_archive(
         // (0-50% extraction already done, conversion runs on 50-100%). This
         // saves the user from manually unpacking the ISO first.
         if let Some(iso) = single_iso_in(&tmp)? {
-            return convert_into(&iso, dest, cancel, &|p| update_progress(50 + p * 50 / 100));
+            return convert_into(&iso, dest, x360_format, cancel, &|p| {
+                update_progress(50 + p * 50 / 100)
+            });
         }
 
         // Otherwise: a set of XBLA/DLC/title-update packages.
@@ -650,7 +694,7 @@ mod tests {
         zip.finish().unwrap();
 
         let root = dir.join("root");
-        convert_into(&zip_path, &ConvertDest::under(&root), &AtomicBool::new(false), &|_| {}).unwrap();
+        convert_into(&zip_path, &ConvertDest::under(&root), Xbox360Format::God, &AtomicBool::new(false), &|_| {}).unwrap();
 
         let title_dir = root.join(DEFAULT_GOD_DIR).join("58410889");
         assert!(title_dir.join("000D0000/ArcadeGamePackage").is_file());
@@ -674,7 +718,7 @@ mod tests {
         std::fs::write(&package, stfs_package(stfs::CONTENT_TYPE_ARCADE, 0x584108A1)).unwrap();
 
         let root = dir.join("root");
-        convert_into(&package, &ConvertDest::under(&root), &AtomicBool::new(false), &|_| {}).unwrap();
+        convert_into(&package, &ConvertDest::under(&root), Xbox360Format::God, &AtomicBool::new(false), &|_| {}).unwrap();
         assert!(
             root.join(DEFAULT_GOD_DIR)
                 .join("584108A1/000D0000/SomeArcadeGame")
@@ -701,7 +745,7 @@ mod tests {
         zip.finish().unwrap();
 
         let root = dir.join("root");
-        let err = convert_into(&zip_path, &ConvertDest::under(&root), &AtomicBool::new(false), &|_| {}).unwrap_err();
+        let err = convert_into(&zip_path, &ConvertDest::under(&root), Xbox360Format::God, &AtomicBool::new(false), &|_| {}).unwrap_err();
         assert!(err.to_string().contains("no Arcade package"));
 
         std::fs::remove_dir_all(&dir).unwrap();

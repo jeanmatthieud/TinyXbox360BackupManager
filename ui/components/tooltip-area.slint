@@ -8,11 +8,30 @@ export component TooltipArea inherits Rectangle {
     in property <string> tooltip;
     out property <bool> has-hover: t.has-hover;
     in property <bool> disabled: false;
+    // When > 0, holding the pointer for this long fires `long-pressed` on the
+    // press instead of `clicked` on release. Opt-in, used for hidden debug
+    // affordances; 0ms keeps the plain click-only behaviour.
+    in property <duration> long-press-duration: 0ms;
 
     callback clicked;
+    callback long-pressed;
+
+    // Set once the long-press timer fired, so the release doesn't also click.
+    property <bool> long-fired: false;
 
     r := Rectangle {
         @children
+    }
+
+    long-press-timer := Timer {
+        interval: long-press-duration;
+        running: false;
+        triggered => {
+            self.running = false;
+            long-fired = true;
+            Tooltip.text = "";
+            long-pressed();
+        }
     }
 
     if disabled: Rectangle {
@@ -32,6 +51,12 @@ export component TooltipArea inherits Rectangle {
         clicked => {
             Tooltip.text = "";
 
+            // Swallow the click that ends a long press.
+            if long-fired {
+                long-fired = false;
+                return;
+            }
+
             if !disabled {
                 clicked();
             }
@@ -41,6 +66,18 @@ export component TooltipArea inherits Rectangle {
             if event.kind == PointerEventKind.move {
                 Tooltip.mouse-x = self.absolute-position.x + self.mouse-x;
                 Tooltip.mouse-y = self.absolute-position.y + self.mouse-y;
+            } else if event.kind == PointerEventKind.down {
+                // Always clear the swallow flag on a fresh press so a previous
+                // long-press that ended outside the area (no `clicked` to reset
+                // it) can never make the next real click be swallowed. The reset
+                // is deliberately ungated: it must run even when this press won't
+                // arm the timer (disabled, or no long-press configured).
+                long-fired = false;
+                if long-press-duration > 0ms && !disabled {
+                    long-press-timer.running = true;
+                }
+            } else if event.kind == PointerEventKind.up || event.kind == PointerEventKind.cancel {
+                long-press-timer.running = false;
             }
         }
 

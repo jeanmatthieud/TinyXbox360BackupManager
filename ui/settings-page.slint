@@ -3,30 +3,15 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 import { ScrollView, Palette } from "std-widgets.slint";
-import { IconSet, IconDisplay } from "@lucide";
+import { IconSet } from "@lucide";
 import { SettingCard } from "components/setting-card.slint";
-import { MyPalette } from "styling.slint";
+import { PageHeader } from "components/page-header.slint";
 import { UiState } from "ui-state.slint";
 import { Message, Dispatcher } from "messages.slint";
 
 export component SettingsPage inherits VerticalLayout {
-    HorizontalLayout {
-        height: 58px;
-        padding: 20px;
-        padding-left: 10px;
-        spacing: 5px;
-        cross-axis-alignment: CrossAxisAlignment.center;
-
-        IconDisplay {
-            icon: IconSet.ChevronRight;
-            size: 18px;
-            stroke: MyPalette.foreground;
-        }
-
-        Text {
-            text: "Settings";
-            font-size: 18px;
-        }
+    PageHeader {
+        title: "Settings";
     }
 
     ScrollView {
@@ -43,6 +28,17 @@ export component SettingsPage inherits VerticalLayout {
                 items: [{ value: "false", label: "No (recommended)" }, { value: "true", label: "Yes" }];
                 active-item: UiState.config.remove-sources-games;
                 set-property: Message.SetRemoveSourcesGames;
+            }
+
+            SettingCard {
+                icon: IconSet.Package;
+                label: "Xbox 360 storage format";
+                items: [
+                    { value: "God", label: "GOD (Games On Demand, recommended)" },
+                    { value: "Xex", label: "XEX (extracted game folder)" }
+                ];
+                active-item: UiState.config.xbox360-format;
+                set-property: Message.SetXbox360Format;
             }
 
             SettingCard {

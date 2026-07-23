@@ -2,28 +2,16 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 import { IconButton, IconButtonKind } from "icon-button.slint";
-import { IconSet, IconDisplay } from "@lucide";
-import { MyPalette } from "../styling.slint";
+import { IconSet } from "@lucide";
+import { PageTitle } from "page-header.slint";
 import { UiState } from "../ui-state.slint";
 
 export component ConversionQueueToolbar inherits HorizontalLayout {
     alignment: space-between;
     height: 38px;
 
-    HorizontalLayout {
-        spacing: 5px;
-        cross-axis-alignment: CrossAxisAlignment.center;
-
-        IconDisplay {
-            icon: IconSet.ChevronRight;
-            size: 18px;
-            stroke: MyPalette.foreground;
-        }
-
-        Text {
-            text: "Conversion queue";
-            font-size: 18px;
-        }
+    PageTitle {
+        title: "Conversion queue";
     }
 
     VerticalLayout {

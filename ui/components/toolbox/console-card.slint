@@ -1,0 +1,44 @@
+// SPDX-FileCopyrightText: 2026 Manuel Quarneti <mq1@ik.me> (TinyWiiBackupManager)
+// SPDX-FileContributor: Modified by Jean-Matthieu Dechriste (TinyXbox360BackupManager)
+// SPDX-License-Identifier: GPL-3.0-only
+
+import { IconSet } from "@lucide";
+import { ToolboxCard } from "../toolbox-card.slint";
+import { CardHeader } from "../card-header.slint";
+import { CardActionRow } from "../card-action-row.slint";
+import { HorizontalLine } from "../horizontal-line.slint";
+import { UiState } from "../../ui-state.slint";
+import { Message, Dispatcher } from "../../messages.slint";
+
+// Aurora FTP console target: connection test and Aurora restart.
+export component ConsoleCard inherits ToolboxCard {
+    CardHeader {
+        icon: IconSet.MonitorUp;
+        title: "Console (Aurora FTP)";
+    }
+
+    HorizontalLine { }
+
+    VerticalLayout {
+        height: self.min-height;
+
+        Text {
+            text: "The library is managed directly on the console at \{UiState.config.target}.\nOnce games are added, add the content paths in Aurora (Settings > Content Paths, Scan Depth 3+) and rescan.";
+            wrap: word-wrap;
+        }
+    }
+
+    HorizontalLine { }
+
+    CardActionRow {
+        icon: IconSet.Cable;
+        text: "Test the FTP connection";
+        clicked => Dispatcher.dispatch(Message.TestFtp, "");
+    }
+
+    CardActionRow {
+        icon: IconSet.RotateCw;
+        text: "Restart Aurora";
+        clicked => Dispatcher.dispatch(Message.RestartAurora, "");
+    }
+}

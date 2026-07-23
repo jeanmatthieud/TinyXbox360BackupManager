@@ -22,7 +22,7 @@ export component FtpTargetModal inherits Modal {
         spacing: 10px;
 
         Text {
-            text: "Console internal drive over FTP (Aurora)";
+            text: "Remote Xbox 360 over WiFi / Ethernet";
             font-size: 18px;
         }
 
@@ -42,19 +42,19 @@ export component FtpTargetModal inherits Modal {
                 VerticalLayout {
                     alignment: center;
                     Text {
-                        text: "Searching for your console on the network…";
+                        text: "Searching for your Xbox360 on the network…";
                         wrap: word-wrap;
                     }
                 }
             }
 
             if !UiState.ftp-scanning && UiState.ftp-scan-found-ip != "": Text {
-                text: "Console found at " + UiState.ftp-scan-found-ip + ".";
+                text: "🎉 Xbox360 found at " + UiState.ftp-scan-found-ip;
                 wrap: word-wrap;
             }
 
             if !UiState.ftp-scanning && UiState.ftp-scan-found-ip == "": Text {
-                text: "No console found on the network.\nMake sure it is on with the FTP Server module started, or enter its details manually.";
+                text: "🥺 No Xbox360 found on the network.\nMake sure it is on with the 'FTP Server module' started, or enter its details manually.";
                 wrap: word-wrap;
             }
         }
@@ -64,7 +64,7 @@ export component FtpTargetModal inherits Modal {
             spacing: 10px;
 
             Text {
-                text: "On the console, press Select to reveal its IP, then\nStart > Modules > FTP Server for the credentials.";
+                text: "On the Aurora dashboard, press 'Select' to reveal its IP, then\n'Start > Modules > FTP Server' for the credentials.";
                 wrap: word-wrap;
             }
 
@@ -76,7 +76,7 @@ export component FtpTargetModal inherits Modal {
                     width: 90px;
 
                     Text {
-                        text: "Console IP:";
+                        text: "Xbox360 IP:";
                     }
                 }
 
@@ -156,19 +156,26 @@ export component FtpTargetModal inherits Modal {
             }
 
             HorizontalLayout {
-                alignment: space-between;
                 spacing: 10px;
+                horizontal-stretch: 1;
 
+                // Back to the target-selection modal this was opened from.
                 IconButton {
-                    label: "Cancel";
+                    horizontal-stretch: 0;
+                    label: "Previous";
                     clicked => {
                         Dispatcher.dispatch(Message.CancelFtpScan, "");
                         UiState.editing-ftp-target = false;
+                        UiState.selecting-target = true;
                     }
                 }
 
+                Rectangle {
+                    horizontal-stretch: 1;
+                }
+
                 HorizontalLayout {
-                    alignment: end;
+                    horizontal-stretch: 0;
                     spacing: 10px;
 
                     // In the scan view, the manual-entry button sits just left of
@@ -186,7 +193,7 @@ export component FtpTargetModal inherits Modal {
                     // the scan, or entered manually).
                     IconButton {
                         icon: IconSet.MonitorUp;
-                        label: "Use this console";
+                        label: "Connect";
                         kind: IconButtonKind.Primary;
                         disabled: !UiState.ftp-show-manual && UiState.ftp-scan-found-ip == "";
                         clicked => {

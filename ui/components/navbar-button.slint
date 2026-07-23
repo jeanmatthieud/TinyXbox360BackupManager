@@ -5,9 +5,31 @@ import { MyPalette } from "../styling.slint";
 import { IconDisplay, Icon, IconSet } from "@lucide";
 import { TooltipArea } from "tooltip-area.slint";
 
+// A single "ping" ring: a circle expands and fades out (the "ripple"), then
+// stays hidden until the next cycle. `delay` pushes the ripple later within the
+// cycle, so a second ring can start inside the first one during the burst.
+component PingRing inherits Rectangle {
+    in property <duration> delay: 0s;
+    // Ripple burst duration, then a rest before the whole cycle repeats.
+    property <duration> ripple: 1.5s;
+    property <duration> cycle: 4s;
+    // + cycle keeps the argument positive before taking the modulo.
+    property <duration> t: mod(animation-tick() - delay + cycle, cycle);
+    property <bool> active: t < ripple;
+    property <float> progress: active ? t / ripple : 1.0;
+    width: 42px + progress * 26px;
+    height: self.width;
+    border-radius: self.width / 2;
+    border-width: 2px;
+    border-color: MyPalette.accent-background;
+    opacity: active ? 1 - progress : 0;
+}
+
 export component NavbarButton inherits TooltipArea {
     in property <bool> active: false;
     in property <bool> rotate: false;
+    // When true, an expanding/fading ring pulses behind the icon to draw attention.
+    in property <bool> ping: false;
     in property <Icon> icon;
     in property <Icon> icon2: IconSet.WifiZero;
 
@@ -24,8 +46,16 @@ export component NavbarButton inherits TooltipArea {
     width: 42px;
     height: 42px;
     border-radius: self.width / 2;
-    clip: true;
+    // Disable clipping while pinging so the ring can grow past the button bounds.
+    // The rounded `background` still renders correctly — clip only affects children.
+    clip: !ping;
     background: get-background();
+
+    // Two staggered "ping" rings: the second starts inside the first during the burst.
+    if ping: PingRing { }
+    if ping: PingRing {
+        delay: 0.5s;
+    }
 
     if rotate: IconDisplay {
         icon: icon;

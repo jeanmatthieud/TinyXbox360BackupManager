@@ -1,0 +1,26 @@
+// SPDX-FileCopyrightText: 2026 Manuel Quarneti <mq1@ik.me> (TinyWiiBackupManager)
+// SPDX-FileContributor: Modified by Jean-Matthieu Dechriste (TinyXbox360BackupManager)
+// SPDX-License-Identifier: GPL-3.0-only
+
+import { IconSet } from "@lucide";
+import { ToolboxCard } from "../toolbox-card.slint";
+import { CardHeader } from "../card-header.slint";
+import { CardActionRow } from "../card-action-row.slint";
+import { HorizontalLine } from "../horizontal-line.slint";
+import { Message, Dispatcher } from "../../messages.slint";
+
+// Cover-art cache maintenance.
+export component CoversCacheCard inherits ToolboxCard {
+    CardHeader {
+        icon: IconSet.Image;
+        title: "Covers cache";
+    }
+
+    HorizontalLine { }
+
+    CardActionRow {
+        icon: IconSet.Play;
+        text: "Redownload all covers (clears the local cache first)";
+        clicked => Dispatcher.dispatch(Message.RedownloadAllCovers, "");
+    }
+}

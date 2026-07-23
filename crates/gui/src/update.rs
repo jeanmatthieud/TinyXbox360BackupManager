@@ -51,6 +51,26 @@ static TITLE_UPDATES_RESULT: Mutex<
 > = Mutex::new(None);
 
 impl State {
+    /// Switches the target to the local drive mounted at `path`, records it in
+    /// the recent locations, and queues a config sync + target analysis. Shared
+    /// by the removable-drive picker and the debug folder picker.
+    fn select_local_mount(
+        &mut self,
+        path: PathBuf,
+        message_queue: &mut VecDeque<(Message, SharedString)>,
+    ) {
+        self.config.contents.target_kind = TargetKind::Local;
+        self.config.contents.mount_point = path;
+
+        if self.config.check_mount_point() {
+            self.notifications.push(Notification::info(NEW_DRIVE_TEXT));
+        }
+        self.config.contents.record_recent_location();
+
+        message_queue.push_back((Message::SyncConfig, SharedString::new()));
+        message_queue.push_back((Message::StartTargetAnalysis, SharedString::new()));
+    }
+
     pub fn update(
         &mut self,
         message: Message,
@@ -85,18 +105,27 @@ impl State {
                 let window_handle = app.window().window_handle();
 
                 if let Some(path) = dialogs::pick_mount_point(&window_handle) {
-                    self.config.contents.target_kind = TargetKind::Local;
-                    self.config.contents.mount_point = path;
-
-                    if self.config.check_mount_point() {
-                        self.notifications.push(Notification::info(NEW_DRIVE_TEXT));
-                    }
-                    self.config.contents.record_recent_location();
-
-                    message_queue.push_back((Message::SyncConfig, SharedString::new()));
-                    message_queue
-                        .push_back((Message::StartTargetAnalysis, SharedString::new()));
+                    self.select_local_mount(path, message_queue);
                 }
+            }
+            Message::RefreshRemovableDrives => {
+                let app = weak.upgrade().unwrap();
+                app.global::<UiState<'_>>().set_removable_drives(ModelRc::from(
+                    Rc::new(VecModel::from(crate::config::removable_drives())),
+                ));
+            }
+            Message::SelectRemovableDrive => {
+                let path = PathBuf::from(payload.as_str());
+                if !path.is_dir() {
+                    self.notifications
+                        .push(Notification::error("This drive is no longer available"));
+                    // The confirm button already closed the modal; re-open it so
+                    // the user can pick another drive instead of being stuck.
+                    let app = weak.upgrade().unwrap();
+                    app.global::<UiState<'_>>().set_selecting_target(true);
+                    return;
+                }
+                self.select_local_mount(path, message_queue);
             }
             Message::RefreshDisplayedGames => {
                 let displayed_games = self
@@ -147,6 +176,12 @@ impl State {
             Message::SetRemoveSourcesGames => {
                 let value = payload.parse().unwrap();
                 self.config.contents.remove_sources_games = value;
+
+                message_queue.push_back((Message::SyncConfig, SharedString::new()));
+            }
+            Message::SetXbox360Format => {
+                let value = payload.parse().unwrap();
+                self.config.contents.xbox360_format = value;
 
                 message_queue.push_back((Message::SyncConfig, SharedString::new()));
             }
@@ -306,6 +341,16 @@ impl State {
 
                 match loc.kind {
                     TargetKind::Local => {
+                        // The drive may have been unplugged since it was
+                        // recorded: bail out and re-open the target selection.
+                        if !loc.mount_point.is_dir() {
+                            self.notifications.push(Notification::error(
+                                "This location is no longer available (drive unplugged?)",
+                            ));
+                            let app = weak.upgrade().unwrap();
+                            app.global::<UiState<'_>>().set_selecting_target(true);
+                            return;
+                        }
                         self.config.contents.target_kind = TargetKind::Local;
                         self.config.contents.mount_point = loc.mount_point;
                     }
@@ -1223,6 +1268,36 @@ impl State {
                 message_queue.push_back((Message::SyncConfig, SharedString::new()));
             }
             Message::CreateBadAvatar => {
+                if self.is_creating_badavatar {
+                    return;
+                }
+
+                // Open the in-app removable-drive picker (same one used for
+                // target selection), pre-populated with the detected drives.
+                let app = weak.upgrade().unwrap();
+                let ui_state = app.global::<UiState<'_>>();
+                ui_state.set_removable_drives(ModelRc::from(Rc::new(VecModel::from(
+                    crate::config::removable_drives(),
+                ))));
+                ui_state.set_selecting_badavatar_target(true);
+            }
+            Message::SelectBadAvatarDrive => {
+                // Payload: the mount point picked in the drive-picker modal.
+                let dest = PathBuf::from(payload.as_str());
+                if !dest.is_dir() {
+                    self.notifications
+                        .push(Notification::error("This drive is no longer available"));
+                    return;
+                }
+                let path_text = dest.to_string_lossy().to_shared_string();
+                self.badavatar_pending_dest = Some(dest);
+                let app = weak.upgrade().unwrap();
+                app.global::<UiState<'_>>()
+                    .set_badavatar_pending_path(path_text);
+            }
+            Message::PickBadAvatarMountPoint => {
+                // Hidden escape hatch (long press): pick any folder with the
+                // native OS picker instead of a detected removable drive.
                 if self.is_creating_badavatar {
                     return;
                 }

@@ -1,0 +1,122 @@
+// SPDX-FileCopyrightText: 2026 Manuel Quarneti <mq1@ik.me> (TinyWiiBackupManager)
+// SPDX-FileContributor: Modified by Jean-Matthieu Dechriste (TinyXbox360BackupManager)
+// SPDX-License-Identifier: GPL-3.0-only
+
+import { IconSet, IconDisplay } from "@lucide";
+import { Spinner } from "std-widgets.slint";
+import { ToolboxCard } from "../toolbox-card.slint";
+import { CardHeader } from "../card-header.slint";
+import { CardActionRow } from "../card-action-row.slint";
+import { HorizontalLine } from "../horizontal-line.slint";
+import { IconButton } from "../icon-button.slint";
+import { MyPalette } from "../../styling.slint";
+import { UiState } from "../../ui-state.slint";
+import { Message, Dispatcher } from "../../messages.slint";
+import { TargetKind } from "../../types.slint";
+
+// The paths Aurora is actually scanning, with guidance when none are set or
+// when the read failed.
+export component AuroraScanPathsCard inherits ToolboxCard {
+    CardHeader {
+        icon: IconSet.FolderSearch;
+        title: "Aurora scan paths";
+
+        if UiState.fetching-aurora-paths: Spinner {
+            width: 27px;
+            height: 27px;
+            indeterminate: true;
+        }
+
+        if UiState.config.target-kind == TargetKind.Ftp && !UiState.fetching-aurora-paths: IconButton {
+            icon: IconSet.RefreshCcw;
+            width: self.height;
+            clicked => {
+                if !UiState.fetching-aurora-paths {
+                    Dispatcher.dispatch(Message.FetchAuroraPaths, "");
+                }
+            }
+        }
+    }
+
+    HorizontalLine { }
+
+    if UiState.fetching-aurora-paths && !UiState.aurora-paths-loaded: Text {
+        text: "Reading Aurora's scan paths…";
+    }
+
+    // Read failure: reported here, not as a notification.
+    if !UiState.fetching-aurora-paths && UiState.aurora-paths-error != "": VerticalLayout {
+        spacing: 5px;
+
+        HorizontalLayout {
+            spacing: 5px;
+            cross-axis-alignment: CrossAxisAlignment.center;
+
+            IconDisplay {
+                icon: IconSet.TriangleAlert;
+                stroke: MyPalette.destructive;
+                size: 14px;
+            }
+
+            Text {
+                text: "Couldn't read Aurora's scan paths.";
+                color: MyPalette.destructive;
+            }
+        }
+
+        Text {
+            text: UiState.aurora-paths-error;
+            font-size: 12px;
+            wrap: word-wrap;
+            color: MyPalette.foreground.transparentize(0.4);
+        }
+    }
+
+    // Aurora scans nothing yet: warn and offer guidance.
+    if UiState.aurora-paths-error == "" && UiState.aurora-paths-loaded && UiState.aurora-scan-paths.length == 0: VerticalLayout {
+        height: self.min-height;
+        spacing: 8px;
+
+        HorizontalLayout {
+            spacing: 5px;
+            cross-axis-alignment: CrossAxisAlignment.center;
+
+            IconDisplay {
+                icon: IconSet.TriangleAlert;
+                stroke: #e0a12f;
+                size: 14px;
+            }
+
+            Text {
+                text: "Aurora isn't scanning any location.";
+                color: #e0a12f;
+            }
+        }
+
+        Text {
+            text: "No game will show up until you add scan paths in Aurora for your Xbox 360 (GOD) and OG Xbox games. Add them on the console, then refresh.";
+            wrap: word-wrap;
+        }
+
+        HorizontalLine { }
+
+        CardActionRow {
+            icon: IconSet.CircleQuestionMark;
+            text: "Help me add the content paths to Aurora";
+            clicked => { UiState.showing-aurora-help = true };
+        }
+    }
+
+    if !UiState.fetching-aurora-paths && UiState.aurora-scan-paths.length > 0: VerticalLayout {
+        spacing: 3px;
+
+        Text {
+            text: "The following paths are scanned by Aurora :";
+        }
+
+        for path in UiState.aurora-scan-paths: Text {
+            text: "- " + path;
+            font-size: 12px;
+        }
+    }
+}
