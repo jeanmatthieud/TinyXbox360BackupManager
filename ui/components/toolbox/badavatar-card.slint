@@ -1,0 +1,145 @@
+// SPDX-FileCopyrightText: 2026 Manuel Quarneti <mq1@ik.me> (TinyWiiBackupManager)
+// SPDX-FileContributor: Modified by Jean-Matthieu Dechriste (TinyXbox360BackupManager)
+// SPDX-License-Identifier: GPL-3.0-only
+
+import { IconSet } from "@lucide";
+import { LineEdit, CheckBox, Spinner } from "std-widgets.slint";
+import { ToolboxCard } from "../toolbox-card.slint";
+import { CardHeader } from "../card-header.slint";
+import { CardActionRow } from "../card-action-row.slint";
+import { HorizontalLine } from "../horizontal-line.slint";
+import { IconButton } from "../icon-button.slint";
+import { UiState } from "../../ui-state.slint";
+import { Message, Dispatcher } from "../../messages.slint";
+
+// One editable BadAvatar download-URL row with a per-field reset button
+// (shown only when the field differs from its built-in default).
+component BadAvatarUrlField inherits VerticalLayout {
+    in property <string> label;
+    in property <string> url;
+    in property <string> default-url;
+    in property <string> field-key;
+    spacing: 3px;
+
+    // Editing a LineEdit breaks its `text: url` binding, so a later reset (url
+    // reverting to the default) would leave the field stale. Push the value back
+    // imperatively when `url` changes — but only when it actually differs from
+    // what's shown, otherwise the echo of the user's own keystroke (which
+    // round-trips through the config) would reassign the text every character
+    // and bounce the caret to the end, breaking mid-string editing.
+    changed url => {
+        if edit.text != url {
+            edit.text = url;
+        }
+    }
+
+    Text {
+        text: label;
+        font-size: 12px;
+    }
+
+    HorizontalLayout {
+        spacing: 5px;
+
+        edit := LineEdit {
+            horizontal-stretch: 1;
+            text: url;
+            edited => Dispatcher.dispatch(Message.SetBadAvatarUrl, field-key + "\n" + self.text);
+        }
+
+        if url != default-url: IconButton {
+            icon: IconSet.RotateCcw;
+            width: self.height;
+            clicked => Dispatcher.dispatch(Message.ResetBadAvatarUrl, field-key);
+        }
+    }
+}
+
+// Card offering to build a homebrew boot USB key. Shown when no target is set.
+export component BadAvatarCard inherits ToolboxCard {
+    // Local toggle for the advanced (URL) settings section.
+    private property <bool> show-badavatar-settings: false;
+
+    CardHeader {
+        icon: IconSet.Usb;
+        title: "BadAvatar USB key";
+
+        if UiState.creating-badavatar: Spinner {
+            width: 27px;
+            height: 27px;
+            indeterminate: true;
+        }
+
+        if !UiState.creating-badavatar: IconButton {
+            icon: IconSet.Settings2;
+            width: self.height;
+            clicked => {
+                show-badavatar-settings = !show-badavatar-settings;
+            }
+        }
+    }
+
+    HorizontalLine { }
+
+    Text {
+        text: "Creates a homebrew boot USB key (ABadAvatar + XeUnshackle + Aurora).\nPlug in a FAT32-formatted USB key first.";
+        wrap: word-wrap;
+    }
+
+    CheckBox {
+        text: "Also download and add the official system update";
+        checked: UiState.badavatar.include-system-update;
+        toggled => {
+            Dispatcher.dispatch(Message.ToggleBadAvatarSystemUpdate, "");
+        }
+    }
+
+    if show-badavatar-settings: VerticalLayout {
+        spacing: 8px;
+
+        HorizontalLine { }
+
+        Text {
+            text: "Download URLs — edit to use a different source, reset to restore the default:";
+            font-size: 12px;
+            wrap: word-wrap;
+        }
+
+        BadAvatarUrlField {
+            label: "ABadAvatar";
+            url: UiState.badavatar.abadavatar-url;
+            default-url: UiState.badavatar.abadavatar-default-url;
+            field-key: "abadavatar";
+        }
+
+        BadAvatarUrlField {
+            label: "XeUnshackle";
+            url: UiState.badavatar.xeunshackle-url;
+            default-url: UiState.badavatar.xeunshackle-default-url;
+            field-key: "xeunshackle";
+        }
+
+        BadAvatarUrlField {
+            label: "Aurora (.zip/.7z — the official .rar is not supported)";
+            url: UiState.badavatar.aurora-url;
+            default-url: UiState.badavatar.aurora-default-url;
+            field-key: "aurora";
+        }
+
+        if UiState.badavatar.include-system-update: BadAvatarUrlField {
+            label: "System update";
+            url: UiState.badavatar.system-update-url;
+            default-url: UiState.badavatar.system-update-default-url;
+            field-key: "system_update";
+        }
+    }
+
+    HorizontalLine { }
+
+    CardActionRow {
+        icon: IconSet.Hammer;
+        disabled: UiState.creating-badavatar;
+        text: !UiState.creating-badavatar ? "Create the BadAvatar USB key" : "Working… see the status bar below.";
+        clicked => Dispatcher.dispatch(Message.CreateBadAvatar, "");
+    }
+}

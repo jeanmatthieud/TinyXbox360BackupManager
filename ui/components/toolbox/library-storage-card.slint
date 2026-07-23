@@ -1,0 +1,126 @@
+// SPDX-FileCopyrightText: 2026 Manuel Quarneti <mq1@ik.me> (TinyWiiBackupManager)
+// SPDX-FileContributor: Modified by Jean-Matthieu Dechriste (TinyXbox360BackupManager)
+// SPDX-License-Identifier: GPL-3.0-only
+
+import { IconSet, IconDisplay } from "@lucide";
+import { Spinner } from "std-widgets.slint";
+import { ToolboxCard } from "../toolbox-card.slint";
+import { CardHeader } from "../card-header.slint";
+import { CardActionRow } from "../card-action-row.slint";
+import { HorizontalLine } from "../horizontal-line.slint";
+import { IconButton } from "../icon-button.slint";
+import { MyPalette } from "../../styling.slint";
+import { UiState } from "../../ui-state.slint";
+import { Message, Dispatcher } from "../../messages.slint";
+import { TargetKind } from "../../types.slint";
+
+// App storage folders (and, on a console, their Aurora scan coverage).
+export component LibraryStorageCard inherits ToolboxCard {
+    CardHeader {
+        icon: IconSet.FolderCog;
+        title: "Library storage";
+
+        if UiState.fetching-aurora-paths: Spinner {
+            width: 27px;
+            height: 27px;
+            indeterminate: true;
+        }
+
+        if UiState.config.target-kind == TargetKind.Ftp && !UiState.fetching-aurora-paths: IconButton {
+            icon: IconSet.RefreshCcw;
+            width: self.height;
+            clicked => {
+                if !UiState.fetching-aurora-paths {
+                    Dispatcher.dispatch(Message.FetchAuroraPaths, "");
+                }
+            }
+        }
+    }
+
+    HorizontalLine { }
+
+    Text {
+        text: "Folders where this app installs and scans your games.";
+        font-size: 12px;
+        wrap: word-wrap;
+        color: MyPalette.foreground.transparentize(0.4);
+    }
+
+    if UiState.fetching-aurora-paths && !UiState.aurora-paths-loaded: Text {
+        text: "Reading the storage configuration…";
+    }
+
+    if UiState.app-storage-paths.length > 0: VerticalLayout {
+        spacing: 10px;
+
+        for p in UiState.app-storage-paths: HorizontalLayout {
+            spacing: 8px;
+            cross-axis-alignment: CrossAxisAlignment.start;
+
+            IconDisplay {
+                // Neutral folder on a local drive (no Aurora
+                // comparison); coverage badge on a console.
+                icon: !UiState.storage-aurora-compared
+                    ? IconSet.Folder
+                    : (p.covered ? IconSet.Check : IconSet.TriangleAlert);
+                stroke: !UiState.storage-aurora-compared
+                    ? MyPalette.foreground
+                    : (p.covered ? MyPalette.foreground : #e0a12f);
+                size: 15px;
+            }
+
+            VerticalLayout {
+                spacing: 2px;
+                horizontal-stretch: 1;
+
+                Text {
+                    text: p.label;
+                }
+
+                Text {
+                    text: p.aurora-path;
+                    font-size: 12px;
+                    wrap: char-wrap;
+                    color: MyPalette.foreground.transparentize(0.4);
+                }
+
+                if UiState.storage-aurora-compared && !p.covered: Text {
+                    text: "Not scanned by Aurora yet.";
+                    font-size: 11px;
+                    color: #e0a12f;
+                }
+            }
+        }
+    }
+
+    // At least one folder isn't covered: guide the user.
+    if UiState.storage-has-uncovered: VerticalLayout {
+        spacing: 8px;
+        height: self.preferred-height;
+
+        HorizontalLine { }
+
+        Text {
+            text: "Add the folders marked above to Aurora (Settings > Content Paths, Scan Depth 3+) so your games show up on the console, then rescan.";
+            wrap: word-wrap;
+            color: #e0a12f;
+        }
+
+        HorizontalLine { }
+
+        CardActionRow {
+            icon: IconSet.CircleQuestionMark;
+            text: "Help me add the content paths to Aurora";
+            clicked => { UiState.showing-aurora-help = true };
+        }
+    }
+
+    if !UiState.storage-has-uncovered: HorizontalLine { }
+
+    CardActionRow {
+        icon: IconSet.FolderCog;
+        text: "Change storage folders";
+        disabled: UiState.fetching-aurora-paths;
+        clicked => Dispatcher.dispatch(Message.EditStorageConfig, "");
+    }
+}

@@ -1,0 +1,44 @@
+// SPDX-FileCopyrightText: 2026 Manuel Quarneti <mq1@ik.me> (TinyWiiBackupManager)
+// SPDX-FileContributor: Modified by Jean-Matthieu Dechriste (TinyXbox360BackupManager)
+// SPDX-License-Identifier: GPL-3.0-only
+
+import { Icon, IconSet, IconDisplay } from "@lucide";
+import { MyPalette } from "../styling.slint";
+
+// The title label shared by page headers and toolbars: a leading chevron and
+// the title text. Used on its own inside a toolbar's leading group, or wrapped
+// by PageHeader for a full-width page title bar.
+export component PageTitle inherits HorizontalLayout {
+    in property <string> title;
+    in property <Icon> icon: IconSet.ChevronRight;
+
+    spacing: 5px;
+    cross-axis-alignment: CrossAxisAlignment.center;
+
+    IconDisplay {
+        icon: root.icon;
+        size: 18px;
+        stroke: MyPalette.foreground;
+    }
+
+    Text {
+        text: root.title;
+        font-size: 18px;
+    }
+}
+
+// The standard page title bar: a PageTitle in a full-width, padded 58px band.
+export component PageHeader inherits HorizontalLayout {
+    in property <string> title;
+    in property <Icon> icon: IconSet.ChevronRight;
+
+    height: 58px;
+    padding: 20px;
+    padding-left: 10px;
+    cross-axis-alignment: CrossAxisAlignment.center;
+
+    PageTitle {
+        title: root.title;
+        icon: root.icon;
+    }
+}

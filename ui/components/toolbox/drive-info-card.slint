@@ -1,0 +1,85 @@
+// SPDX-FileCopyrightText: 2026 Manuel Quarneti <mq1@ik.me> (TinyWiiBackupManager)
+// SPDX-FileContributor: Modified by Jean-Matthieu Dechriste (TinyXbox360BackupManager)
+// SPDX-License-Identifier: GPL-3.0-only
+
+import { IconSet, IconDisplay, Icon } from "@lucide";
+import { ToolboxCard } from "../toolbox-card.slint";
+import { CardHeader } from "../card-header.slint";
+import { HorizontalLine } from "../horizontal-line.slint";
+import { MyPalette } from "../../styling.slint";
+import { UiState } from "../../ui-state.slint";
+
+// Filesystem / allocation-granularity report for a local drive target.
+export component DriveInfoCard inherits ToolboxCard {
+    private property <int> optimal-allocation-granularity: (UiState.drive-info.total-gib <= 32) ? 32768 : 65536;
+    private property <bool> is-optimal-allocation-granularity: UiState.drive-info.allocation-granularity == optimal-allocation-granularity;
+
+    pure function fs-icon(fs-kind: string) -> Icon {
+        if fs-kind == "FAT32" {
+            IconSet.Check
+        } else {
+            IconSet.TriangleAlert
+        }
+    }
+
+    pure function fs-comment(fs-kind: string) -> string {
+        if fs-kind == "FAT32" {
+            "optimal choice for Xbox 360 USB storage"
+        } else if fs-kind == "NTFS" || fs-kind == "exFAT" {
+            "not readable by the Xbox 360 (fine for a local staging folder)"
+        } else {
+            "fine for a local staging folder, but not readable by the Xbox 360"
+        }
+    }
+
+    pure function allocation-granularity-icon(optimal: bool) -> Icon {
+        if optimal {
+            IconSet.Check
+        } else {
+            IconSet.TriangleAlert
+        }
+    }
+
+    pure function allocation-granularity-comment(optimal: bool) -> string {
+        if optimal {
+            "optimal"
+        } else {
+            "not optimal, but should work"
+        }
+    }
+
+    CardHeader {
+        icon: IconSet.HardDrive;
+        title: "Drive info";
+    }
+
+    HorizontalLine { }
+
+    HorizontalLayout {
+        spacing: 5px;
+
+        IconDisplay {
+            icon: fs-icon(UiState.drive-info.fs-kind);
+            stroke: MyPalette.foreground;
+            size: 14px;
+        }
+
+        Text {
+            text: "Filesystem: \{UiState.drive-info.fs-kind}  (\{fs-comment(UiState.drive-info.fs-kind)})";
+        }
+    }
+
+    HorizontalLayout {
+        spacing: 5px;
+
+        IconDisplay {
+            icon: allocation-granularity-icon(is-optimal-allocation-granularity);
+            stroke: MyPalette.foreground;
+            size: 14px;
+        }
+
+        Text {
+            text: "Allocation granularity: \{UiState.drive-info.allocation-granularity}  (\{allocation-granularity-comment(is-optimal-allocation-granularity)})";
+        }
+    }
+}
