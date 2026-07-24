@@ -323,6 +323,44 @@ impl FtpSession {
             .into_inner())
     }
 
+    /// Downloads only the first `max_bytes` of a remote file, aborting the
+    /// transfer by closing the data connection early. Useful to read a small
+    /// header (e.g. an STFS package header) out of a multi-hundred-MB file
+    /// without pulling the whole thing.
+    ///
+    /// The Aurora server does NOT implement `REST`, so this only works from
+    /// offset 0 (prefix reads). It also replies to the truncated transfer
+    /// with a non-standard `550 Connection interrupted` instead of the usual
+    /// `426`/`226`; that reply is expected and swallowed here — the control
+    /// connection stays in sync for the next request (verified on a real
+    /// console).
+    pub fn download_prefix(&mut self, remote_path: &str, max_bytes: usize) -> Result<Vec<u8>> {
+        let (parent, name) = parent_and_name(remote_path);
+        self.cwd(&parent)?;
+        let mut stream = self
+            .stream
+            .retr_as_stream(&name)
+            .with_context(|| format!("starting partial download of {remote_path}"))?;
+
+        let mut buf = vec![0u8; max_bytes];
+        let mut filled = 0;
+        while filled < max_bytes {
+            let n = stream
+                .read(&mut buf[filled..])
+                .with_context(|| format!("reading {remote_path}"))?;
+            if n == 0 {
+                break;
+            }
+            filled += n;
+        }
+        buf.truncate(filled);
+
+        // Close the data connection early; the console's non-standard reply to
+        // the aborted transfer is expected, not a failure to propagate.
+        let _ = self.stream.finalize_retr_stream(stream);
+        Ok(buf)
+    }
+
     /// Counts files in a remote directory, recursively.
     pub fn count_files(&mut self, remote_dir: &str) -> u64 {
         let mut count = 0;

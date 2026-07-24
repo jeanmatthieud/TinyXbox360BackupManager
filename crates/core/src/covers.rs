@@ -6,6 +6,12 @@ use anyhow::Result;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
+/// Max width (in pixels) of the cached cover thumbnails. Full XboxUnity
+/// wraps can be several thousand pixels wide; decoding them on the UI
+/// thread at every list refresh is what makes the grid lag. We downscale
+/// them once, off the UI thread, into `covers/thumbs/`.
+pub const THUMB_WIDTH: u32 = 1024;
+
 /// Path of the cached cover for a TitleID inside `covers_dir`, if any.
 pub fn cached_cover(covers_dir: &Path, title_id: &str) -> Option<PathBuf> {
     if title_id.is_empty() {
@@ -18,6 +24,47 @@ pub fn cached_cover(covers_dir: &Path, title_id: &str) -> Option<PathBuf> {
         }
     }
     None
+}
+
+/// Path of the downscaled cover thumbnail for a TitleID, if it exists.
+pub fn cached_thumbnail(covers_dir: &Path, title_id: &str) -> Option<PathBuf> {
+    if title_id.is_empty() {
+        return None;
+    }
+    let path = covers_dir.join("thumbs").join(format!("{title_id}.png"));
+    path.is_file().then_some(path)
+}
+
+/// Ensure a downscaled PNG thumbnail (at most `THUMB_WIDTH` wide, aspect
+/// ratio preserved) exists for the cached cover of `title_id`. Returns
+/// true if one was just created.
+///
+/// The heavy decode + resize runs on the caller's thread, so this MUST be
+/// called off the UI thread. The result is written atomically (temp file +
+/// rename) so a concurrent UI-thread load never sees a half-written PNG.
+pub fn ensure_thumbnail(covers_dir: &Path, title_id: &str) -> Result<bool> {
+    if title_id.is_empty() || cached_thumbnail(covers_dir, title_id).is_some() {
+        return Ok(false);
+    }
+    let Some(cover) = cached_cover(covers_dir, title_id) else {
+        return Ok(false);
+    };
+
+    let img = image::open(&cover)?;
+    let img = if img.width() > THUMB_WIDTH {
+        let height =
+            (u64::from(img.height()) * u64::from(THUMB_WIDTH) / u64::from(img.width())).max(1) as u32;
+        img.resize_exact(THUMB_WIDTH, height, image::imageops::FilterType::Lanczos3)
+    } else {
+        img
+    };
+
+    let dir = covers_dir.join("thumbs");
+    std::fs::create_dir_all(&dir)?;
+    let tmp = dir.join(format!("{title_id}.png.tmp"));
+    img.save_with_format(&tmp, image::ImageFormat::Png)?;
+    std::fs::rename(&tmp, dir.join(format!("{title_id}.png")))?;
+    Ok(true)
 }
 
 /// Download the best cover for `title_id` into `covers_dir`:

@@ -88,6 +88,32 @@ export struct DisplayedGame {
     incomplete: bool,
 }
 
+// Status of one stored component (disc / DLC / title update) shown in the
+// game info modal's table.
+export enum ComponentStatus {
+    // Present and its STFS header parses cleanly.
+    Installed,
+    // STFS header couldn't be read (missing magic / interrupted upload).
+    Corrupted,
+    // Expected but absent (e.g. only DLC installed, base game disc missing).
+    Missing,
+    // Currently being transferred (reserved; wired up later).
+    Uploading,
+}
+
+// One row of the game info modal's stored-components table.
+export struct DisplayedGameComponent {
+    // "Disc", "DLC", or "TU" — drives the row icon and label.
+    kind: string,
+    // On-disk file name of the package, used to delete it. Empty for the
+    // synthetic "Missing" row (which has nothing to delete).
+    id: string,
+    // e.g. "Disc 1 · 545408A7" or the DLC display name.
+    description: string,
+    size-gib: float,
+    status: ComponentStatus,
+}
+
 export struct DisplayedTitleUpdate {
     id: string,
     hash: string,

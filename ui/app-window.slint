@@ -117,6 +117,23 @@ export component AppWindow inherits Window {
     }
 
     if !UiState.current-game.path.is-empty: GameInfoModal { }
+
+    // Confirm deleting a single stored component. Stacked above the info modal
+    // (current-game stays set), so that modal remains open underneath.
+    if UiState.content-to-delete.id != "": ConfirmationModal {
+        Text {
+            text: "Delete \{UiState.content-to-delete.description} (\{UiState.content-to-delete.kind})?\nThis content will be removed from the game. This action cannot be undone.";
+            wrap: word-wrap;
+        }
+        destructive: true;
+        cancelled => {
+            UiState.content-to-delete = { };
+        }
+        confirmed => {
+            Dispatcher.dispatch(Message.DeleteContent, "\{UiState.current-game.path}\n\{UiState.content-to-delete.kind}\n\{UiState.content-to-delete.id}");
+            UiState.content-to-delete = { };
+        }
+    }
     if UiState.showing-title-updates: TitleUpdatesModal { }
 
     if UiState.selecting-target: SelectTargetModal { }
@@ -146,6 +163,7 @@ export component AppWindow inherits Window {
 
         for path in UiState.games-to-add: Text {
             text: "• \{path}";
+            overflow: elide;
         }
 
         cancelled => Dispatcher.dispatch(Message.ClearGamesToAdd, "");

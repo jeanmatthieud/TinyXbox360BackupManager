@@ -44,7 +44,12 @@ pub fn download_covers(
             continue;
         }
 
-        if covers::download_cover(&covers_dir, &game.id, game.is_x360).unwrap_or(false) {
+        let downloaded = covers::download_cover(&covers_dir, &game.id, game.is_x360).unwrap_or(false);
+        // Build the downscaled thumbnail off the UI thread. Also catches
+        // covers cached by a previous run that have no thumbnail yet.
+        let thumbnailed = covers::ensure_thumbnail(&covers_dir, &game.id).unwrap_or(false);
+
+        if downloaded || thumbnailed {
             let _ = weak.upgrade_in_event_loop(move |app| {
                 app.global::<Dispatcher<'_>>()
                     .invoke_dispatch(Message::RefreshDisplayedGames, SharedString::new());

@@ -18,7 +18,7 @@ use std::{
 use txbm_core::{
     badavatar::UrlField, config::TargetKind, conversion_queue::QueuedConversion,
     data_dir::DATA_DIR, drive_info::DriveInfo, ftp::FtpSession, game::Game,
-    target::{StorageConfig, Target, TargetAnalysis},
+    game_details::ContentKind, target::{StorageConfig, Target, TargetAnalysis},
 };
 
 const NEW_DRIVE_TEXT: &str = "New drive detected\nOnce the games are on the console, remember to add the content paths in Aurora\n(Settings > Content Paths)";
@@ -628,6 +628,13 @@ impl State {
                 // re-downloaded by the covers pass right after.
                 txbm_core::mobcat::clear_db();
 
+                // Drop the in-memory thumbnails too, otherwise the wiped
+                // covers would keep showing until the app restarts.
+                crate::games::clear_thumb_cache();
+
+                self.notifications
+                    .push(Notification::info("Covers cache cleared"));
+
                 message_queue.push_back((Message::RefreshDisplayedGames, SharedString::new()));
                 message_queue.push_back((Message::DownloadCovers, SharedString::new()));
             }
@@ -999,6 +1006,67 @@ impl State {
                     });
                 });
             }
+            Message::DeleteContent => {
+                // Payload: "<game path>\n<kind>\n<file name>".
+                let mut parts = payload.splitn(3, '\n');
+                let (Some(path), Some(kind_str), Some(file_name)) =
+                    (parts.next(), parts.next(), parts.next())
+                else {
+                    return;
+                };
+                let path = Path::new(path);
+                let Some(game) = self.games.iter().find(|g| g.path == path).cloned() else {
+                    return;
+                };
+                let Some(target) = Target::from_config(&self.config.contents) else {
+                    return;
+                };
+                let kind = match kind_str {
+                    "Disc" => ContentKind::Disc,
+                    "DLC" => ContentKind::Dlc,
+                    _ => return,
+                };
+                let file_name = file_name.to_string();
+                let game_path = game.path.clone();
+
+                message_queue
+                    .push_back((Message::SetStatus, SharedString::from("✕  Deleting content…")));
+
+                let weak = weak.clone();
+                std::thread::spawn(move || {
+                    let weak2 = weak.clone();
+                    let update_progress = move |percentage| {
+                        let status = slint::format!("✕  Deleting content  {percentage}%");
+                        let _ = weak2.upgrade_in_event_loop(move |app| {
+                            app.global::<UiState<'_>>().set_status(status);
+                        });
+                    };
+
+                    let res = target.delete_content(&game, kind, &file_name, &update_progress);
+
+                    let _ = weak.upgrade_in_event_loop(move |app| {
+                        let dispatcher = app.global::<Dispatcher<'_>>();
+                        dispatcher.invoke_dispatch(Message::SetStatus, SharedString::new());
+
+                        match res {
+                            Ok(()) => dispatcher
+                                .invoke_dispatch(Message::NotifyInfo, "Content deleted".into()),
+                            Err(e) => dispatcher.invoke_dispatch(
+                                Message::NotifyError,
+                                slint::format!("Failed to delete content: {e:#}"),
+                            ),
+                        }
+
+                        // Refresh the table if the info modal is still open on
+                        // the same game.
+                        let ui_state = app.global::<UiState<'_>>();
+                        let current = ui_state.get_current_game();
+                        if current.path.as_str() == game_path.to_string_lossy() {
+                            dispatcher.invoke_dispatch(Message::FetchGameDetails, current.path);
+                        }
+                    });
+                });
+            }
             Message::CancelConversion => {
                 let i = payload.parse().unwrap();
                 // Index 0 is the conversion currently running, which can't be
@@ -1071,8 +1139,7 @@ impl State {
                 };
 
                 ui_state.set_fetching_game_details(true);
-                ui_state.set_current_game_discs(ModelRc::default());
-                ui_state.set_current_game_dlc(ModelRc::default());
+                ui_state.set_current_game_components(ModelRc::default());
 
                 let weak = weak.clone();
                 std::thread::spawn(move || {
@@ -1099,11 +1166,9 @@ impl State {
                     return;
                 }
 
-                ui_state.set_current_game_discs(ModelRc::from(Rc::new(VecModel::from(
-                    game_details::disc_lines(&details),
-                ))));
-                ui_state.set_current_game_dlc(ModelRc::from(Rc::new(VecModel::from(
-                    game_details::dlc_lines(&details),
+                let incomplete = ui_state.get_current_game().incomplete;
+                ui_state.set_current_game_components(ModelRc::from(Rc::new(VecModel::from(
+                    game_details::components(&details, incomplete),
                 ))));
             }
             Message::FetchTitleUpdates => {

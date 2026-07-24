@@ -6,6 +6,7 @@ import { ScrollView, Palette } from "std-widgets.slint";
 import { IconSet } from "@lucide";
 import { SettingCard } from "components/setting-card.slint";
 import { PageHeader } from "components/page-header.slint";
+import { CoversCacheCard } from "components/toolbox/covers-cache-card.slint";
 import { UiState } from "ui-state.slint";
 import { Message, Dispatcher } from "messages.slint";
 
@@ -35,7 +36,7 @@ export component SettingsPage inherits VerticalLayout {
                 label: "Xbox 360 storage format";
                 items: [
                     { value: "God", label: "GOD (Games On Demand, recommended)" },
-                    { value: "Xex", label: "XEX (extracted game folder)" }
+                    { value: "Xex", label: "XEX (extracted game folder, experimental)" }
                 ];
                 active-item: UiState.config.xbox360-format;
                 set-property: Message.SetXbox360Format;
@@ -73,6 +74,8 @@ export component SettingsPage inherits VerticalLayout {
                 active-item: UiState.config.auto-reconnect;
                 set-property: Message.SetAutoReconnect;
             }
+
+            if !UiState.config.target.is-empty: CoversCacheCard { }
         }
     }
 }

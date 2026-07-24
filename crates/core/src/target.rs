@@ -107,7 +107,7 @@ impl Target {
 }
 
 /// Local equivalent of `fs::remove_dir_all` reporting per-file progress.
-fn remove_dir_all_with_progress(
+pub(crate) fn remove_dir_all_with_progress(
     dir: &std::path::Path,
     done: &mut u64,
     total: u64,

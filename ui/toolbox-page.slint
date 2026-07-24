@@ -12,7 +12,6 @@ import { DriveInfoCard } from "components/toolbox/drive-info-card.slint";
 import { ConsoleCard } from "components/toolbox/console-card.slint";
 import { LibraryStorageCard } from "components/toolbox/library-storage-card.slint";
 import { AuroraScanPathsCard } from "components/toolbox/aurora-scan-paths-card.slint";
-import { CoversCacheCard } from "components/toolbox/covers-cache-card.slint";
 
 export component ToolboxPage inherits VerticalLayout {
     init => {
@@ -45,8 +44,6 @@ export component ToolboxPage inherits VerticalLayout {
             // Aurora scan paths: always for a console; for a local drive only
             // when it carries an Aurora install (otherwise nothing to show).
             if !UiState.config.target.is-empty && (UiState.config.target-kind == TargetKind.Ftp || UiState.aurora-scan-paths.length > 0): AuroraScanPathsCard { }
-
-            if !UiState.config.target.is-empty: CoversCacheCard { }
         }
     }
 }
