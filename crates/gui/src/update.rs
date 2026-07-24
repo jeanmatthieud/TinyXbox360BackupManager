@@ -632,6 +632,9 @@ impl State {
                 // covers would keep showing until the app restarts.
                 crate::games::clear_thumb_cache();
 
+                self.notifications
+                    .push(Notification::info("Covers cache cleared"));
+
                 message_queue.push_back((Message::RefreshDisplayedGames, SharedString::new()));
                 message_queue.push_back((Message::DownloadCovers, SharedString::new()));
             }
