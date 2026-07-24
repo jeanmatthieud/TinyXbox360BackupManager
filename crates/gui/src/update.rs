@@ -945,6 +945,7 @@ impl State {
                                     ui_state.set_aurora_scan_paths(ModelRc::from(Rc::new(
                                         VecModel::<SharedString>::default(),
                                     )));
+                                    ui_state.set_aurora_install_dir(SharedString::new());
                                     ui_state.set_aurora_paths_error(slint::format!("{e:#}"));
                                     ui_state.set_app_storage_paths(ModelRc::from(Rc::new(
                                         VecModel::<DisplayedStoragePath>::default(),
@@ -1061,7 +1062,7 @@ impl State {
                         // the same game.
                         let ui_state = app.global::<UiState<'_>>();
                         let current = ui_state.get_current_game();
-                        if current.path.as_str() == game_path.to_string_lossy() {
+                        if Path::new(current.path.as_str()) == game_path {
                             dispatcher.invoke_dispatch(Message::FetchGameDetails, current.path);
                         }
                     });
@@ -1490,6 +1491,7 @@ fn set_storage_status(app: &AppWindow, status: txbm_core::target::StorageStatus)
             .map(|l| SharedString::from(l.as_str()))
             .collect::<Vec<_>>(),
     ))));
+    ui.set_aurora_install_dir(status.aurora_install_dir.clone().unwrap_or_default().into());
 
     let paths: Vec<DisplayedStoragePath> = status
         .paths

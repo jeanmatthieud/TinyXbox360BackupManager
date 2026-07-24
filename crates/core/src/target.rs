@@ -293,6 +293,9 @@ pub fn ftp_hdd_root(session: &mut FtpSession) -> String {
 #[derive(Debug, Clone)]
 pub struct AuroraScan {
     pub locations: Vec<ScanLocation>,
+    /// Where the Aurora installation itself was found (e.g. `/Hdd1/Aurora` on
+    /// a console, or an absolute local path on a mounted drive), for display.
+    pub install_dir: Option<String>,
 }
 
 impl AuroraScan {
@@ -310,15 +313,88 @@ impl AuroraScan {
     }
 }
 
+/// Parses a `launch.ini` (dash-launch config) and returns the directory
+/// holding `Aurora.xex`, relative to whichever drive letter names it (e.g.
+/// `Default = Usb:\Aurora\Aurora.xex` yields `Aurora`), if any `[Paths]`
+/// entry points at one. The drive letter itself is discarded: the caller is
+/// expected to resolve the result against the volume `launch.ini` was read
+/// from, since that's the drive dash-launch booted from and thus the one its
+/// own drive letter (`Usb:`, `Hdd:`, ...) refers to.
+fn aurora_dir_from_launch_ini(text: &str) -> Option<String> {
+    let mut in_paths = false;
+    for line in text.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with(';') {
+            continue;
+        }
+        if let Some(section) = line.strip_prefix('[').and_then(|s| s.strip_suffix(']')) {
+            in_paths = section.eq_ignore_ascii_case("Paths");
+            continue;
+        }
+        if !in_paths {
+            continue;
+        }
+        let Some((_, value)) = line.split_once('=') else {
+            continue;
+        };
+        // Drop the drive letter: "Usb:\Aurora\Aurora.xex" -> "Aurora\Aurora.xex".
+        let value = value.trim();
+        let path = value.split_once(':').map_or(value, |(_, rest)| rest);
+        let path = path.trim_start_matches(['\\', '/']);
+        let Some((dir, file)) = path.rsplit_once('\\') else {
+            continue;
+        };
+        if file.eq_ignore_ascii_case("Aurora.xex") {
+            return Some(dir.replace('\\', "/"));
+        }
+    }
+    None
+}
+
 /// Looks for the Aurora installation on the console's drives and returns
 /// its `Aurora/Data` folder (holding `Databases/` and `TitleUpdates/`).
 pub(crate) fn find_aurora_data_dir(session: &mut FtpSession) -> Option<String> {
-    let roots = session.list_root().ok()?;
-    for root in roots {
-        for entry in session.list_dir(&format!("/{root}")) {
-            if entry.is_dir && entry.name.eq_ignore_ascii_case("Aurora") {
-                return Some(format!("/{root}/{}/Data", entry.name));
-            }
+    for root in session.list_root().ok()? {
+        if let Some(dir) = find_aurora_dir_on_root(session, &root) {
+            return Some(format!("{dir}/Data"));
+        }
+    }
+    None
+}
+
+/// Resolves the Aurora install directory on one console volume: prefers a
+/// `launch.ini`'s `[Paths]` entry when present (whatever the actual layout),
+/// falling back to `Aurora` or `Dashboard/Aurora` at the volume's root.
+fn find_aurora_dir_on_root(session: &mut FtpSession, root: &str) -> Option<String> {
+    let root_path = format!("/{root}");
+
+    let has_ini = session
+        .list_dir(&root_path)
+        .iter()
+        .any(|e| !e.is_dir && e.name.eq_ignore_ascii_case("launch.ini"));
+    if has_ini
+        && let Ok(bytes) = session.download_file(&format!("{root_path}/launch.ini"))
+        && let Ok(text) = String::from_utf8(bytes)
+        && let Some(rel_dir) = aurora_dir_from_launch_ini(&text)
+    {
+        let dir = format!("{root_path}/{rel_dir}");
+        let target_exists = session
+            .list_dir(&dir)
+            .iter()
+            .any(|e| !e.is_dir && e.name.eq_ignore_ascii_case("Aurora.xex"));
+        if target_exists {
+            return Some(dir);
+        }
+    }
+
+    for candidate in ["Aurora", "Dashboard/Aurora"] {
+        let dir = format!("{root_path}/{candidate}");
+        let target_exists = session
+            .list_dir(&dir)
+            .iter()
+            .any(|e| !e.is_dir && e.name.eq_ignore_ascii_case("Aurora.xex"));
+        if target_exists {
+            return Some(dir);
         }
     }
     None
@@ -343,6 +419,9 @@ fn find_aurora_databases(session: &mut FtpSession) -> Option<String> {
 pub fn aurora_paths(session: &mut FtpSession) -> Result<AuroraScan> {
     let db_dir = find_aurora_databases(session)
         .context("Aurora installation not found on console")?;
+    let install_dir = db_dir
+        .strip_suffix("/Data/Databases")
+        .map(str::to_string);
 
     let tmp_dir = DATA_DIR.join("tmp");
     std::fs::create_dir_all(&tmp_dir)?;
@@ -354,7 +433,7 @@ pub fn aurora_paths(session: &mut FtpSession) -> Result<AuroraScan> {
     std::fs::write(&settings_path, settings_bytes)?;
     std::fs::write(&content_path, content_bytes)?;
 
-    let result = read_aurora_databases(&settings_path, &content_path);
+    let result = read_aurora_databases(&settings_path, &content_path, install_dir);
 
     let _ = std::fs::remove_file(&settings_path);
     let _ = std::fs::remove_file(&content_path);
@@ -365,6 +444,7 @@ pub fn aurora_paths(session: &mut FtpSession) -> Result<AuroraScan> {
 fn read_aurora_databases(
     settings_path: &std::path::Path,
     content_path: &std::path::Path,
+    install_dir: Option<String>,
 ) -> Result<AuroraScan> {
     let content_db =
         rusqlite::Connection::open(content_path).context("opening content.db")?;
@@ -410,7 +490,10 @@ fn read_aurora_databases(
     // An empty result is a valid state (Aurora scans nothing yet): callers
     // that need a fallback check `is_empty()`, while the UI reports it to
     // the user instead of treating it as an error.
-    Ok(AuroraScan { locations })
+    Ok(AuroraScan {
+        locations,
+        install_dir,
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -634,6 +717,8 @@ pub struct StorageStatus {
     pub paths: Vec<StoragePathStatus>,
     /// Aurora's scan paths, formatted one per line (for the existing card).
     pub aurora_lines: Vec<String>,
+    /// Where the Aurora installation itself was found, for display.
+    pub aurora_install_dir: Option<String>,
     /// Set when Aurora's databases could not be read (message).
     pub aurora_error: Option<String>,
     /// True when at least one app path is not covered by Aurora (and Aurora
@@ -701,9 +786,9 @@ pub fn ftp_storage_status(session: &mut FtpSession, hdd: &str) -> StorageStatus 
     let root = format!("/{hdd}");
     let manifest = read_ftp_manifest(session);
 
-    let (aurora_locs, aurora_error) = match aurora_paths(session) {
-        Ok(a) => (a.locations, None),
-        Err(e) => (Vec::new(), Some(format!("{e:#}"))),
+    let (aurora_locs, aurora_install_dir, aurora_error) = match aurora_paths(session) {
+        Ok(a) => (a.locations, a.install_dir, None),
+        Err(e) => (Vec::new(), None, Some(format!("{e:#}"))),
     };
 
     let storage = if let Some(s) = manifest {
@@ -729,6 +814,7 @@ pub fn ftp_storage_status(session: &mut FtpSession, hdd: &str) -> StorageStatus 
     StorageStatus {
         paths,
         aurora_lines,
+        aurora_install_dir,
         aurora_error,
         has_uncovered,
         aurora_compared,
@@ -744,22 +830,62 @@ fn find_child_ci(dir: &Path, name: &str) -> Option<PathBuf> {
         .map(|e| e.path())
 }
 
+/// Resolves the Aurora install directory on a mounted drive: prefers a
+/// `launch.ini`'s `[Paths]` entry when present (whatever the actual layout),
+/// falling back to `Aurora` or `Dashboard/Aurora` at the drive's root.
+fn local_aurora_dir(mount: &Path) -> Option<PathBuf> {
+    if let Some(ini_path) = find_child_ci(mount, "launch.ini")
+        && let Ok(text) = std::fs::read_to_string(&ini_path)
+        && let Some(rel_dir) = aurora_dir_from_launch_ini(&text)
+    {
+        let mut dir = mount.to_path_buf();
+        for part in rel_dir.split('/') {
+            dir = find_child_ci(&dir, part).unwrap_or_else(|| dir.join(part));
+        }
+        if find_child_ci(&dir, "Aurora.xex").is_some() {
+            return Some(dir);
+        }
+    }
+
+    for candidate in [vec!["Aurora"], vec!["Dashboard", "Aurora"]] {
+        let mut dir = mount.to_path_buf();
+        let mut ok = true;
+        for part in candidate {
+            match find_child_ci(&dir, part) {
+                Some(child) => dir = child,
+                None => {
+                    ok = false;
+                    break;
+                }
+            }
+        }
+        if ok && find_child_ci(&dir, "Aurora.xex").is_some() {
+            return Some(dir);
+        }
+    }
+    None
+}
+
 /// Locates Aurora's databases on a mounted drive (Aurora on a bootable USB key
 /// sits at the drive root: `<mount>/Aurora/Data/Databases`).
-fn local_aurora_databases(mount: &Path) -> Option<(PathBuf, PathBuf)> {
-    let aurora = find_child_ci(mount, "Aurora")?;
+fn local_aurora_databases(mount: &Path) -> Option<(PathBuf, PathBuf, PathBuf)> {
+    let aurora = local_aurora_dir(mount)?;
     let db_dir = find_child_ci(&aurora, "Data").and_then(|d| find_child_ci(&d, "Databases"))?;
     let settings = find_child_ci(&db_dir, "settings.db")?;
     let content = find_child_ci(&db_dir, "content.db")?;
-    Some((settings, content))
+    Some((settings, content, aurora))
 }
 
 /// Reads Aurora's scan paths from an Aurora installation carried on a local
 /// drive (e.g. a bootable USB key), if present.
 pub fn local_aurora_paths(mount: &Path) -> Result<AuroraScan> {
-    let (settings, content) =
+    let (settings, content, aurora_dir) =
         local_aurora_databases(mount).context("no Aurora databases on this drive")?;
-    read_aurora_databases(&settings, &content)
+    read_aurora_databases(
+        &settings,
+        &content,
+        Some(aurora_dir.to_string_lossy().to_string()),
+    )
 }
 
 /// Local counterpart of [`ftp_storage_status`]: lists the app's storage folders
@@ -818,6 +944,7 @@ pub fn local_storage_status(mount: &Path) -> StorageStatus {
     StorageStatus {
         paths,
         aurora_lines,
+        aurora_install_dir: aurora.as_ref().and_then(|a| a.install_dir.clone()),
         // A drive without Aurora is not an error, just an empty list.
         aurora_error: None,
         has_uncovered,
