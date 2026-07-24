@@ -96,6 +96,9 @@ export global UiState {
     // Locations currently scanned by Aurora on the console, as displayed
     // lines (fetched from its databases over FTP).
     in-out property <[string]> aurora-scan-paths;
+    // Where the Aurora installation itself was found (e.g. "/Hdd1/Aurora").
+    // Empty when not detected.
+    in-out property <string> aurora-install-dir;
     // True while fetching aurora-scan-paths over FTP.
     in-out property <bool> fetching-aurora-paths: false;
     // True once a fetch has completed at least once (to tell an empty

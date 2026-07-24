@@ -36,19 +36,26 @@ pub fn cached_thumbnail(covers_dir: &Path, title_id: &str) -> Option<PathBuf> {
 }
 
 /// Ensure a downscaled PNG thumbnail (at most `THUMB_WIDTH` wide, aspect
-/// ratio preserved) exists for the cached cover of `title_id`. Returns
-/// true if one was just created.
+/// ratio preserved) exists for the cached cover of `title_id`, and is not
+/// older than that cover. Returns true if one was just (re)created.
+///
+/// A thumbnail is rebuilt when the source cover is newer than it (cover
+/// refreshed in place), so an updated cover is not masked by a stale thumb.
 ///
 /// The heavy decode + resize runs on the caller's thread, so this MUST be
 /// called off the UI thread. The result is written atomically (temp file +
 /// rename) so a concurrent UI-thread load never sees a half-written PNG.
 pub fn ensure_thumbnail(covers_dir: &Path, title_id: &str) -> Result<bool> {
-    if title_id.is_empty() || cached_thumbnail(covers_dir, title_id).is_some() {
+    if title_id.is_empty() {
         return Ok(false);
     }
     let Some(cover) = cached_cover(covers_dir, title_id) else {
         return Ok(false);
     };
+    let thumb = covers_dir.join("thumbs").join(format!("{title_id}.png"));
+    if thumbnail_is_fresh(&thumb, &cover) {
+        return Ok(false);
+    }
 
     let img = image::open(&cover)?;
     let img = if img.width() > THUMB_WIDTH {
@@ -65,6 +72,17 @@ pub fn ensure_thumbnail(covers_dir: &Path, title_id: &str) -> Result<bool> {
     img.save_with_format(&tmp, image::ImageFormat::Png)?;
     std::fs::rename(&tmp, dir.join(format!("{title_id}.png")))?;
     Ok(true)
+}
+
+/// True if `thumb` exists and is at least as new as its source `cover`. A
+/// missing thumbnail (or unreadable mtime on either side) is treated as
+/// stale so the thumbnail is (re)built.
+fn thumbnail_is_fresh(thumb: &Path, cover: &Path) -> bool {
+    let modified = |p: &Path| std::fs::metadata(p).and_then(|m| m.modified());
+    match (modified(thumb), modified(cover)) {
+        (Ok(t), Ok(c)) => t >= c,
+        _ => false,
+    }
 }
 
 /// Download the best cover for `title_id` into `covers_dir`:

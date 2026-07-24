@@ -107,6 +107,11 @@ export component AuroraScanPathsCard inherits ToolboxCard {
         }
     }
 
+    if !UiState.fetching-aurora-paths && UiState.aurora-install-dir != "": Text {
+        text: "Aurora found at: " + UiState.aurora-install-dir;
+        wrap: word-wrap;
+    }
+
     if !UiState.fetching-aurora-paths && UiState.aurora-scan-paths.length > 0: VerticalLayout {
         spacing: 3px;
 

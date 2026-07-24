@@ -7,6 +7,7 @@ use slint::{Image, ToSharedString};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::time::SystemTime;
 use txbm_core::{
     covers,
     data_dir::DATA_DIR,
@@ -16,8 +17,12 @@ use txbm_core::{
 thread_local! {
     // Decoded thumbnails, keyed by their file path, so a list refresh reuses
     // the already-decoded `Image` instead of re-reading and re-decoding every
-    // cover from disk. Only ever touched from the UI thread (`From` runs there).
-    static THUMB_CACHE: RefCell<HashMap<PathBuf, Image>> = RefCell::new(HashMap::new());
+    // cover from disk. The stored mtime lets us drop an entry whose file was
+    // rewritten in place (cover refreshed at the same path), so an updated
+    // thumbnail is not masked by the previously decoded one. Only ever
+    // touched from the UI thread (`From` runs there).
+    static THUMB_CACHE: RefCell<HashMap<PathBuf, (SystemTime, Image)>> =
+        RefCell::new(HashMap::new());
 }
 
 /// Drop every cached thumbnail. Call this after the on-disk cover cache is
@@ -27,13 +32,20 @@ pub fn clear_thumb_cache() {
 }
 
 /// Load a thumbnail through the in-memory cache, decoding from disk at most
-/// once per path.
+/// once per (path, mtime). A cached entry is reused only while the file's
+/// mtime is unchanged, so a thumbnail rewritten in place is picked up.
 fn load_thumbnail(path: PathBuf) -> Option<Image> {
-    if let Some(img) = THUMB_CACHE.with(|c| c.borrow().get(&path).cloned()) {
+    let mtime = std::fs::metadata(&path).and_then(|m| m.modified()).ok()?;
+    if let Some(img) = THUMB_CACHE.with(|c| {
+        c.borrow()
+            .get(&path)
+            .filter(|(t, _)| *t == mtime)
+            .map(|(_, img)| img.clone())
+    }) {
         return Some(img);
     }
     let img = Image::load_from_path(&path).ok()?;
-    THUMB_CACHE.with(|c| c.borrow_mut().insert(path, img.clone()));
+    THUMB_CACHE.with(|c| c.borrow_mut().insert(path, (mtime, img.clone())));
     Some(img)
 }
 
