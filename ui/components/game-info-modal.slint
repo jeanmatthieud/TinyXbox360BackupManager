@@ -3,28 +3,29 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 import { ScrollView, ProgressIndicator, Palette } from "std-widgets.slint";
-import { ComponentStatus, DisplayedGame } from "../types.slint";
+import { ComponentStatus, DisplayedGame, DisplayedGameComponent } from "../types.slint";
 import { IconSet, IconDisplay, Icon } from "@lucide";
 import { Link } from "link.slint";
 import { Card } from "card.slint";
 import { HorizontalLine } from "horizontal-line.slint";
 import { MyPalette } from "../styling.slint";
 import { IconButton, IconButtonKind } from "icon-button.slint";
+import { TooltipArea } from "tooltip-area.slint";
 import { Modal } from "modal.slint";
 import { CoverImage } from "cover-image.slint";
 import { UiState } from "../ui-state.slint";
 import { Message, Dispatcher } from "../messages.slint";
 
-export component GameInfoModal inherits Modal {
-    max-w: 640px;
-    min-w: 520px;
-    min-h: 460px;
-    max-h: 620px;
+// One table row for a stored component, with a trash button revealed on hover
+// (except for the synthetic "Missing" row, which has nothing to delete).
+component ContentRow inherits Rectangle {
+    in property <DisplayedGameComponent> comp;
+    in property <length> col-kind;
+    in property <length> col-size;
+    in property <length> col-status;
+    callback delete-requested();
 
-    // Shared column widths so the header and every row line up.
-    property <length> col-kind: 96px;
-    property <length> col-size: 84px;
-    property <length> col-status: 112px;
+    property <bool> deletable: comp.status != ComponentStatus.Missing;
 
     pure function kind-icon(k: string) -> Icon {
         if k == "DLC" {
@@ -69,6 +70,99 @@ export component GameInfoModal inherits Modal {
             "Uploading"
         }
     }
+
+    height: max(32px, layout.preferred-height);
+    border-radius: 6px;
+    // background: ta.has-hover ? MyPalette.alternate-background : transparent;
+
+    // Under the trash button (declared later), so the button still gets its
+    // clicks; only there to drive the row's hover state.
+    ta := TouchArea { }
+
+    layout := HorizontalLayout {
+        spacing: 10px;
+        cross-axis-alignment: CrossAxisAlignment.center;
+
+        HorizontalLayout {
+            width: col-kind;
+            spacing: 5px;
+            cross-axis-alignment: CrossAxisAlignment.center;
+
+            IconDisplay {
+                icon: kind-icon(comp.kind);
+                stroke: MyPalette.foreground;
+                size: 14px;
+            }
+
+            Text {
+                text: comp.kind;
+                vertical-alignment: center;
+            }
+        }
+
+        Text {
+            text: comp.description;
+            horizontal-stretch: 1;
+            overflow: elide;
+            vertical-alignment: center;
+        }
+
+        Text {
+            text: comp.size-gib > 0 ? "\{comp.size-gib.to-fixed(2)} GiB" : "—";
+            width: col-size;
+            vertical-alignment: center;
+        }
+
+        // Status is icon-only to save space; the label shows as a tooltip.
+        HorizontalLayout {
+            width: col-status;
+            alignment: start;
+            cross-axis-alignment: CrossAxisAlignment.center;
+
+            TooltipArea {
+                width: 18px;
+                height: 18px;
+                tooltip: status-text(comp.status);
+
+                IconDisplay {
+                    icon: status-icon(comp.status);
+                    stroke: status-color(comp.status);
+                    size: 14px;
+                }
+            }
+        }
+    }
+
+    // Overlaid at the right edge so it doesn't shift the columns; revealed
+    // only while the row is hovered.
+    del := IconButton {
+        // A TouchArea-based element fills its parent by default when it isn't
+        // inside a layout, so pin an explicit square size.
+        width: 25px;
+        height: 25px;
+        x: parent.width - self.width - 10px /* scrollbar */;
+        y: (parent.height - self.height) / 2;
+        // Include the button's own hover so it stays visible once the pointer
+        // moves onto it (which pulls hover off `ta`).
+        visible: (ta.has-hover || del.has-hover) && deletable;
+        icon: IconSet.Trash;
+        kind: IconButtonKind.DestructiveText;
+        clicked => {
+            root.delete-requested();
+        }
+    }
+}
+
+export component GameInfoModal inherits Modal {
+    max-w: 640px;
+    min-w: 520px;
+    min-h: 460px;
+    max-h: 620px;
+
+    // Shared column widths so the header and every row line up.
+    property <length> col-kind: 72px;
+    property <length> col-size: 84px;
+    property <length> col-status: 64px;
 
     // Fill the whole card: the shared Modal body uses `alignment: start`,
     // which ignores stretch factors, so wrap our content in a layout pinned
@@ -177,7 +271,7 @@ export component GameInfoModal inherits Modal {
 
             // Shadow caster, sized exactly to the cover so the drop shadow
             // hugs it (a layout-stretched wrapper would shadow the wrong box).
-            Rectangle {
+            if UiState.current-game.cover.width > 0: Rectangle {
                 width: cover.width;
                 height: cover.height;
                 background: black;
@@ -200,6 +294,23 @@ export component GameInfoModal inherits Modal {
                     }
                 }
             }
+
+            // No cover cached: neutral placeholder, same footprint as a
+            // portrait front panel.
+            if UiState.current-game.cover.width == 0: Rectangle {
+                width: 142px;
+                height: 190px;
+                border-radius: 8px;
+                background: MyPalette.alternate-background;
+
+                IconDisplay {
+                    x: (parent.width - self.width) / 2;
+                    y: (parent.height - self.height) / 2;
+                    icon: IconSet.Image;
+                    size: 48px;
+                    stroke: MyPalette.foreground.transparentize(0.6);
+                }
+            }
         }
     }
 
@@ -216,7 +327,7 @@ export component GameInfoModal inherits Modal {
             spacing: 10px;
 
             Text {
-                text: "Component";
+                text: "Content";
                 width: col-kind;
                 font-weight: 600;
                 color: MyPalette.foreground.transparentize(0.35);
@@ -264,56 +375,15 @@ export component GameInfoModal inherits Modal {
                     horizontal-alignment: left;
                 }
 
-                for comp in UiState.current-game-components: HorizontalLayout {
-                    spacing: 10px;
-                    cross-axis-alignment: CrossAxisAlignment.center;
-
-                    HorizontalLayout {
-                        width: col-kind;
-                        spacing: 5px;
-                        cross-axis-alignment: CrossAxisAlignment.center;
-
-                        IconDisplay {
-                            icon: kind-icon(comp.kind);
-                            stroke: MyPalette.foreground;
-                            size: 14px;
-                        }
-
-                        Text {
-                            text: comp.kind;
-                            vertical-alignment: center;
-                        }
-                    }
-
-                    Text {
-                        text: comp.description;
-                        horizontal-stretch: 1;
-                        overflow: elide;
-                        vertical-alignment: center;
-                    }
-
-                    Text {
-                        text: comp.size-gib > 0 ? "\{comp.size-gib.to-fixed(2)} GiB" : "—";
-                        width: col-size;
-                        vertical-alignment: center;
-                    }
-
-                    HorizontalLayout {
-                        width: col-status;
-                        spacing: 5px;
-                        cross-axis-alignment: CrossAxisAlignment.center;
-
-                        IconDisplay {
-                            icon: status-icon(comp.status);
-                            stroke: status-color(comp.status);
-                            size: 14px;
-                        }
-
-                        Text {
-                            text: status-text(comp.status);
-                            color: status-color(comp.status);
-                            vertical-alignment: center;
-                        }
+                for comp in UiState.current-game-components: ContentRow {
+                    comp: comp;
+                    col-kind: root.col-kind;
+                    col-size: root.col-size;
+                    col-status: root.col-status;
+                    // Ask for confirmation without touching current-game, so
+                    // the detail modal stays open beneath the confirmation.
+                    delete-requested => {
+                        UiState.content-to-delete = comp;
                     }
                 }
             }

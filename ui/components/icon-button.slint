@@ -12,6 +12,7 @@ export enum IconButtonKind {
     Secondary,
     Destructive,
     DestructiveText,
+    DestructiveOutline,
 }
 
 export component IconButton inherits TooltipArea {
@@ -29,6 +30,8 @@ export component IconButton inherits TooltipArea {
             self.has-hover ? MyPalette.destructive.darker(0.2) : MyPalette.destructive;
         } else if kind == IconButtonKind.DestructiveText {
             transparent
+        } else if kind == IconButtonKind.DestructiveOutline {
+            self.has-hover ? MyPalette.destructive.transparentize(0.85) : transparent
         } else {
             self.has-hover ? MyPalette.alternate-background.darker(0.1) : MyPalette.alternate-background;
         }
@@ -37,6 +40,8 @@ export component IconButton inherits TooltipArea {
     pure function get-border-color() -> color {
         if kind == IconButtonKind.DestructiveText {
             self.has-hover ? MyPalette.destructive : transparent
+        } else if kind == IconButtonKind.DestructiveOutline {
+            MyPalette.destructive
         } else if kind == IconButtonKind.Secondary && !squared {
             MyPalette.border
         } else {
@@ -47,6 +52,8 @@ export component IconButton inherits TooltipArea {
     pure function get-border-width() -> length {
         if kind == IconButtonKind.DestructiveText {
             self.has-hover ? 1px : 0px
+        } else if kind == IconButtonKind.DestructiveOutline {
+            1px
         } else if kind == IconButtonKind.Secondary && !squared {
             1px
         } else {
@@ -57,6 +64,8 @@ export component IconButton inherits TooltipArea {
     pure function get-stroke() -> brush {
         if kind == IconButtonKind.DestructiveText {
             self.has-hover ? MyPalette.destructive : MyPalette.foreground.transparentize(0.4)
+        } else if kind == IconButtonKind.DestructiveOutline {
+            MyPalette.destructive
         } else if kind == IconButtonKind.Secondary {
             MyPalette.foreground
         } else {

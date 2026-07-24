@@ -16,6 +16,7 @@ pub fn components(details: &GameDetails, incomplete: bool) -> Vec<DisplayedGameC
     for disc in &details.discs {
         rows.push(DisplayedGameComponent {
             kind: "Disc".into(),
+            id: disc.file_name.as_str().into(),
             description: slint::format!("{} · {}", disc.description, disc.media_id),
             size_gib: disc.size as f32 / GIB,
             status: status(disc.readable),
@@ -25,6 +26,7 @@ pub fn components(details: &GameDetails, incomplete: bool) -> Vec<DisplayedGameC
     if incomplete {
         rows.push(DisplayedGameComponent {
             kind: "Disc".into(),
+            id: "".into(),
             description: "Game disc".into(),
             size_gib: 0.0,
             status: ComponentStatus::Missing,
@@ -39,6 +41,7 @@ pub fn components(details: &GameDetails, incomplete: bool) -> Vec<DisplayedGameC
             .unwrap_or_else(|| slint::format!("DLC {}", i + 1));
         rows.push(DisplayedGameComponent {
             kind: "DLC".into(),
+            id: dlc.file_name.as_str().into(),
             description,
             size_gib: dlc.size as f32 / GIB,
             status: status(dlc.readable),

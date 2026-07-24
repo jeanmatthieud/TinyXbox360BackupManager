@@ -24,6 +24,10 @@ export global UiState {
     // absent base disc) for `current-game`, one row per item, fetched on
     // demand when its info modal is opened (may involve an FTP round-trip).
     in-out property <[DisplayedGameComponent]> current-game-components;
+    // Set to the component the user asked to delete (from the info modal's
+    // per-row trash button): shows a confirmation without closing the info
+    // modal. `id == ""` means no deletion pending.
+    in-out property <DisplayedGameComponent> content-to-delete;
     in-out property <bool> fetching-game-details: false;
 
     // Title Updates window for `current-game`, opened separately from a
