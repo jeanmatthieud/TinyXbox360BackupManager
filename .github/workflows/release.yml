@@ -41,7 +41,7 @@ jobs:
           fetch-depth: 0 # semantic-release needs full history + tags
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
@@ -393,7 +393,7 @@ jobs:
           persist-credentials: true # @semantic-release/git pushes the release commit
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
