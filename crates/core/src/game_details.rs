@@ -43,11 +43,30 @@ pub struct DiscInfo {
     /// e.g. "Disc 1 of 2", or plain "Disc" for single-disc games.
     pub description: String,
     pub size: u64,
+    /// False when the STFS header couldn't be parsed (no magic / read
+    /// error) — a disc header always should, so this flags a corrupted or
+    /// interrupted install.
+    pub readable: bool,
 }
 
 #[derive(Debug, Clone)]
 pub struct DlcInfo {
+    /// The DLC's own display name from its STFS header, when readable
+    /// (e.g. "Multiplayer Map Pack"). `None` if the file isn't a parseable
+    /// STFS package or carries no name.
+    pub name: Option<String>,
     pub size: u64,
+    /// False when the STFS header couldn't be parsed (no magic / read
+    /// error): the package is corrupted or was only partially uploaded.
+    pub readable: bool,
+}
+
+/// Best human-readable name for a DLC package: its own `display_name` first
+/// (the content name), falling back to `title_name` (the parent game).
+fn dlc_name(info: &stfs::StfsInfo) -> Option<String> {
+    info.display_name
+        .clone()
+        .or_else(|| info.title_name.clone())
 }
 
 #[derive(Debug, Clone, Default)]
@@ -85,11 +104,13 @@ fn inspect_local(game: &Game) -> GameDetails {
                 }
                 let header_size = entry.metadata().map(|m| m.len()).unwrap_or(0);
                 let data_dir = type_dir.join(format!("{name}.data"));
-                let description = disc_description(stfs::inspect(&path).ok().flatten());
+                let info = stfs::inspect(&path).ok().flatten();
+                let readable = info.is_some();
                 details.discs.push(DiscInfo {
                     media_id: name.to_uppercase(),
-                    description,
+                    description: disc_description(info),
                     size: header_size + dir_size(&data_dir),
+                    readable,
                 });
             }
         }
@@ -98,11 +119,19 @@ fn inspect_local(game: &Game) -> GameDetails {
     let dlc_dir = game.path.join(dlc_dir_name());
     if let Ok(entries) = std::fs::read_dir(&dlc_dir) {
         for entry in entries.flatten() {
-            if !entry.path().is_file() {
+            let path = entry.path();
+            if !path.is_file() {
                 continue;
             }
             let size = entry.metadata().map(|m| m.len()).unwrap_or(0);
-            details.dlc.push(DlcInfo { size });
+            let info = stfs::inspect(&path).ok().flatten();
+            let readable = info.is_some();
+            let name = info.as_ref().and_then(dlc_name);
+            details.dlc.push(DlcInfo {
+                name,
+                size,
+                readable,
+            });
         }
     }
 
@@ -128,19 +157,41 @@ fn inspect_ftp(session: &mut FtpSession, game: &Game) -> GameDetails {
                     .ok()
                     .flatten()
             });
+            let readable = info.is_some();
             let data_size = session.dir_size(&format!("{type_dir}/{}.data", entry.name), 1);
             details.discs.push(DiscInfo {
                 media_id: entry.name.to_uppercase(),
                 description: disc_description(info),
                 size: entry.size + data_size,
+                readable,
             });
         }
     }
 
-    for entry in session.list_dir(&format!("{remote}/{}", dlc_dir_name())) {
-        if !entry.is_dir {
-            details.dlc.push(DlcInfo { size: entry.size });
+    let dlc_dir = format!("{remote}/{}", dlc_dir_name());
+    for entry in session.list_dir(&dlc_dir) {
+        if entry.is_dir {
+            continue;
         }
+        // Read just the STFS header prefix (Aurora has no REST, so this is a
+        // prefix read from offset 0) rather than downloading the whole DLC.
+        let header_path = format!("{dlc_dir}/{}", entry.name);
+        let info = session
+            .download_prefix(&header_path, stfs::HEADER_SIZE)
+            .ok()
+            .and_then(|bytes| {
+                let mut cursor = std::io::Cursor::new(bytes);
+                stfs::inspect_reader(&mut cursor, PathBuf::from(&header_path))
+                    .ok()
+                    .flatten()
+            });
+        let readable = info.is_some();
+        let name = info.as_ref().and_then(dlc_name);
+        details.dlc.push(DlcInfo {
+            name,
+            size: entry.size,
+            readable,
+        });
     }
 
     details

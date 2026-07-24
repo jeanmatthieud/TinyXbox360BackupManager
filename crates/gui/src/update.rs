@@ -1075,8 +1075,7 @@ impl State {
                 };
 
                 ui_state.set_fetching_game_details(true);
-                ui_state.set_current_game_discs(ModelRc::default());
-                ui_state.set_current_game_dlc(ModelRc::default());
+                ui_state.set_current_game_components(ModelRc::default());
 
                 let weak = weak.clone();
                 std::thread::spawn(move || {
@@ -1103,11 +1102,9 @@ impl State {
                     return;
                 }
 
-                ui_state.set_current_game_discs(ModelRc::from(Rc::new(VecModel::from(
-                    game_details::disc_lines(&details),
-                ))));
-                ui_state.set_current_game_dlc(ModelRc::from(Rc::new(VecModel::from(
-                    game_details::dlc_lines(&details),
+                let incomplete = ui_state.get_current_game().incomplete;
+                ui_state.set_current_game_components(ModelRc::from(Rc::new(VecModel::from(
+                    game_details::components(&details, incomplete),
                 ))));
             }
             Message::FetchTitleUpdates => {

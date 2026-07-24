@@ -1,32 +1,57 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
-//! Formats the disc/DLC listing shown on the game info modal, below the
-//! Size line.
+//! Builds the stored-components table shown on the game info modal (discs,
+//! DLC, and a "Missing" placeholder for an absent base disc).
 
 use crate::util::GIB;
-use slint::SharedString;
+use crate::{ComponentStatus, DisplayedGameComponent};
+use slint::ToSharedString;
 use txbm_core::game_details::GameDetails;
 
-pub fn disc_lines(details: &GameDetails) -> Vec<SharedString> {
-    details
-        .discs
-        .iter()
-        .map(|disc| {
-            slint::format!(
-                "{} {}: {:.2} GiB",
-                disc.description,
-                disc.media_id,
-                disc.size as f32 / GIB
-            )
-        })
-        .collect()
+/// One table row per disc and DLC, plus a synthetic "Missing" disc row when
+/// the game is incomplete (only DLC/updates installed, base disc gone).
+pub fn components(details: &GameDetails, incomplete: bool) -> Vec<DisplayedGameComponent> {
+    let mut rows = Vec::new();
+
+    for disc in &details.discs {
+        rows.push(DisplayedGameComponent {
+            kind: "Disc".into(),
+            description: slint::format!("{} · {}", disc.description, disc.media_id),
+            size_gib: disc.size as f32 / GIB,
+            status: status(disc.readable),
+        });
+    }
+
+    if incomplete {
+        rows.push(DisplayedGameComponent {
+            kind: "Disc".into(),
+            description: "Game disc".into(),
+            size_gib: 0.0,
+            status: ComponentStatus::Missing,
+        });
+    }
+
+    for (i, dlc) in details.dlc.iter().enumerate() {
+        let description = dlc
+            .name
+            .clone()
+            .map(|n| n.to_shared_string())
+            .unwrap_or_else(|| slint::format!("DLC {}", i + 1));
+        rows.push(DisplayedGameComponent {
+            kind: "DLC".into(),
+            description,
+            size_gib: dlc.size as f32 / GIB,
+            status: status(dlc.readable),
+        });
+    }
+
+    rows
 }
 
-pub fn dlc_lines(details: &GameDetails) -> Vec<SharedString> {
-    details
-        .dlc
-        .iter()
-        .enumerate()
-        .map(|(i, dlc)| slint::format!("DLC {}: {:.2} GiB", i + 1, dlc.size as f32 / GIB))
-        .collect()
+fn status(readable: bool) -> ComponentStatus {
+    if readable {
+        ComponentStatus::Installed
+    } else {
+        ComponentStatus::Corrupted
+    }
 }

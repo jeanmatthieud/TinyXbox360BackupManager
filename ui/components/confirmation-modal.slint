@@ -17,7 +17,7 @@ export component ConfirmationModal inherits Modal {
     // spacing: 10px;
 
     ScrollView {
-        width: v.preferred-width;
+        width: min(v.preferred-width, root.max-w - 40px);
         height: min(v.preferred-height, 300px);
 
         v := VerticalLayout {

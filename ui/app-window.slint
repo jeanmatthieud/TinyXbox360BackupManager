@@ -146,6 +146,7 @@ export component AppWindow inherits Window {
 
         for path in UiState.games-to-add: Text {
             text: "• \{path}";
+            overflow: elide;
         }
 
         cancelled => Dispatcher.dispatch(Message.ClearGamesToAdd, "");

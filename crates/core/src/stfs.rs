@@ -12,6 +12,12 @@ use std::path::{Path, PathBuf};
 /// Discs sharing a TitleID are told apart by these two bytes.
 const DISC_NUMBER_OFFSET: u64 = 0x366;
 
+/// Bytes needed to cover every field `inspect_reader` reads. The last one is
+/// `title_name` at 0x1691 spanning 0x100 bytes (ends at 0x1791); rounded up.
+/// Used to fetch just the header prefix of a large package (e.g. over FTP)
+/// instead of downloading the whole file.
+pub const HEADER_SIZE: usize = 0x1800;
+
 /// Marketplace content (DLC, unlocks).
 pub const CONTENT_TYPE_DLC: u32 = 0x0000_0002;
 /// Title update.
