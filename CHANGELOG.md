@@ -1,3 +1,48 @@
+## [0.8.0](https://github.com/jeanmatthieud/TinyXbox360BackupManager/compare/v0.7.0...v0.8.0) (2026-07-24)
+
+### Features
+
+* Add support for displaying Aurora installation directory and enhance thumbnail caching mechanism ([8cbf183](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/8cbf183a6944ba458a470aa61effbb840866d5dc))
+* Update target selection button behavior during BadAvatar USB key creation ([660c452](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/660c452949df69f1166e93ba20384bb18689bf55))
+
+### Bug Fixes
+
+* Improve thumbnail freshness check ([f586e8e](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/f586e8e5e114dd7d0f89dade54da889512fa910f))
+
+
+---
+
+
+<a href="https://github.com/sponsors/jeanmatthieud">
+  <img src="https://img.shields.io/badge/GitHub%20Sponsors-Support-ea4aaa?logo=github-sponsors&logoColor=white" alt="GitHub Sponsors">
+</a>
+<a href="https://ko-fi.com/W6I723OON9">
+  <img src="https://img.shields.io/badge/Ko--fi-Support%20Me-ff5e5b?logo=ko-fi&logoColor=white" alt="Ko-fi">
+</a>
+
+
+Between my freelance work and my two little daughters, free time is a rare commodity! I build this tool on my own time, with a lot of late-night coffee.
+
+If TinyXbox360BackupManager saved you time or made you smile, **a donation** (much cheaper than a new game) **helps me keep maintaining and improving it**.
+
+Thanks! 🎮
+
+<hr />
+
+> [!TIP]
+> **:window: Windows installation:**\
+> Most users should download `TinyXbox360BackupManager-vX.X.X-windows-x64.exe`
+
+> [!TIP]
+> **:penguin: Linux installation:**\
+> Most users should download `TinyXbox360BackupManager-vX.X.X-linux-x86_64.AppImage`
+> `chmod +x /path/to/AppImage` after downloading may be required
+
+> [!IMPORTANT]
+> **:apple: macOS installation:**\
+> The app is not notarized, you must allow it manually after installing by running this command in Terminal:\
+> `xattr -rd com.apple.quarantine /Applications/TinyXbox360BackupManager.app`
+
 ## [0.7.0](https://github.com/jeanmatthieud/TinyXbox360BackupManager/compare/v0.6.1...v0.7.0) (2026-07-24)
 
 ### Features
