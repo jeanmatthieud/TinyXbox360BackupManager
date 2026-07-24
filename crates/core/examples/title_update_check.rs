@@ -35,7 +35,11 @@ fn main() -> anyhow::Result<()> {
             );
         }
         for dlc in &details.dlc {
-            println!("  dlc — {} bytes", dlc.size);
+            println!(
+                "  dlc — {} — {} bytes",
+                dlc.name.as_deref().unwrap_or("<no name>"),
+                dlc.size
+            );
         }
 
         let installed = target.installed_title_updates(game)?;
