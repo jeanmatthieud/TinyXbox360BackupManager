@@ -628,6 +628,10 @@ impl State {
                 // re-downloaded by the covers pass right after.
                 txbm_core::mobcat::clear_db();
 
+                // Drop the in-memory thumbnails too, otherwise the wiped
+                // covers would keep showing until the app restarts.
+                crate::games::clear_thumb_cache();
+
                 message_queue.push_back((Message::RefreshDisplayedGames, SharedString::new()));
                 message_queue.push_back((Message::DownloadCovers, SharedString::new()));
             }

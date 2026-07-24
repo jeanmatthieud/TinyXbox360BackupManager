@@ -1,1 +1,30 @@
-usr/bin/TinyXbox360BackupManager
+#!/bin/sh
+APPDIR="$(dirname "$(readlink -f "$0")")"
+
+# Expose bundled data (icons, desktop file) to the app process
+export XDG_DATA_DIRS="${APPDIR}/usr/share${XDG_DATA_DIRS:+:${XDG_DATA_DIRS}}"
+
+# Desktop integration: install icon and .desktop file into the user's
+# local share dirs so that Wayland compositors and X11 desktop
+# environments can resolve the taskbar/dock icon via the app_id / WM_CLASS.
+# $APPIMAGE is set by the AppImage runtime to the .AppImage file path.
+if [ -n "${APPIMAGE}" ]; then
+    _icon_src="${APPDIR}/usr/share/icons/hicolor/256x256/apps/fr.dechriste.TinyXbox360BackupManager.png"
+    _icon_dst="${HOME}/.local/share/icons/hicolor/256x256/apps/fr.dechriste.TinyXbox360BackupManager.png"
+    _desk_src="${APPDIR}/usr/share/applications/fr.dechriste.TinyXbox360BackupManager.desktop"
+    _desk_dst="${HOME}/.local/share/applications/fr.dechriste.TinyXbox360BackupManager.desktop"
+
+    mkdir -p "${HOME}/.local/share/icons/hicolor/256x256/apps" \
+             "${HOME}/.local/share/applications"
+
+    # Refresh icon when the AppImage is newer than the installed copy
+    if [ ! -f "${_icon_dst}" ] || [ "${_icon_src}" -nt "${_icon_dst}" ]; then
+        cp -f "${_icon_src}" "${_icon_dst}"
+    fi
+
+    # Always rewrite Exec= so it points at the current AppImage path.
+    sed "s|^Exec=.*|Exec=${APPIMAGE}|" "${_desk_src}" > "${_desk_dst}"
+    update-desktop-database "${HOME}/.local/share/applications" 2>/dev/null || true
+fi
+
+exec "${APPDIR}/usr/bin/TinyXbox360BackupManager" "$@"

@@ -9,7 +9,7 @@
 // that are already front-only (portrait, e.g. Original Xbox) are shown as-is.
 export component CoverImage inherits Image {
     property <bool> is-wrap: self.source.width > self.source.height;
-    property <float> front-fraction: 0.4745;
+    property <float> front-fraction: 0.47; // Rounded down for better visual representation
 
     source-clip-x: is-wrap ? round(self.source.width * (1 - front-fraction)) : 0;
     source-clip-y: 0;
