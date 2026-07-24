@@ -1,35 +1,68 @@
 name: Release
 
+# Fully automated release pipeline driven by semantic-release.
+#
+# On push to `main`:
+#   1. `version` runs semantic-release in dry-run to compute the next version
+#      from the Conventional Commits since the last release.
+#   2. The `build-*` jobs bump Cargo.toml to that version and compile, so the
+#      binary embeds the correct `env!("CARGO_PKG_VERSION")` (used by the
+#      self-updater in crates/core/src/updates.rs).
+#   3. `release` runs semantic-release for real: it generates CHANGELOG.md,
+#      commits the version bump, tags `vX.Y.Z` and publishes the GitHub Release
+#      with the built assets.
+#
+# On pull_request: the `build-*` jobs run for validation only (no release).
+
 on:
   push:
     branches:
       - main
-      - dev
-      - slint
-    tags:
-      - "v*.*.*"
-    paths:
-      - ".github/workflows/release.yml"
-      - "**.rs"
-      - "**.slint"
-      - "**/Cargo.toml"
-      - "**/Cargo.lock"
-      - "package/**"
   pull_request:
   workflow_dispatch:
 
 permissions:
   contents: write
 
-env:
-  VERSION_NAME: ${{ github.ref_type == 'tag' && github.ref_name || github.sha }}
-
 jobs:
   # ==================================================================================
-  #  Build & Bundle Jobs
+  #  Stage 1: Compute the next version (semantic-release dry-run).
+  # ==================================================================================
+  version:
+    name: Compute next version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.semantic.outputs.version }}
+      published: ${{ steps.semantic.outputs.version != '' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0 # semantic-release needs full history + tags
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Compute next version
+        id: semantic
+        run: npx semantic-release --dry-run
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ==================================================================================
+  #  Stage 2: Build & Bundle Jobs
+  #  Run on pull_request (validation) or when a release is due on push to main.
   # ==================================================================================
   build-linux:
     name: Build for Linux
+    needs: version
+    if: github.event_name == 'pull_request' || needs.version.outputs.published == 'true'
     runs-on: ${{ matrix.runner }}
     container:
       image: rust:1.97-bullseye
@@ -88,6 +121,19 @@ jobs:
           wget -O /usr/local/bin/yq "https://github.com/mikefarah/yq/releases/latest/download/yq_linux_${YQ_ARCH}"
           chmod +x /usr/local/bin/yq
 
+      - name: Set release version
+        if: needs.version.outputs.published == 'true'
+        run: yq -i '.workspace.package.version = "${{ needs.version.outputs.version }}"' Cargo.toml
+
+      - name: Resolve version name
+        id: name
+        run: |
+          if [ "${{ needs.version.outputs.published }}" = "true" ]; then
+            echo "version=${{ needs.version.outputs.version }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Build binary
         run: |
           cargo build -Z build-std=std,panic_abort --release --target ${{ matrix.target }} --no-default-features --features rustls
@@ -114,7 +160,7 @@ jobs:
             --comp zstd --mksquashfs-opt -Xcompression-level --mksquashfs-opt 19 \
             -u "gh-releases-zsync|jeanmatthieud|TinyXbox360BackupManager|latest|*${{ matrix.arch }}.AppImage.zsync" \
             ../TinyXbox360BackupManager.AppDir \
-            "TinyXbox360BackupManager-${{ env.VERSION_NAME }}-linux-${{ matrix.arch }}.AppImage"
+            "TinyXbox360BackupManager-v${{ steps.name.outputs.version }}-linux-${{ matrix.arch }}.AppImage"
         env:
           ARCH: ${{ matrix.arch }}
           APPIMAGE_EXTRACT_AND_RUN: 1
@@ -127,6 +173,8 @@ jobs:
 
   build-windows:
     name: Build for Windows
+    needs: version
+    if: github.event_name == 'pull_request' || needs.version.outputs.published == 'true'
     runs-on: windows-2022
     strategy:
       fail-fast: false
@@ -154,14 +202,17 @@ jobs:
         with:
           components: rust-src
 
+      - name: Set release version
+        if: needs.version.outputs.published == 'true'
+        shell: pwsh
+        run: |
+          $v = "${{ needs.version.outputs.version }}"
+          (Get-Content Cargo.toml) -replace '(?m)^version = "[^"]*"', "version = `"$v`"" | Set-Content Cargo.toml
+
       # UPX packing disabled: it triggers Windows Defender false positives
       # (Trojan:Win32/Wacatac.B!ml) because packed executables have high entropy
       # and atypical section layout typical of malware. Only benefit was download
       # size; not worth the "your app is a trojan" cost.
-      # - name: Download UPX
-      #   if: matrix.arch == 'x64' || matrix.arch == 'x86'
-      #   shell: pwsh
-      #   run: choco install upx
 
       - name: Build binary
         shell: pwsh
@@ -182,17 +233,18 @@ jobs:
           CARGO_TARGET_AARCH64_PC_WINDOWS_MSVC_LINKER: lld-link
           CARGO_TARGET_I686_WIN7_WINDOWS_MSVC_LINKER: lld-link
 
-      # UPX packing disabled — see note on the "Download UPX" step above.
-      # - name: Compress binary (UPX)
-      #   if: matrix.arch == 'x64' || matrix.arch == 'x86'
-      #   shell: pwsh
-      #   run: upx --best --lzma "TinyXbox360BackupManager.exe"
+      - name: Resolve version name
+        id: name
+        shell: pwsh
+        run: |
+          $v = if ("${{ needs.version.outputs.published }}" -eq "true") { "${{ needs.version.outputs.version }}" } else { "${{ github.sha }}" }
+          "version=$v" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
       - name: Rename binary
         shell: pwsh
         run: |
           New-Item -Path "dist" -ItemType Directory -Force
-          Copy-Item "TinyXbox360BackupManager.exe" "dist\TinyXbox360BackupManager-${{ env.VERSION_NAME }}-windows-${{ matrix.arch }}.exe"
+          Copy-Item "TinyXbox360BackupManager.exe" "dist\TinyXbox360BackupManager-v${{ steps.name.outputs.version }}-windows-${{ matrix.arch }}.exe"
 
       - name: Upload Windows distributables
         uses: actions/upload-artifact@v7
@@ -202,6 +254,8 @@ jobs:
 
   build-macos:
     name: Build for macOS
+    needs: version
+    if: github.event_name == 'pull_request' || needs.version.outputs.published == 'true'
     runs-on: macos-26
     strategy:
       fail-fast: false
@@ -226,6 +280,12 @@ jobs:
         with:
           components: rust-src
 
+      - name: Set release version
+        if: needs.version.outputs.published == 'true'
+        run: |
+          brew install yq
+          yq -i '.workspace.package.version = "${{ needs.version.outputs.version }}"' Cargo.toml
+
       - name: Build binary
         run: |
           cargo build -Z build-std=std,panic_abort --release --target ${{ matrix.target }}
@@ -247,14 +307,21 @@ jobs:
 
   build-macos-universal:
     name: Build for macOS (Universal)
+    needs: [version, build-macos]
+    if: github.event_name == 'pull_request' || needs.version.outputs.published == 'true'
     runs-on: macos-26
-    needs: [build-macos]
 
     steps:
       - name: Checkout
         uses: actions/checkout@v6
         with:
           fetch-depth: 1
+
+      - name: Set release version
+        if: needs.version.outputs.published == 'true'
+        run: |
+          brew install yq
+          yq -i '.workspace.package.version = "${{ needs.version.outputs.version }}"' Cargo.toml
 
       - name: Download macOS binaries
         uses: actions/download-artifact@v8
@@ -290,10 +357,19 @@ jobs:
       - name: Install appdmg
         run: npm i -g appdmg
 
+      - name: Resolve version name
+        id: name
+        run: |
+          if [ "${{ needs.version.outputs.published }}" = "true" ]; then
+            echo "version=${{ needs.version.outputs.version }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Create Universal DMG
         run: |
           mkdir dist
-          appdmg package/macos/appdmg.json "dist/TinyXbox360BackupManager-${{ env.VERSION_NAME }}-macos-universal.dmg"
+          appdmg package/macos/appdmg.json "dist/TinyXbox360BackupManager-v${{ steps.name.outputs.version }}-macos-universal.dmg"
 
       - name: Upload macOS distributables
         uses: actions/upload-artifact@v7
@@ -302,34 +378,48 @@ jobs:
           path: dist/*
 
   # ==================================================================================
-  #  Release Job: Collects all artifacts and creates a single GitHub Release.
+  #  Stage 3: Release Job — semantic-release publishes the tag + GitHub Release.
   # ==================================================================================
   release:
     name: Create GitHub Release
-    if: github.ref_type == 'tag'
-    runs-on: ubuntu-slim
-    needs: [build-linux, build-windows, build-macos, build-macos-universal]
+    if: github.event_name == 'push' && needs.version.outputs.published == 'true'
+    runs-on: ubuntu-latest
+    needs: [version, build-linux, build-windows, build-macos, build-macos-universal]
     steps:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          fetch-depth: 1
+          fetch-depth: 0
+          persist-credentials: true # @semantic-release/git pushes the release commit
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install yq
+        run: |
+          wget -O /usr/local/bin/yq "https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64"
+          chmod +x /usr/local/bin/yq
+
+      - name: Install dependencies
+        run: npm ci
 
       - name: Download distributables
         uses: actions/download-artifact@v8
         with:
           path: dist
-          pattern: "dist-*" # This pattern will match all final distributable artifacts
-          merge-multiple: true # This places all matching artifacts into a single 'dist' directory
+          pattern: "dist-*" # matches all final distributable artifacts
+          merge-multiple: true # place all matching artifacts into a single 'dist' directory
 
       - name: Create version.txt
-        run: echo -n $(yq '.package.version' Cargo.toml) > dist/version.txt # Write without line break
+        run: echo -n "${{ needs.version.outputs.version }}" > dist/version.txt # Write without line break
 
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v3
-        with:
-          files: dist/*
-          body_path: package/release-body.md
-          prerelease: ${{ contains(env.VERSION_NAME, 'alpha') || contains(env.VERSION_NAME, 'beta') || contains(env.VERSION_NAME, 'rc') }}
+      - name: Semantic Release
+        run: npx semantic-release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

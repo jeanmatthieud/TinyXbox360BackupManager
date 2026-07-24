@@ -22,6 +22,9 @@ target/
 
 .DS_Store
 
+# semantic-release tooling
+node_modules/
+
 dist/
 out/
 VC-LTL-Binary.7z

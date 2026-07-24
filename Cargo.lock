@@ -5860,6 +5860,7 @@ dependencies = [
  "directories",
  "fs4",
  "fs_extra",
+ "image",
  "iso2god",
  "rusqlite",
  "semver",
