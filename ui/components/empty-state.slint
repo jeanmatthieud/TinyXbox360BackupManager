@@ -1,0 +1,108 @@
+// SPDX-FileCopyrightText: 2026 Manuel Quarneti <mq1@ik.me> (TinyWiiBackupManager)
+// SPDX-FileContributor: Modified by Jean-Matthieu Dechriste (TinyXbox360BackupManager)
+// SPDX-License-Identifier: GPL-3.0-only
+
+import { Icon, IconDisplay, IconSet } from "@lucide";
+import { MyPalette } from "../styling.slint";
+import { Card } from "card.slint";
+import { IconButton, IconButtonKind } from "icon-button.slint";
+
+// Shared placeholder shown in the middle of a page when there is nothing to
+// list: an icon, a title, an optional description and an optional call to
+// action.
+//
+// Two looks, same markup: `boxed` wraps the content in a visible card with a
+// round icon badge (used when the state invites an action), while the default
+// flat look only draws the icon and the text (used for transient/idle states).
+// The card is always there, just transparent and borderless when flat, so the
+// two variants don't need duplicated layouts.
+export component EmptyState inherits VerticalLayout {
+    in property <Icon> icon: IconSet.Info;
+    in property <string> title;
+    in property <string> description;
+    // Non-empty to show a button under the text.
+    in property <string> action-label;
+    in property <Icon> action-icon: IconSet.Plus;
+    in property <bool> boxed: false;
+
+    callback action();
+
+    alignment: center;
+
+    HorizontalLayout {
+        alignment: center;
+
+        Card {
+            width: min(root.boxed ? 420px : 520px, parent.width - 40px);
+            height: content.preferred-height;
+            background: root.boxed ? MyPalette.background : transparent;
+            border-width: root.boxed ? 1px : 0px;
+
+            content := VerticalLayout {
+                padding: root.boxed ? 32px : 0px;
+                spacing: root.boxed ? 20px : 8px;
+                alignment: center;
+
+                HorizontalLayout {
+                    alignment: center;
+
+                    // Boxed: the icon sits in an accent badge.
+                    if root.boxed: Rectangle {
+                        width: 72px;
+                        height: 72px;
+                        border-radius: self.width / 2;
+                        background: MyPalette.accent-background.transparentize(0.85);
+
+                        IconDisplay {
+                            icon: root.icon;
+                            stroke: MyPalette.accent-background;
+                            size: 34px;
+                        }
+                    }
+
+                    if !root.boxed: IconDisplay {
+                        icon: root.icon;
+                        stroke: MyPalette.foreground.transparentize(0.4);
+                        size: 32px;
+                    }
+                }
+
+                VerticalLayout {
+                    spacing: 6px;
+
+                    Text {
+                        text: root.title;
+                        horizontal-alignment: center;
+                        wrap: word-wrap;
+                        font-size: root.boxed ? 19px : 16px;
+                        font-weight: root.boxed ? 700 : 600;
+                        color: MyPalette.foreground;
+                    }
+
+                    if root.description != "": Text {
+                        text: root.description;
+                        horizontal-alignment: center;
+                        wrap: word-wrap;
+                        font-size: root.boxed ? 14px : 13px;
+                        color: MyPalette.foreground.transparentize(0.4);
+                    }
+                }
+
+                if root.action-label != "": HorizontalLayout {
+                    alignment: center;
+
+                    IconButton {
+                        icon: root.action-icon;
+                        label: root.action-label;
+                        kind: IconButtonKind.Primary;
+                        font-size: 15px;
+                        height: 38px;
+                        clicked => {
+                            root.action();
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

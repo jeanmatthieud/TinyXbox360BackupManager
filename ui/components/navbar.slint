@@ -78,7 +78,7 @@ export component Navbar inherits VerticalLayout {
         if !UiState.config.target.is-empty: NavbarButton {
             icon: IconSet.Unplug;
             tooltip: "Disconnect from \{UiState.config.target}";
-            clicked => Dispatcher.dispatch(Message.Disconnect, "");
+            clicked => Dispatcher.dispatch(Message.RequestDisconnect, "");
         }
 
         NavbarButton {

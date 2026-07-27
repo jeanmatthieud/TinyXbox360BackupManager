@@ -12,6 +12,7 @@ import { UiState } from "ui-state.slint";
 import { DisplayedGame } from "types.slint";
 import { NoTarget } from "components/no-target.slint";
 import { NoGames } from "components/no-games.slint";
+import { EmptyState } from "components/empty-state.slint";
 
 export component GameGridPage inherits VerticalLayout {
     private property <int> col-count: max(1, floor((self.width - 10px) / (172px + 10px)));
@@ -55,35 +56,10 @@ export component GameGridPage inherits VerticalLayout {
 
     // Connected, library has games but they are all hidden by the current
     // search / category filters: tell the user rather than showing NoGames.
-    if !UiState.config.target.is-empty && !UiState.scanning && UiState.has-games && UiState.games.length == 0: VerticalLayout {
-        alignment: center;
-        spacing: 8px;
-
-        HorizontalLayout {
-            alignment: center;
-
-            IconDisplay {
-                icon: IconSet.SearchX;
-                stroke: MyPalette.foreground.transparentize(0.4);
-                size: 32px;
-            }
-        }
-
-        Text {
-            text: "No games match the current filters";
-            horizontal-alignment: center;
-            font-size: 16px;
-            font-weight: 600;
-            color: MyPalette.foreground;
-        }
-
-        Text {
-            text: "Clear the search box or re-enable a category to see your games again.";
-            horizontal-alignment: center;
-            wrap: word-wrap;
-            font-size: 13px;
-            color: MyPalette.foreground.transparentize(0.4);
-        }
+    if !UiState.config.target.is-empty && !UiState.scanning && UiState.has-games && UiState.games.length == 0: EmptyState {
+        icon: IconSet.SearchX;
+        title: "No games match the current filters";
+        description: "Clear the search box or re-enable a category to see your games again.";
     }
 
     if !UiState.config.target.is-empty && UiState.games.length > 0: ScrollView {

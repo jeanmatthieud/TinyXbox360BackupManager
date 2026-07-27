@@ -17,10 +17,13 @@ export component ConversionQueueToolbar inherits HorizontalLayout {
     VerticalLayout {
         alignment: center;
 
+        // Disabled while a cancellation is already under way (the banner on the
+        // page carries the "terminate now" escape hatch).
         if UiState.conversion-queue.length > 0: IconButton {
             icon: IconSet.X;
-            label: "Cancel all conversions";
+            label: UiState.cancelling-queue ? "Cancelling..." : "Cancel all conversions";
             kind: IconButtonKind.Primary;
+            disabled: UiState.cancelling-queue;
             clicked => {
                 UiState.confirming-cancel-all = true;
             }

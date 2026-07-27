@@ -2,16 +2,19 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 import { ScrollView } from "std-widgets.slint";
-import { IconSet } from "@lucide";
+import { IconDisplay, IconSet } from "@lucide";
 import { MyPalette } from "styling.slint";
 import { UiState } from "ui-state.slint";
 import { Card } from "components/card.slint";
+import { IconButton, IconButtonKind } from "components/icon-button.slint";
 import { ConversionRow } from "components/conversion-row.slint";
 import {
     ConversionQueueToolbar,
 } from "components/conversion-queue-toolbar.slint";
 import { HorizontalLine } from "components/horizontal-line.slint";
+import { EmptyState } from "components/empty-state.slint";
 import { Message, Dispatcher } from "messages.slint";
+import { PendingQueueAction } from "types.slint";
 
 export component ConversionQueuePage inherits VerticalLayout {
     HorizontalLayout {
@@ -20,7 +23,65 @@ export component ConversionQueuePage inherits VerticalLayout {
         ConversionQueueToolbar { }
     }
 
-    ScrollView {
+    // Banner shown between the cancellation request and the moment the
+    // conversion that was running actually stops, so the queue lingering at
+    // index 0 doesn't look stuck.
+    if UiState.cancelling-queue: HorizontalLayout {
+        padding: 10px;
+        padding-top: 0px;
+
+        Card {
+            background: MyPalette.destructive.transparentize(0.9);
+            border-color: MyPalette.destructive.transparentize(0.6);
+            height: banner.preferred-height;
+
+            banner := HorizontalLayout {
+                padding: 10px;
+                spacing: 8px;
+                cross-axis-alignment: CrossAxisAlignment.center;
+
+                IconDisplay {
+                    icon: IconSet.X;
+                    stroke: MyPalette.destructive;
+                    size: 14px;
+                }
+
+                Text {
+                    horizontal-stretch: 1;
+                    text: UiState.pending-queue-action == PendingQueueAction.Quit
+                        ? "Cancelling the conversions in progress, the app will close once done..."
+                        : (UiState.pending-queue-action == PendingQueueAction.Disconnect
+                            ? "Cancelling the conversions in progress, the target will be disconnected once done..."
+                            : "Cancelling the conversions in progress...");
+                    color: MyPalette.destructive;
+                    vertical-alignment: center;
+                    wrap: word-wrap;
+                }
+
+                // Skip the wait: carry out the pending disconnect/quit without
+                // letting the running conversion bail out cleanly.
+                if UiState.pending-queue-action != PendingQueueAction.None: IconButton {
+                    horizontal-stretch: 0;
+                    icon: UiState.pending-queue-action == PendingQueueAction.Quit ? IconSet.Power : IconSet.Unplug;
+                    label: UiState.pending-queue-action == PendingQueueAction.Quit
+                        ? "Terminate and quit"
+                        : "Terminate and disconnect";
+                    kind: IconButtonKind.Destructive;
+                    tooltip: "Don't wait for the conversion in progress to stop";
+                    clicked => Dispatcher.dispatch(Message.ForceQueueAction, "");
+                }
+            }
+        }
+    }
+
+    // Nothing queued: explain the page instead of showing an empty card.
+    if UiState.conversion-queue.length == 0: EmptyState {
+        icon: IconSet.ListChecks;
+        title: "The conversion queue is empty";
+        description: "Games you add are converted here one at a time. Nothing is pending right now.";
+    }
+
+    if UiState.conversion-queue.length > 0: ScrollView {
         width: parent.width;
         viewport-height: v.preferred-height;
 

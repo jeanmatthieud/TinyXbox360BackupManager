@@ -25,7 +25,7 @@ mod window_color;
 
 use crate::{file_drop::FileDropHandler, state::State};
 use anyhow::{Result, bail};
-use slint::{BackendSelector, ComponentHandle, ModelRc, SharedString, ToSharedString};
+use slint::{BackendSelector, ComponentHandle, Model, ModelRc, SharedString, ToSharedString};
 use std::{collections::VecDeque, process::Command};
 use txbm_core::data_dir::DATA_DIR;
 
@@ -90,6 +90,26 @@ fn main() -> Result<()> {
             while let Some((message, payload)) = message_queue.pop_front() {
                 state.update(message, payload, &mut message_queue, &weak);
             }
+        }
+    });
+
+    // Closing the window with a busy conversion queue asks whether it should be
+    // cancelled first; the quit is then replayed once the queue is drained.
+    app.window().on_close_requested({
+        let weak = app.as_weak();
+
+        move || {
+            let app = weak.upgrade().unwrap();
+            let ui_state = app.global::<UiState<'_>>();
+
+            if ui_state.get_conversion_queue().row_count() == 0 {
+                return slint::CloseRequestResponse::HideWindow;
+            }
+
+            app.global::<Dispatcher<'_>>()
+                .invoke_dispatch(Message::RequestQuit, SharedString::new());
+
+            slint::CloseRequestResponse::KeepWindowShown
         }
     });
 
