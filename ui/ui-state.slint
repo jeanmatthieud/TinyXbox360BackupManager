@@ -14,6 +14,7 @@ import {
     DisplayedTitleUpdate,
     Notification,
     Page,
+    PendingQueueAction,
 } from "types.slint";
 
 export global UiState {
@@ -93,6 +94,16 @@ export global UiState {
     in-out property <bool> converting: false;
     // True while the "cancel all conversions" confirmation modal is shown.
     in-out property <bool> confirming-cancel-all: false;
+    // True between "cancel all conversions" and the moment the conversion that
+    // was running actually bails out (the queue is empty again).
+    in-out property <bool> cancelling-queue: false;
+    // Action (disconnect / quit) requested while the queue was still busy. It
+    // drives the "cancel the queue first?" confirmation modal, and is replayed
+    // once the queue is empty. `None` means nothing is pending.
+    in-out property <PendingQueueAction> pending-queue-action: PendingQueueAction.None;
+    // True once the user confirmed: the queue is being cancelled and the
+    // pending action is waiting for it to drain.
+    in-out property <bool> draining-queue: false;
     // Locations currently scanned by Aurora on the console, as displayed
     // lines (fetched from its databases over FTP).
     in-out property <[string]> aurora-scan-paths;

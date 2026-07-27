@@ -205,9 +205,9 @@ fn push_god_games_local(title_dir: &Path, title_id_raw: &str, games: &mut Vec<Ga
 
 /// Detects an extracted-game folder from its default executable.
 fn detect_extracted_local(game_dir: &Path) -> Option<GameFormat> {
-    if game_dir.join("default.xex").is_file() {
+    if crate::util::find_file_ci(game_dir, "default.xex").is_some() {
         Some(GameFormat::ExtractedXex)
-    } else if game_dir.join("default.xbe").is_file() {
+    } else if crate::util::find_file_ci(game_dir, "default.xbe").is_some() {
         Some(GameFormat::ExtractedXbe)
     } else {
         None
@@ -224,8 +224,11 @@ fn push_extracted_local(
     let (title, mut id) = split_title_id_suffix(folder_name);
     // Game added by hand (no TitleID suffix): read it from the XBE, which is
     // cheap on a local target.
-    if id.is_none() && format == GameFormat::ExtractedXbe {
-        id = crate::xbe::title_id_from_file(&game_dir.join("default.xbe")).ok();
+    if id.is_none()
+        && format == GameFormat::ExtractedXbe
+        && let Some(xbe) = crate::util::find_file_ci(game_dir, "default.xbe")
+    {
+        id = crate::xbe::title_id_from_file(&xbe).ok();
     }
     let id = id.unwrap_or_default();
     let search_term = format!("{title}\0{id}").to_lowercase();

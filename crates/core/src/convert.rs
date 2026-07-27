@@ -131,6 +131,14 @@ pub fn perform(
                 let hdd = ftp_hdd_root(&mut session);
                 let storage = ftp_layout(&mut session, &hdd).storage;
 
+                // Cancelling a transfer deletes nothing on the console: what has
+                // already been written stays there. Removing the half-uploaded
+                // tree would mean telling apart the files we wrote from those
+                // that predate us inside directories that already existed, and
+                // getting that wrong destroys the user's games. Interrupting a
+                // copy is a deliberate act; cleaning up the leftovers (or simply
+                // re-running the transfer, which overwrites them) is up to the
+                // user.
                 let upload = (|| -> Result<()> {
                     let total = crate::util::dir_size(&staging);
                     let mut sent_before: u64 = 0;
@@ -161,9 +169,12 @@ pub fn perform(
                             }
                             let name = entry.file_name().to_string_lossy().to_string();
                             let base = sent_before;
+                            let remote_path = format!("{remote}/{name}");
+
                             session.upload_dir(
                                 &entry.path(),
-                                &format!("{remote}/{name}"),
+                                &remote_path,
+                                cancel,
                                 &mut |sent, _, speed| report(base, sent, speed),
                             )?;
                             sent_before += crate::util::dir_size(&entry.path());
@@ -172,7 +183,15 @@ pub fn perform(
 
                     Ok(())
                 })();
-                session.quit();
+
+                if upload.is_err() && is_cancelled(cancel) {
+                    // An aborted transfer leaves the session out of sync mid
+                    // command: drop it without the QUIT handshake rather than
+                    // wait on a reply that won't match.
+                    drop(session);
+                } else {
+                    session.quit();
+                }
                 upload
             })();
 

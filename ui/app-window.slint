@@ -7,7 +7,7 @@ import { Navbar } from "components/navbar.slint";
 import { GameGridPage } from "game-grid-page.slint";
 import { SettingsPage } from "settings-page.slint";
 import { AboutPage } from "about-page.slint";
-import { Page, DisplayedGame } from "types.slint";
+import { Page, DisplayedGame, PendingQueueAction } from "types.slint";
 import { Message, Dispatcher } from "messages.slint";
 import { MyPalette } from "styling.slint";
 import { VerticalLine } from "components/vertical-line.slint";
@@ -195,6 +195,24 @@ export component AppWindow inherits Window {
             Dispatcher.dispatch(Message.CancelAllConversions, "");
             UiState.confirming-cancel-all = false;
         }
+    }
+
+    // Disconnect / quit asked for while the queue is still busy: the action is
+    // only carried out once the queue has been cancelled and drained.
+    if UiState.pending-queue-action != PendingQueueAction.None && !UiState.draining-queue: ConfirmationModal {
+        Text {
+            text: (UiState.pending-queue-action == PendingQueueAction.Quit
+                ? "Transfers are still queued.\nCancel the queue and quit?"
+                : "Transfers are still queued.\nCancel the queue and disconnect?")
+                + (UiState.converting
+                    ? "\nThe conversion in progress will be stopped. Files already written to the target are left in place."
+                    : "");
+            wrap: word-wrap;
+        }
+        destructive: true;
+        btn-icon: IconSet.X;
+        cancelled => Dispatcher.dispatch(Message.AbortQueueAction, "");
+        confirmed => Dispatcher.dispatch(Message.ConfirmCancelQueueAction, "");
     }
 
     if UiState.notifications.length > 0: Notifications {

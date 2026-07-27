@@ -15,6 +15,14 @@ export enum TargetKind {
     Ftp,
 }
 
+// Action the user asked for while the conversion queue was still busy: it is
+// held back until the queue has been cancelled and fully drained.
+export enum PendingQueueAction {
+    None,
+    Disconnect,
+    Quit,
+}
+
 export struct DisplayedConfig {
     path: string,
     // Displayed target: local path or ftp://ip. Empty if no target.

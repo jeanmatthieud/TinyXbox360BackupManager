@@ -32,8 +32,6 @@ export component ToolboxPage inherits VerticalLayout {
             spacing: 10px;
             alignment: start;
 
-            if UiState.config.target.is-empty: BadAvatarCard { }
-
             if UiState.config.target-kind == TargetKind.Local && !UiState.config.target.is-empty: DriveInfoCard { }
 
             if UiState.config.target-kind == TargetKind.Ftp && !UiState.config.target.is-empty: ConsoleCard { }
@@ -44,6 +42,9 @@ export component ToolboxPage inherits VerticalLayout {
             // Aurora scan paths: always for a console; for a local drive only
             // when it carries an Aurora install (otherwise nothing to show).
             if !UiState.config.target.is-empty && (UiState.config.target-kind == TargetKind.Ftp || UiState.aurora-scan-paths.length > 0): AuroraScanPathsCard { }
+
+            // Last: standalone tool, only usable when no target is connected.
+            BadAvatarCard { }
         }
     }
 }

@@ -11,6 +11,8 @@ export component CardActionRow inherits HorizontalLayout {
     in property <Icon> icon;
     in property <string> text;
     in property <bool> disabled;
+    // Optional tooltip on the button, e.g. to explain why it is disabled.
+    in property <string> tooltip;
     // Optional long-press on the button; 0ms leaves the default behaviour.
     in property <duration> long-press-duration: 0ms;
 
@@ -23,6 +25,7 @@ export component CardActionRow inherits HorizontalLayout {
         icon: root.icon;
         width: self.height;
         disabled: root.disabled;
+        tooltip: root.tooltip;
         long-press-duration: root.long-press-duration;
         clicked => {
             root.clicked();

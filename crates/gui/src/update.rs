@@ -4,8 +4,9 @@
 
 use crate::{
     AppWindow, Dispatcher, DisplayedConfig, DisplayedDriveInfo, DisplayedGame,
-    DisplayedStoragePath, DisplayedTitleUpdate, Message, Notification, Page, UiState,
-    convert::perform_conversion, covers, dialogs, game_details, state::State, title_updates, util,
+    DisplayedStoragePath, DisplayedTitleUpdate, Message, Notification, Page, PendingQueueAction,
+    UiState, convert::perform_conversion, covers, dialogs, game_details, state::State,
+    title_updates, util,
 };
 use slint::{ComponentHandle, ModelRc, SharedString, ToSharedString, VecModel, Weak};
 use std::{
@@ -51,6 +52,54 @@ static TITLE_UPDATES_RESULT: Mutex<
 > = Mutex::new(None);
 
 impl State {
+    /// Cancels the whole conversion queue: the running item (index 0) is only
+    /// signalled to stop — it bails at its next cancellation checkpoint, cleans
+    /// up its partial output, and is removed by `ConversionFinished` — while
+    /// the pending ones are dropped right away.
+    fn cancel_all_conversions(&mut self, weak: &Weak<AppWindow>) {
+        if self.is_converting {
+            self.conversion_cancel
+                .store(true, std::sync::atomic::Ordering::Relaxed);
+        }
+
+        let pending_start = if self.is_converting { 1 } else { 0 };
+        while self.conversion_queue.len() > pending_start {
+            let _ = self.conversion_queue.remove(pending_start);
+            let _ = self.displayed_conversion_queue.remove(pending_start);
+        }
+
+        // Only meaningful while the running conversion is still bailing out;
+        // with nothing left the queue is already gone.
+        let app = weak.upgrade().unwrap();
+        app.global::<UiState<'_>>()
+            .set_cancelling_queue(!self.conversion_queue.is_empty());
+    }
+
+    /// Carries out the disconnect/quit the user asked for while the queue was
+    /// still busy, now that it has been drained. No-op when nothing is pending.
+    fn run_pending_queue_action(
+        &mut self,
+        message_queue: &mut VecDeque<(Message, SharedString)>,
+        weak: &Weak<AppWindow>,
+    ) {
+        let app = weak.upgrade().unwrap();
+        let ui = app.global::<UiState<'_>>();
+
+        let action = ui.get_pending_queue_action();
+        ui.set_pending_queue_action(PendingQueueAction::None);
+        ui.set_draining_queue(false);
+
+        match action {
+            PendingQueueAction::None => {}
+            PendingQueueAction::Disconnect => {
+                message_queue.push_back((Message::Disconnect, SharedString::new()));
+            }
+            PendingQueueAction::Quit => {
+                let _ = slint::quit_event_loop();
+            }
+        }
+    }
+
     /// Switches the target to the local drive mounted at `path`, records it in
     /// the recent locations, and queues a config sync + target analysis. Shared
     /// by the removable-drive picker and the debug folder picker.
@@ -373,6 +422,65 @@ impl State {
                 if i < self.config.contents.recent_locations.len() {
                     self.config.contents.recent_locations.remove(i);
                     message_queue.push_back((Message::SyncConfig, SharedString::new()));
+                }
+            }
+            Message::RequestDisconnect | Message::RequestQuit => {
+                let action = if matches!(message, Message::RequestQuit) {
+                    PendingQueueAction::Quit
+                } else {
+                    PendingQueueAction::Disconnect
+                };
+
+                // Nothing queued: go ahead straight away.
+                if self.conversion_queue.is_empty() {
+                    match action {
+                        PendingQueueAction::Quit => {
+                            let _ = slint::quit_event_loop();
+                        }
+                        _ => message_queue.push_back((Message::Disconnect, SharedString::new())),
+                    }
+                    return;
+                }
+
+                // Otherwise ask whether the queue should be cancelled first.
+                let app = weak.upgrade().unwrap();
+                let ui = app.global::<UiState<'_>>();
+                ui.set_pending_queue_action(action);
+
+                // Asking again while the queue is already draining: the
+                // confirmation modal is suppressed in that state, so send the
+                // user to the queue page instead of doing nothing visible.
+                // The banner there reports the pending action and offers the
+                // "Terminate" shortcut for those who don't want to wait.
+                if ui.get_draining_queue() {
+                    ui.set_current_page(Page::ConversionQueue);
+                }
+            }
+            Message::ForceQueueAction => {
+                // "Terminate": go through with the disconnect/quit without
+                // waiting for the conversion being cancelled to bail out.
+                self.run_pending_queue_action(message_queue, weak);
+            }
+            Message::AbortQueueAction => {
+                // The user declined to cancel the queue: drop the action.
+                let app = weak.upgrade().unwrap();
+                let ui = app.global::<UiState<'_>>();
+                ui.set_pending_queue_action(PendingQueueAction::None);
+                ui.set_draining_queue(false);
+            }
+            Message::ConfirmCancelQueueAction => {
+                // Show the queue draining, then replay the action once empty.
+                let app = weak.upgrade().unwrap();
+                let ui = app.global::<UiState<'_>>();
+                ui.set_current_page(Page::ConversionQueue);
+                ui.set_draining_queue(true);
+
+                self.cancel_all_conversions(weak);
+
+                // The running conversion (if any) stays at index 0 until it
+                // bails: the action is then replayed from TriggerConversion.
+                if self.conversion_queue.is_empty() {
+                    self.run_pending_queue_action(message_queue, weak);
                 }
             }
             Message::Disconnect => {
@@ -713,6 +821,10 @@ impl State {
                     self.displayed_conversion_queue.push(displayed_conv);
                 }
 
+                // Queueing new work supersedes an in-flight "cancel all".
+                let app = weak.upgrade().unwrap();
+                app.global::<UiState<'_>>().set_cancelling_queue(false);
+
                 if !self.is_converting {
                     self.is_converting = true;
                     message_queue.push_back((Message::TriggerConversion, SharedString::new()));
@@ -726,9 +838,14 @@ impl State {
                 let Some(conv) = self.conversion_queue.front().cloned() else {
                     self.is_converting = false;
                     let app = weak.upgrade().unwrap();
-                    app.global::<UiState<'_>>().set_converting(false);
+                    let ui = app.global::<UiState<'_>>();
+                    ui.set_converting(false);
+                    ui.set_cancelling_queue(false);
                     let text = "Conversion queue empty";
                     self.notifications.push(Notification::info(text));
+                    // The queue is now drained: carry out the disconnect/quit
+                    // the user was waiting on, if any.
+                    self.run_pending_queue_action(message_queue, weak);
                     return;
                 };
 
@@ -1079,20 +1196,7 @@ impl State {
                 let _ = self.displayed_conversion_queue.remove(i);
             }
             Message::CancelAllConversions => {
-                // Signal the running conversion (index 0) to stop; it bails at
-                // its next cancellation checkpoint, cleans up its partial local
-                // output, and is removed from the queue by `ConversionFinished`.
-                if self.is_converting {
-                    self.conversion_cancel
-                        .store(true, std::sync::atomic::Ordering::Relaxed);
-                }
-                // Drop the pending items right away, keeping the running one
-                // (index 0) until it finishes bailing.
-                let pending_start = if self.is_converting { 1 } else { 0 };
-                while self.conversion_queue.len() > pending_start {
-                    let _ = self.conversion_queue.remove(pending_start);
-                    let _ = self.displayed_conversion_queue.remove(pending_start);
-                }
+                self.cancel_all_conversions(weak);
             }
             Message::SetLatestVersion => {
                 let app = weak.upgrade().unwrap();
