@@ -55,10 +55,13 @@ component BadAvatarUrlField inherits VerticalLayout {
     }
 }
 
-// Card offering to build a homebrew boot USB key. Shown when no target is set.
+// Card offering to build a homebrew boot USB key. Always shown, but the action
+// is disabled while a target is connected (the key must be built standalone).
 export component BadAvatarCard inherits ToolboxCard {
     // Local toggle for the advanced (URL) settings section.
     private property <bool> show-badavatar-settings: false;
+
+    private property <bool> target-connected: !UiState.config.target.is-empty;
 
     CardHeader {
         icon: IconSet.Usb;
@@ -138,7 +141,8 @@ export component BadAvatarCard inherits ToolboxCard {
 
     CardActionRow {
         icon: IconSet.Hammer;
-        disabled: UiState.creating-badavatar;
+        disabled: UiState.creating-badavatar || target-connected;
+        tooltip: target-connected ? "Disconnect from the current target first — the USB key must be prepared on its own." : "";
         text: !UiState.creating-badavatar ? "Create the BadAvatar USB key" : "Working… see the status bar below.";
         // Opens the in-app removable-drive picker. Hidden escape hatch: a long
         // press falls back to the native folder picker (any arbitrary path).
