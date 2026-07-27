@@ -205,7 +205,7 @@ export component AppWindow inherits Window {
                 ? "Transfers are still queued.\nCancel the queue and quit?"
                 : "Transfers are still queued.\nCancel the queue and disconnect?")
                 + (UiState.converting
-                    ? "\nThe conversion in progress will be stopped and its partial files removed."
+                    ? "\nThe conversion in progress will be stopped. Files already written to the target are left in place."
                     : "");
             wrap: word-wrap;
         }

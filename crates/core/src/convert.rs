@@ -131,12 +131,14 @@ pub fn perform(
                 let hdd = ftp_hdd_root(&mut session);
                 let storage = ftp_layout(&mut session, &hdd).storage;
 
-                // Remote directory being written when a cancellation hits, so
-                // the half-uploaded tree can be dropped from the console. Only
-                // set for directories this transfer created: an already present
-                // one holds content that predates us and must be left alone.
-                let mut in_flight: Option<String> = None;
-
+                // Cancelling a transfer deletes nothing on the console: what has
+                // already been written stays there. Removing the half-uploaded
+                // tree would mean telling apart the files we wrote from those
+                // that predate us inside directories that already existed, and
+                // getting that wrong destroys the user's games. Interrupting a
+                // copy is a deliberate act; cleaning up the leftovers (or simply
+                // re-running the transfer, which overwrites them) is up to the
+                // user.
                 let upload = (|| -> Result<()> {
                     let total = crate::util::dir_size(&staging);
                     let mut sent_before: u64 = 0;
@@ -169,19 +171,12 @@ pub fn perform(
                             let base = sent_before;
                             let remote_path = format!("{remote}/{name}");
 
-                            let existed = session
-                                .list_dir(remote)
-                                .iter()
-                                .any(|e| e.is_dir && e.name.eq_ignore_ascii_case(&name));
-                            in_flight = (!existed).then(|| remote_path.clone());
-
                             session.upload_dir(
                                 &entry.path(),
                                 &remote_path,
                                 cancel,
                                 &mut |sent, _, speed| report(base, sent, speed),
                             )?;
-                            in_flight = None;
                             sent_before += crate::util::dir_size(&entry.path());
                         }
                     }
@@ -190,17 +185,10 @@ pub fn perform(
                 })();
 
                 if upload.is_err() && is_cancelled(cancel) {
-                    // An aborted transfer leaves the session out of sync: close
-                    // it first, then reconnect to remove what was uploaded so
-                    // far — never two connections writing at once.
+                    // An aborted transfer leaves the session out of sync mid
+                    // command: drop it without the QUIT handshake rather than
+                    // wait on a reply that won't match.
                     drop(session);
-                    if let Some(remote_path) = in_flight {
-                        if let Ok(mut cleanup) = FtpSession::connect(ftp) {
-                            let _ =
-                                cleanup.remove_dir_recursive(&remote_path, &mut |_, _| {});
-                            cleanup.quit();
-                        }
-                    }
                 } else {
                     session.quit();
                 }

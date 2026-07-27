@@ -25,7 +25,7 @@ mod window_color;
 
 use crate::{file_drop::FileDropHandler, state::State};
 use anyhow::{Result, bail};
-use slint::{BackendSelector, ComponentHandle, Model, ModelRc, SharedString, ToSharedString};
+use slint::{BackendSelector, ComponentHandle, ModelRc, SharedString, ToSharedString};
 use std::{collections::VecDeque, process::Command};
 use txbm_core::data_dir::DATA_DIR;
 
@@ -95,16 +95,18 @@ fn main() -> Result<()> {
 
     // Closing the window with a busy conversion queue asks whether it should be
     // cancelled first; the quit is then replayed once the queue is drained.
+    //
+    // Whether the queue is busy is decided by `RequestQuit` alone, on the Rust
+    // side: testing the Slint model here too would give two sources of truth
+    // that can disagree (the model only follows in the message handlers) and
+    // leave the window shown while the handler takes the "nothing queued" path.
+    // The dispatch is synchronous, so an empty queue quits the event loop
+    // before we return and `KeepWindowShown` never applies.
     app.window().on_close_requested({
         let weak = app.as_weak();
 
         move || {
             let app = weak.upgrade().unwrap();
-            let ui_state = app.global::<UiState<'_>>();
-
-            if ui_state.get_conversion_queue().row_count() == 0 {
-                return slint::CloseRequestResponse::HideWindow;
-            }
 
             app.global::<Dispatcher<'_>>()
                 .invoke_dispatch(Message::RequestQuit, SharedString::new());

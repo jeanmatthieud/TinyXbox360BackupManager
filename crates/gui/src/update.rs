@@ -444,8 +444,17 @@ impl State {
 
                 // Otherwise ask whether the queue should be cancelled first.
                 let app = weak.upgrade().unwrap();
-                app.global::<UiState<'_>>()
-                    .set_pending_queue_action(action);
+                let ui = app.global::<UiState<'_>>();
+                ui.set_pending_queue_action(action);
+
+                // Asking again while the queue is already draining: the
+                // confirmation modal is suppressed in that state, so send the
+                // user to the queue page instead of doing nothing visible.
+                // The banner there reports the pending action and offers the
+                // "Terminate" shortcut for those who don't want to wait.
+                if ui.get_draining_queue() {
+                    ui.set_current_page(Page::ConversionQueue);
+                }
             }
             Message::ForceQueueAction => {
                 // "Terminate": go through with the disconnect/quit without
