@@ -46,7 +46,11 @@ pub fn perform_conversion(
 
         match res {
             Ok(()) => {}
-            Err(e) if e.to_string().contains(txbm_core::convert::CONVERSION_CANCELLED) => {
+            // The whole cause chain is searched: the cancellation marker is
+            // often wrapped in a context (e.g. "extracting foo.xex: …").
+            Err(e)
+                if format!("{e:#}").contains(txbm_core::convert::CONVERSION_CANCELLED) =>
+            {
                 dispatcher
                     .invoke_dispatch(Message::NotifyInfo, "Conversion cancelled".into());
             }

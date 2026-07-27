@@ -138,14 +138,21 @@ const PROGRESS_DEBOUNCE: Duration = Duration::from_millis(200);
 
 /// Wraps a reader and reports the running byte count on each read, so the
 /// upload of a single (possibly large) file can be tracked as it streams.
-struct ProgressReader<R, F> {
+struct ProgressReader<'a, R, F> {
     inner: R,
     sent: u64,
     on_read: F,
+    /// Raised from another thread to abort the transfer mid-file: the reader
+    /// then fails, which makes `put_file` give up instead of streaming the
+    /// remaining (possibly gigabytes of) data.
+    cancel: &'a AtomicBool,
 }
 
-impl<R: Read, F: FnMut(u64)> Read for ProgressReader<R, F> {
+impl<R: Read, F: FnMut(u64)> Read for ProgressReader<'_, R, F> {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        if self.cancel.load(Ordering::Relaxed) {
+            return Err(std::io::Error::other(crate::convert::CONVERSION_CANCELLED));
+        }
         let n = self.inner.read(buf)?;
         if n > 0 {
             self.sent += n as u64;
@@ -172,6 +179,10 @@ pub struct RemoteEntry {
 
 pub struct FtpSession {
     stream: FtpStream,
+    /// Set when a transfer was aborted mid-stream, leaving the control and data
+    /// connections out of sync. Such a session cannot be reused, and must not
+    /// be closed with a regular `QUIT` (see `Drop`).
+    poisoned: bool,
 }
 
 impl Drop for FtpSession {
@@ -180,6 +191,14 @@ impl Drop for FtpSession {
     /// explicit `quit()` call. Bounded by `IO_TIMEOUT`, so a dead/timed-out
     /// connection cannot hang this beyond that.
     fn drop(&mut self) {
+        if self.poisoned {
+            // The server is still streaming (or waiting on) an interrupted
+            // transfer: a `QUIT` would only block until `IO_TIMEOUT`, which is
+            // exactly the delay a cancellation is trying to avoid. Tear the
+            // socket down instead — the console frees the slot on close.
+            let _ = self.stream.get_ref().shutdown(std::net::Shutdown::Both);
+            return;
+        }
         let _ = self.stream.quit();
     }
 }
@@ -226,7 +245,10 @@ impl FtpSession {
         stream
             .transfer_type(FileType::Binary)
             .context("switching to binary mode")?;
-        Ok(Self { stream })
+        Ok(Self {
+            stream,
+            poisoned: false,
+        })
     }
 
     /// Moves to a remote directory by descending component by component
@@ -426,18 +448,20 @@ impl FtpSession {
         &mut self,
         local_dir: &Path,
         remote_dir: &str,
+        cancel: &AtomicBool,
         progress: &mut dyn FnMut(u64, u64, Option<f64>),
     ) -> Result<()> {
         let total = dir_size(local_dir);
         let mut sent: u64 = 0;
         progress(0, total, None);
-        self.upload_dir_inner(local_dir, remote_dir, &mut sent, total, progress)
+        self.upload_dir_inner(local_dir, remote_dir, cancel, &mut sent, total, progress)
     }
 
     fn upload_dir_inner(
         &mut self,
         local_dir: &Path,
         remote_dir: &str,
+        cancel: &AtomicBool,
         sent: &mut u64,
         total: u64,
         progress: &mut dyn FnMut(u64, u64, Option<f64>),
@@ -448,12 +472,16 @@ impl FtpSession {
         let entries = std::fs::read_dir(local_dir)
             .with_context(|| format!("reading {}", local_dir.display()))?;
         for entry in entries.flatten() {
+            if cancel.load(Ordering::Relaxed) {
+                anyhow::bail!(crate::convert::CONVERSION_CANCELLED);
+            }
+
             let local_path = entry.path();
             let name = entry.file_name().to_string_lossy().to_string();
 
             if local_path.is_dir() {
                 let remote_path = format!("{}/{}", remote_dir.trim_end_matches('/'), name);
-                self.upload_dir_inner(&local_path, &remote_path, sent, total, progress)?;
+                self.upload_dir_inner(&local_path, &remote_path, cancel, sent, total, progress)?;
                 // Recursive uploads changed the current directory.
                 self.cwd(remote_dir)?;
             } else {
@@ -466,7 +494,7 @@ impl FtpSession {
                 let base = *sent;
                 let file_start = Instant::now();
                 let mut last_notify = file_start;
-                {
+                let res = {
                     let mut reader = ProgressReader {
                         inner: BufReader::new(file),
                         sent: 0,
@@ -479,10 +507,20 @@ impl FtpSession {
                                 progress(base + file_sent, total, speed);
                             }
                         },
+                        cancel,
                     };
-                    self.stream
-                        .put_file(&name, &mut reader)
-                        .with_context(|| format!("sending {remote_dir}/{name}"))?;
+                    self.stream.put_file(&name, &mut reader)
+                };
+                if let Err(e) = res {
+                    if cancel.load(Ordering::Relaxed) {
+                        // The reader deliberately failed mid-file: the session
+                        // is now unusable, and the caller is expected to drop
+                        // it and clean up the partial remote copy.
+                        self.poisoned = true;
+                        anyhow::bail!(crate::convert::CONVERSION_CANCELLED);
+                    }
+                    return Err(anyhow::Error::new(e))
+                        .with_context(|| format!("sending {remote_dir}/{name}"));
                 }
 
                 *sent = base + size;

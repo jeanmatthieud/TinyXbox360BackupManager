@@ -2,7 +2,7 @@
 
 use anyhow::{Context, Result, anyhow, bail};
 use std::fs::{self, File};
-use std::io::{BufReader, Read};
+use std::io::{BufReader, Read, Write};
 use std::path::Path;
 use std::sync::atomic::AtomicBool;
 use xdvdfs::blockdev::OffsetWrapper;
@@ -66,7 +66,7 @@ pub fn extract_iso(
                 .dirent
                 .seek_to(&mut dev)
                 .map_err(|e| anyhow!("seeking in image: {e}"))?;
-            let copied = std::io::copy(&mut dev.get_mut().by_ref().take(size), &mut out)
+            let copied = copy_cancellable(dev.get_mut(), &mut out, size, cancel)
                 .with_context(|| format!("extracting {relative}"))?;
             if copied != size {
                 bail!("incomplete extraction of {relative} ({copied}/{size} bytes)");
@@ -78,6 +78,39 @@ pub fn extract_iso(
     }
 
     Ok(())
+}
+
+/// Chunk size used to stream a file out of the image, and thus the granularity
+/// at which a cancellation is noticed. A single file can be several gigabytes,
+/// so waiting for it to finish is not an option.
+const COPY_CHUNK: usize = 1 << 20;
+
+/// Copies exactly `size` bytes from `reader` to `writer`, bailing out as soon as
+/// `cancel` is raised. Returns the number of bytes copied, which is short of
+/// `size` only if the reader hit EOF early.
+fn copy_cancellable(
+    reader: &mut impl Read,
+    writer: &mut impl Write,
+    size: u64,
+    cancel: &AtomicBool,
+) -> Result<u64> {
+    let mut buf = vec![0u8; COPY_CHUNK];
+    let mut copied: u64 = 0;
+
+    while copied < size {
+        if crate::convert::is_cancelled(cancel) {
+            bail!(crate::convert::CONVERSION_CANCELLED);
+        }
+        let want = COPY_CHUNK.min((size - copied) as usize);
+        let read = reader.read(&mut buf[..want])?;
+        if read == 0 {
+            break;
+        }
+        writer.write_all(&buf[..read])?;
+        copied += read as u64;
+    }
+
+    Ok(copied)
 }
 
 /// Joins a relative path from the image, refusing any traversal
