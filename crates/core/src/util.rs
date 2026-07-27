@@ -26,6 +26,20 @@ pub fn sha1_hex_file(path: &Path) -> std::io::Result<String> {
     Ok(format!("{:x}", hasher.finalize()))
 }
 
+/// Path of the file named `name` (case-insensitively) directly inside `dir`,
+/// if any. Xbox images store their executable as `Default.xex`/`default.xbe`
+/// with inconsistent casing, so extracted folders must never be probed with a
+/// case-sensitive `join()` on a case-sensitive filesystem.
+pub fn find_file_ci(dir: &Path, name: &str) -> Option<std::path::PathBuf> {
+    std::fs::read_dir(dir)
+        .ok()?
+        .flatten()
+        .find(|e| {
+            e.file_name().to_string_lossy().eq_ignore_ascii_case(name) && e.path().is_file()
+        })
+        .map(|e| e.path())
+}
+
 /// Number of files in a directory (recursive).
 pub fn file_count(path: &Path) -> u64 {
     let mut total = 0;

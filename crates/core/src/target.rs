@@ -1186,7 +1186,7 @@ fn dir_contains_extracted(dir: &Path, exe: &str) -> bool {
     };
     entries.flatten().any(|e| {
         let p = e.path();
-        p.is_dir() && p.join(exe).is_file()
+        p.is_dir() && crate::util::find_file_ci(&p, exe).is_some()
     })
 }
 
@@ -1251,7 +1251,7 @@ fn collect_local_candidates(dir: &Path, depth: u32, found: &mut Vec<String>) {
         }
         // A folder directly holding a default executable marks its PARENT as
         // an extracted-games location.
-        if path.join("default.xex").is_file() || path.join("default.xbe").is_file() {
+        if is_extracted_game_dir(&path) {
             has_extracted_child = true;
         }
         children.push(path);
@@ -1270,15 +1270,18 @@ fn collect_local_candidates(dir: &Path, depth: u32, found: &mut Vec<String>) {
         for child in children {
             // Don't descend into the GOD tree or extracted-game folders.
             let name = child.file_name().unwrap_or_default().to_string_lossy();
-            if name.eq_ignore_ascii_case("Content")
-                || child.join("default.xex").is_file()
-                || child.join("default.xbe").is_file()
-            {
+            if name.eq_ignore_ascii_case("Content") || is_extracted_game_dir(&child) {
                 continue;
             }
             collect_local_candidates(&child, depth - 1, found);
         }
     }
+}
+
+/// True when `dir` is itself an extracted game (holds a default executable).
+fn is_extracted_game_dir(dir: &Path) -> bool {
+    crate::util::find_file_ci(dir, "default.xex").is_some()
+        || crate::util::find_file_ci(dir, "default.xbe").is_some()
 }
 
 fn push_candidate(found: &mut Vec<String>, path: &Path) {
