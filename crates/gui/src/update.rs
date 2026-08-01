@@ -8,7 +8,7 @@ use crate::{
     UiState, convert::perform_conversion, covers, dialogs, game_details, state::State,
     title_updates, util,
 };
-use slint::{ComponentHandle, ModelRc, SharedString, ToSharedString, VecModel, Weak};
+use slint::{ComponentHandle, Model, ModelRc, SharedString, ToSharedString, VecModel, Weak};
 use std::{
     collections::VecDeque,
     fs,
@@ -57,6 +57,13 @@ impl State {
     /// up its partial output, and is removed by `ConversionFinished` — while
     /// the pending ones are dropped right away.
     fn cancel_all_conversions(&mut self, weak: &Weak<AppWindow>) {
+        // An aborted batch doesn't get confetti, however many items it had
+        // already converted — including the running one, which may well finish
+        // cleanly before it notices the cancel flag.
+        self.conversions_done = 0;
+        self.conversions_failed = 0;
+        self.batch_cancelled = true;
+
         if self.is_converting {
             self.conversion_cancel
                 .store(true, std::sync::atomic::Ordering::Relaxed);
@@ -130,6 +137,9 @@ impl State {
         match message {
             Message::NotifyInfo => {
                 self.notifications.push(Notification::info(payload));
+            }
+            Message::NotifySuccess => {
+                self.notifications.push(Notification::success(payload));
             }
             Message::NotifyError => {
                 self.notifications.push(Notification::error(payload));
@@ -781,8 +791,12 @@ impl State {
                 message_queue.push_back((Message::RefreshDisplayedGames, SharedString::new()));
             }
             Message::CloseNotification => {
-                let i = payload.parse().unwrap();
-                self.notifications.remove(i);
+                // Keyed by id, not by row: a toast that times out at the same
+                // moment as another one would otherwise remove its neighbour.
+                let id: i32 = payload.parse().unwrap();
+                if let Some(i) = self.notifications.iter().position(|n| n.id == id) {
+                    self.notifications.remove(i);
+                }
             }
             Message::PickGames => {
                 let app = weak.upgrade().unwrap();
@@ -821,9 +835,11 @@ impl State {
                     self.displayed_conversion_queue.push(displayed_conv);
                 }
 
-                // Queueing new work supersedes an in-flight "cancel all".
+                // Queueing new work supersedes an in-flight "cancel all", so
+                // the fresh batch is eligible for the celebration again.
                 let app = weak.upgrade().unwrap();
                 app.global::<UiState<'_>>().set_cancelling_queue(false);
+                self.batch_cancelled = false;
 
                 if !self.is_converting {
                     self.is_converting = true;
@@ -841,8 +857,21 @@ impl State {
                     let ui = app.global::<UiState<'_>>();
                     ui.set_converting(false);
                     ui.set_cancelling_queue(false);
-                    let text = "Conversion queue empty";
-                    self.notifications.push(Notification::info(text));
+
+                    // The whole batch went through: celebrate. Skipped when a
+                    // disconnect/quit is waiting on the queue — the window is
+                    // about to go away.
+                    if self.conversions_done > 0
+                        && self.conversions_failed == 0
+                        && !self.batch_cancelled
+                        && ui.get_pending_queue_action() == PendingQueueAction::None
+                    {
+                        ui.set_celebrating(true);
+                    }
+                    self.conversions_done = 0;
+                    self.conversions_failed = 0;
+                    self.batch_cancelled = false;
+
                     // The queue is now drained: carry out the disconnect/quit
                     // the user was waiting on, if any.
                     self.run_pending_queue_action(message_queue, weak);
@@ -864,6 +893,12 @@ impl State {
                 });
             }
             Message::ConversionFinished => {
+                if payload == "ok" {
+                    self.conversions_done += 1;
+                } else {
+                    self.conversions_failed += 1;
+                }
+
                 // Drop the conversion that just finished (in progress or failed)
                 // and move on to the next one.
                 let _ = self.conversion_queue.pop_front();
@@ -903,7 +938,7 @@ impl State {
                                     "FTP connection successful\nConsole root: {}",
                                     roots.join(", ")
                                 );
-                                dispatcher.invoke_dispatch(Message::NotifyInfo, text);
+                                dispatcher.invoke_dispatch(Message::NotifySuccess, text);
                             }
                             Err(e) => {
                                 let text = slint::format!("FTP connection failed: {e:#}");
@@ -1010,7 +1045,7 @@ impl State {
                             Ok(()) => {
                                 let text = "Aurora is ready 🎉";
                                 dispatcher.invoke_dispatch(
-                                    Message::NotifyInfo,
+                                    Message::NotifySuccess,
                                     SharedString::from(text),
                                 );
                             }
@@ -1532,7 +1567,7 @@ impl State {
                         match res {
                             Ok(()) => {
                                 dispatcher.invoke_dispatch(
-                                    Message::NotifyInfo,
+                                    Message::NotifySuccess,
                                     "BadAvatar USB key ready 🎉".to_shared_string(),
                                 );
                             }

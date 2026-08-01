@@ -26,6 +26,20 @@ pub struct State {
     pub displayed_games_to_add: Rc<VecModel<SharedString>>,
     pub notifications: Rc<VecModel<Notification>>,
     pub is_converting: bool,
+    /// Conversions that succeeded since the queue was last empty. Drives the
+    /// confetti burst when it drains, and is reset by a cancellation so an
+    /// aborted batch doesn't get a celebration.
+    pub conversions_done: usize,
+    /// Conversions that failed since the queue was last empty. A non-zero
+    /// count withholds the confetti burst: it's only for a batch that went
+    /// through cleanly, not a partially-failed one.
+    pub conversions_failed: usize,
+    /// Set when the user cancels the queue, cleared only once it has drained.
+    /// Zeroing the counters isn't enough on its own: the running conversion can
+    /// still finish successfully before it reaches its next cancellation
+    /// checkpoint, which would put `conversions_done` back to 1 and celebrate a
+    /// batch the user just aborted.
+    pub batch_cancelled: bool,
     pub is_downloading_covers: bool,
     pub is_scanning: bool,
     pub is_creating_badavatar: bool,
@@ -67,6 +81,9 @@ impl State {
             displayed_games_to_add: Rc::new(VecModel::from(Vec::new())),
             notifications: Rc::new(VecModel::from(Vec::new())),
             is_converting: false,
+            conversions_done: 0,
+            conversions_failed: 0,
+            batch_cancelled: false,
             is_downloading_covers: false,
             is_scanning: false,
             is_creating_badavatar: false,

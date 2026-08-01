@@ -3,23 +3,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 import { ScrollView } from "std-widgets.slint";
-import { UiState } from "ui-state.slint";
-import { Message, Dispatcher } from "messages.slint";
-import { TargetKind } from "types.slint";
 import { PageHeader } from "components/page-header.slint";
 import { BadAvatarCard } from "components/toolbox/badavatar-card.slint";
-import { DriveInfoCard } from "components/toolbox/drive-info-card.slint";
-import { ConsoleCard } from "components/toolbox/console-card.slint";
-import { LibraryStorageCard } from "components/toolbox/library-storage-card.slint";
-import { AuroraScanPathsCard } from "components/toolbox/aurora-scan-paths-card.slint";
 
 export component ToolboxPage inherits VerticalLayout {
-    init => {
-        if !UiState.config.target.is-empty && !UiState.fetching-aurora-paths {
-            Dispatcher.dispatch(Message.FetchAuroraPaths, "");
-        }
-    }
-
     PageHeader {
         title: "Toolbox";
     }
@@ -31,17 +18,6 @@ export component ToolboxPage inherits VerticalLayout {
             padding-top: 0px;
             spacing: 10px;
             alignment: start;
-
-            if UiState.config.target-kind == TargetKind.Local && !UiState.config.target.is-empty: DriveInfoCard { }
-
-            if UiState.config.target-kind == TargetKind.Ftp && !UiState.config.target.is-empty: ConsoleCard { }
-
-            // App storage folders (and, on a console, their Aurora coverage).
-            if !UiState.config.target.is-empty: LibraryStorageCard { }
-
-            // Aurora scan paths: always for a console; for a local drive only
-            // when it carries an Aurora install (otherwise nothing to show).
-            if !UiState.config.target.is-empty && (UiState.config.target-kind == TargetKind.Ftp || UiState.aurora-scan-paths.length > 0): AuroraScanPathsCard { }
 
             // Last: standalone tool, only usable when no target is connected.
             BadAvatarCard { }

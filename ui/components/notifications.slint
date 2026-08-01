@@ -1,14 +1,205 @@
-// SPDX-FileCopyrightText: 2026 Manuel Quarneti <mq1@ik.me>
+// SPDX-FileCopyrightText: 2026 Manuel Quarneti <mq1@ik.me> (TinyWiiBackupManager)
+// SPDX-FileContributor: Modified by Jean-Matthieu Dechriste (TinyXbox360BackupManager)
 // SPDX-License-Identifier: GPL-3.0-only
 
 import { Card } from "card.slint";
-import { IconButton } from "icon-button.slint";
 import { IconSet, IconDisplay } from "@lucide";
+import { IconButton, IconButtonKind } from "icon-button.slint";
 import { MyPalette } from "../styling.slint";
 import { UiState } from "../ui-state.slint";
+import { NotificationKind } from "../types.slint";
 import { Message, Dispatcher } from "../messages.slint";
 
-export component Notifications inherits TouchArea {
+// A self-dismissing toast. Deliberately free of any UiState/Dispatcher
+// dependency: feed it a text and a kind, and act on `dismissed()`. Reusable
+// anywhere a transient message is needed.
+//
+// It counts itself down and asks to be removed once its lifetime runs out;
+// hovering it pauses the countdown, so a message can be kept on screen (and
+// read) simply by keeping the pointer on it.
+export component Toast inherits Rectangle {
+    in property <string> text;
+    in property <NotificationKind> kind: NotificationKind.Info;
+    // How long the toast stays up. Set to 0 for a toast that never expires on
+    // its own — the bar is then hidden and `dismissed()` only comes from the
+    // close button.
+    in property <duration> lifetime: 10s;
+    // The card hugs its text up to this width, then wraps.
+    in property <length> max-card-width: 380px;
+
+    // Freezes the countdown from the outside, on top of the built-in hover
+    // pause — e.g. to hold every toast while a modal is up.
+    in property <bool> hold: false;
+    out property <bool> hovered: ta.has-hover;
+
+    // Emitted once the countdown reaches zero. The owner is responsible for
+    // actually removing the toast.
+    callback dismissed();
+
+    property <bool> paused: root.hovered || root.hold;
+    property <bool> entered: false;
+    property <duration> remaining: root.lifetime;
+    property <float> progress: root.lifetime <= 0ms ? 1 : Math.clamp(root.remaining / root.lifetime, 0, 1);
+
+    property <brush> accent: root.kind == NotificationKind.Error
+        ? MyPalette.destructive
+        : (root.kind == NotificationKind.Success ? #3fae5a : MyPalette.accent-background);
+
+    // 62px of chrome around the text: paddings (12 + 14), icon badge (26) and
+    // the spacing between them (10), plus the 20px the close button takes out
+    // of the text column. Sizing off the text's *preferred* width keeps it
+    // unaffected by wrapping, so the card can hug short messages.
+    width: min(label.preferred-width + 82px, root.max-card-width);
+    height: card.height;
+
+    // A Timer that isn't running simply doesn't tick, which is the whole hover
+    // pause: no elapsed-time bookkeeping, no clock arithmetic. 30ms is fine
+    // enough that the bar reads as continuous.
+    Timer {
+        interval: 30ms;
+        running: !root.paused && root.remaining > 0ms && root.lifetime > 0ms;
+
+        triggered => {
+            if root.remaining > 30ms {
+                root.remaining -= 30ms;
+            } else {
+                root.remaining = 0ms;
+                root.dismissed();
+            }
+        }
+    }
+
+    // Kicks off the slide-in. Done from a timer rather than from `init`, where
+    // Slint takes the assigned value for the initial one and skips the
+    // animation entirely.
+    Timer {
+        interval: 1ms;
+        running: true;
+
+        triggered => {
+            root.entered = true;
+            self.running = false;
+        }
+    }
+
+    ta := TouchArea {
+        width: root.width;
+        height: root.height;
+    }
+
+    card := Card {
+        // Slides in from the right on creation.
+        x: root.entered ? 0px : 26px;
+        opacity: root.entered ? 1 : 0;
+        width: root.width;
+        height: h.preferred-height;
+        // Tucks the countdown bar into the rounded corners.
+        clip: true;
+        // Hovering is acknowledged by the border picking up the accent, which
+        // reads as "held" without adding any furniture to the card.
+        border-color: root.paused ? root.accent.transparentize(0.45) : MyPalette.border;
+
+        animate x, opacity { duration: 220ms; easing: ease-out-quad; }
+        animate border-color { duration: 150ms; }
+
+        h := HorizontalLayout {
+            spacing: 10px;
+            padding-left: 12px;
+            padding-right: 14px;
+            padding-top: 11px;
+            padding-bottom: 11px;
+
+            VerticalLayout {
+                alignment: start;
+                width: 26px;
+
+                Rectangle {
+                    width: 26px;
+                    height: 26px;
+                    border-radius: self.width / 2;
+                    background: root.accent.transparentize(0.85);
+
+                    IconDisplay {
+                        icon: root.kind == NotificationKind.Error
+                            ? IconSet.TriangleAlert
+                            : (root.kind == NotificationKind.Success ? IconSet.Check : IconSet.Info);
+                        size: 14px;
+                        stroke: root.accent;
+                    }
+                }
+            }
+
+            VerticalLayout {
+                alignment: center;
+
+                label := Text {
+                    // Explicit width rather than horizontal-stretch, so the
+                    // wrapped preferred-height is computed against the width
+                    // the text actually gets — 62px of chrome, plus the 20px
+                    // the close button occupies.
+                    width: root.width - 82px;
+                    text: root.text;
+                    wrap: word-wrap;
+                    color: MyPalette.foreground;
+                }
+            }
+
+        }
+
+        // Always offered: toasts with no lifetime never self-dismiss, and the
+        // ones that do sit over the bottom-right corner of the window for 10s
+        // (indefinitely while hovered), swallowing clicks meant for whatever is
+        // underneath. Positioned against the card rather than added to `h`:
+        // inside the row it would be vertically centred against the wrapped
+        // text, which drops it far below the top edge on multi-line toasts. The
+        // room it needs is already carved out of `label`'s width.
+        IconButton {
+            x: parent.width - self.width - 11px;
+            y: 11px;
+            icon: IconSet.X;
+            kind: IconButtonKind.DestructiveText;
+            rounded: true;
+            font-size: 12px;
+            width: 20px;
+            height: 20px;
+            clicked => root.dismissed();
+        }
+
+        // Countdown bar, flush with the bottom edge so it reads as part of the
+        // card's border. The card's `clip` is what tucks it into the rounded
+        // corners: femtovg builds a real rounded clip path, inset to just
+        // inside the 1px border, so the border stays drawn around it.
+        //
+        // The software renderer (the `SLINT_BACKEND=winit-software` fallback)
+        // clips rectangles only — `combine_clip` there ignores the radius — so
+        // the bar pokes out a little at both ends when running on it. The
+        // rounded ends below soften that; nothing else can be done short of
+        // giving up the flush look.
+        if root.lifetime > 0ms: Rectangle {
+            y: parent.height - self.height;
+            height: 3px;
+            border-bottom-left-radius: 10px;
+            border-bottom-right-radius: 10px;
+            background: MyPalette.foreground.transparentize(0.9);
+
+            Rectangle {
+                x: 0;
+                width: parent.width * root.progress;
+                height: 100%;
+                border-bottom-left-radius: 10px;
+                border-bottom-right-radius: 10px;
+                background: root.accent;
+                // Dimmed while held, so a paused countdown doesn't look stuck.
+                opacity: root.paused ? 0.45 : 1;
+                animate opacity { duration: 150ms; }
+            }
+        }
+    }
+
+}
+
+// The application's toast stack, bottom-right.
+export component Notifications inherits Rectangle {
     width: v.width;
     height: v.height;
 
@@ -16,61 +207,16 @@ export component Notifications inherits TouchArea {
         width: self.preferred-width;
         height: self.preferred-height;
         padding: 10px;
-        spacing: 5px;
+        spacing: 8px;
         cross-axis-alignment: end;
 
-        for notification[i] in UiState.notifications: card := Card {
-            // Card hugs the text up to 400px: driven by the text's natural
-            // (unwrapped) preferred-width, which - unlike its stretch-resolved
-            // width - is unaffected by wrapping and safe to use here.
-            width: min(t.preferred-width + 78px, 400px);
-            min-height: 40px;
-
-            HorizontalLayout {
-                cross-axis-alignment: CrossAxisAlignment.center;
-                spacing: 10px;
-                padding-left: 10px;
-                padding-right: 10px;
-                padding-top: 8px;
-                padding-bottom: 8px;
-
-                VerticalLayout {
-                    alignment: start;
-                    width: 14px;
-
-                    IconDisplay {
-                        icon: notification.critical ? IconSet.TriangleAlert : IconSet.Info;
-                        size: 14px;
-                        stroke: MyPalette.foreground;
-                    }
-                }
-
-                VerticalLayout {
-                    height: self.min-height;
-
-                    t := Text {
-                    // Explicit width (rather than horizontal-stretch) so the wrap
-                    // preferred-height is computed against the actual rendered
-                    // width instead of the unconstrained one: 78px = h's paddings
-                    // (20px) + icon column (14px) + close column (24px) + spacing (20px).
-                    width: card.width - 78px;
-                        text: notification.text;
-                        wrap: word-wrap;
-                    }
-                }
-
-                VerticalLayout {
-                    alignment: start;
-
-                    IconButton {
-                        icon: IconSet.X;
-                        clicked => Dispatcher.dispatch(Message.CloseNotification, i);
-                        rounded: true;
-                        height: 24px;
-                        width: 24px;
-                    }
-                }
-            }
+        for notification in UiState.notifications: Toast {
+            text: notification.text;
+            kind: notification.kind;
+            // Errors stay up until the user dismisses them; info/success
+            // toasts still time out on their own.
+            lifetime: notification.kind == NotificationKind.Error ? 0 : 10s;
+            dismissed => Dispatcher.dispatch(Message.CloseNotification, notification.id);
         }
     }
 }

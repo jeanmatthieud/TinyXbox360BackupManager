@@ -2,10 +2,12 @@
 
 //! Extraction of game archives (.7z / .zip), used for XBLA packages.
 
+use crate::convert::{CONVERSION_CANCELLED, is_cancelled};
 use anyhow::{Context, Result, bail};
 use std::fs::File;
 use std::io::Read;
 use std::path::{Component, Path, PathBuf};
+use std::sync::atomic::AtomicBool;
 
 /// True if the extension is a supported archive format (.7z / .zip).
 pub fn is_supported_archive(path: &Path) -> bool {
@@ -29,9 +31,13 @@ pub fn looks_valid(path: &Path) -> bool {
 /// Extracts the archive into `dest`. `progress` receives
 /// (extracted bytes, total uncompressed bytes), reported per chunk so
 /// large solid archives still show smooth progress.
+///
+/// `cancel` is polled per chunk, so a multi-gigabyte archive stops within a
+/// megabyte of the request instead of running to completion.
 pub fn extract_to(
     path: &Path,
     dest: &Path,
+    cancel: &AtomicBool,
     progress: &mut dyn FnMut(u64, u64),
 ) -> Result<()> {
     std::fs::create_dir_all(dest)?;
@@ -39,24 +45,29 @@ pub fn extract_to(
         .extension()
         .is_some_and(|ext| ext.eq_ignore_ascii_case("7z"));
     if is_7z {
-        extract_7z(path, dest, progress)
+        extract_7z(path, dest, cancel, progress)
     } else {
-        extract_zip(path, dest, progress)
+        extract_zip(path, dest, cancel, progress)
     }
 }
 
 /// Copies `reader` to `out`, adding the copied bytes to `done` chunk by
-/// chunk and reporting (done, total) after each one.
+/// chunk and reporting (done, total) after each one. Bails out with
+/// [`CONVERSION_CANCELLED`] as soon as `cancel` is raised.
 fn copy_with_progress(
     reader: &mut dyn Read,
     out: &Path,
     done: &mut u64,
     total: u64,
+    cancel: &AtomicBool,
     progress: &mut dyn FnMut(u64, u64),
-) -> std::io::Result<()> {
+) -> Result<()> {
     let mut out_file = File::create(out)?;
     let mut buf = vec![0u8; 1 << 20];
     loop {
+        if is_cancelled(cancel) {
+            bail!(CONVERSION_CANCELLED);
+        }
         let n = reader.read(&mut buf)?;
         if n == 0 {
             return Ok(());
@@ -67,7 +78,12 @@ fn copy_with_progress(
     }
 }
 
-fn extract_zip(path: &Path, dest: &Path, progress: &mut dyn FnMut(u64, u64)) -> Result<()> {
+fn extract_zip(
+    path: &Path,
+    dest: &Path,
+    cancel: &AtomicBool,
+    progress: &mut dyn FnMut(u64, u64),
+) -> Result<()> {
     let file = File::open(path).with_context(|| format!("opening {}", path.display()))?;
     let mut archive = zip::ZipArchive::new(file).context("reading zip archive")?;
     let total: u64 = archive
@@ -78,6 +94,11 @@ fn extract_zip(path: &Path, dest: &Path, progress: &mut dyn FnMut(u64, u64)) -> 
     progress(0, total);
 
     for i in 0..archive.len() {
+        // Also checked between entries, so an archive of many small files
+        // stops just as fast as one holding a single huge file.
+        if is_cancelled(cancel) {
+            bail!(CONVERSION_CANCELLED);
+        }
         let mut entry = archive.by_index(i).context("reading zip entry")?;
         // enclosed_name rejects absolute paths and `..` traversal.
         let Some(rel) = entry.enclosed_name() else {
@@ -90,14 +111,19 @@ fn extract_zip(path: &Path, dest: &Path, progress: &mut dyn FnMut(u64, u64)) -> 
             if let Some(parent) = out.parent() {
                 std::fs::create_dir_all(parent)?;
             }
-            copy_with_progress(&mut entry, &out, &mut done, total, progress)
+            copy_with_progress(&mut entry, &out, &mut done, total, cancel, progress)
                 .with_context(|| format!("extracting {}", out.display()))?;
         }
     }
     Ok(())
 }
 
-fn extract_7z(path: &Path, dest: &Path, progress: &mut dyn FnMut(u64, u64)) -> Result<()> {
+fn extract_7z(
+    path: &Path,
+    dest: &Path,
+    cancel: &AtomicBool,
+    progress: &mut dyn FnMut(u64, u64),
+) -> Result<()> {
     let mut reader =
         sevenz_rust2::ArchiveReader::open(path, sevenz_rust2::Password::empty())
             .context("reading 7z archive")?;
@@ -106,6 +132,13 @@ fn extract_7z(path: &Path, dest: &Path, progress: &mut dyn FnMut(u64, u64)) -> R
     progress(0, total);
 
     let result = reader.for_each_entries(|entry, entry_reader| {
+        // A cancellation is surfaced as an error rather than by returning
+        // `Ok(false)`: stopping the iteration silently would look like a
+        // successful extraction to the caller. The message carries the
+        // `CONVERSION_CANCELLED` marker the GUI matches on.
+        if is_cancelled(cancel) {
+            return Err(sevenz_rust2::Error::Other(CONVERSION_CANCELLED.into()));
+        }
         let rel = sanitized_relative_path(entry.name()).ok_or_else(|| {
             sevenz_rust2::Error::Other(format!("unsafe path in archive: {}", entry.name()).into())
         })?;
@@ -116,7 +149,8 @@ fn extract_7z(path: &Path, dest: &Path, progress: &mut dyn FnMut(u64, u64)) -> R
             if let Some(parent) = out.parent() {
                 std::fs::create_dir_all(parent)?;
             }
-            copy_with_progress(entry_reader, &out, &mut done, total, progress)?;
+            copy_with_progress(entry_reader, &out, &mut done, total, cancel, progress)
+                .map_err(|e| sevenz_rust2::Error::Other(format!("{e:#}").into()))?;
         }
         Ok(true)
     });

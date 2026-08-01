@@ -53,6 +53,28 @@ pub(crate) fn is_cancelled(cancel: &AtomicBool) -> bool {
     cancel.load(Ordering::Relaxed)
 }
 
+/// Best-effort removal of a partial/intermediate output folder, announced on
+/// the status line.
+///
+/// This is not instant: an extracted game is thousands of small files, and
+/// deleting them on a USB or FATX drive takes long enough that the UI would
+/// otherwise look frozen right after the user hit "cancel" — the read loop
+/// stops within a megabyte, but the cleanup is what they actually wait on.
+fn cleanup_dir(path: &Path, label: &str, status: &dyn Fn(&str)) {
+    if !path.exists() {
+        return;
+    }
+    status(label);
+    let _ = std::fs::remove_dir_all(path);
+    status("");
+}
+
+/// Status line shown while dropping the output of a cancelled conversion.
+const CLEANUP_PARTIAL: &str = "🗑  Cleaning up partial files…";
+/// Status line shown while dropping intermediate work folders (staging, archive
+/// extraction), on success as well as on failure.
+const CLEANUP_TEMP: &str = "🗑  Cleaning up temporary files…";
+
 /// Kind of input file accepted by the conversion pipeline.
 pub enum InputKind {
     /// Optical disc image (360 game, OG game or content disc).
@@ -85,11 +107,15 @@ pub fn inspect_input(path: &Path) -> Result<InputKind> {
 /// Converts/extracts `in_path` on the target, depending on the image type.
 /// `update_progress` receives a percentage (0-100) and, during the FTP upload
 /// phase, the running average upload speed in megabytes per second.
+/// `status` receives a short human-readable line that supersedes the progress
+/// display while a non-measurable phase runs (currently the post-cancellation
+/// cleanup); an empty string hands the status line back to `update_progress`.
 pub fn perform(
     in_path: PathBuf,
     config: &Config,
     cancel: &AtomicBool,
     update_progress: &dyn Fn(u32, Option<f64>),
+    status: &dyn Fn(&str),
 ) -> Result<()> {
     let target =
         Target::from_config(&config.contents).context("no target selected")?;
@@ -104,7 +130,9 @@ pub fn perform(
                 xex_dir: PathBuf::from(&storage.xex_dir),
                 work_dir: root.clone(),
             };
-            convert_into(&in_path, &dest, x360_format, cancel, &|p| update_progress(p, None))?;
+            convert_into(&in_path, &dest, x360_format, cancel, &|p| {
+                update_progress(p, None)
+            }, status)?;
         }
         Target::Ftp(ftp) => {
             let stem = sanitize_name(
@@ -121,9 +149,14 @@ pub fn perform(
 
             let result = (|| -> Result<()> {
                 // Local conversion in staging folder: 0-50%.
-                convert_into(&in_path, &ConvertDest::under(&staging), x360_format, cancel, &|p| {
-                    update_progress(p * 50 / 100, None)
-                })?;
+                convert_into(
+                    &in_path,
+                    &ConvertDest::under(&staging),
+                    x360_format,
+                    cancel,
+                    &|p| update_progress(p * 50 / 100, None),
+                    status,
+                )?;
 
                 // Direct upload to the console, to its resolved storage
                 // locations: 50-100%.
@@ -195,7 +228,7 @@ pub fn perform(
                 upload
             })();
 
-            let _ = std::fs::remove_dir_all(DATA_DIR.join("staging"));
+            cleanup_dir(&DATA_DIR.join("staging"), CLEANUP_TEMP, status);
             result?;
         }
     }
@@ -214,6 +247,7 @@ fn convert_into(
     x360_format: Xbox360Format,
     cancel: &AtomicBool,
     update_progress: &dyn Fn(u32),
+    status: &dyn Fn(&str),
 ) -> Result<()> {
     let info = match inspect_input(in_path)? {
         InputKind::StfsPackage(package) => {
@@ -223,7 +257,7 @@ fn convert_into(
             return Ok(());
         }
         InputKind::Archive => {
-            return install_archive(in_path, dest, x360_format, cancel, update_progress);
+            return install_archive(in_path, dest, x360_format, cancel, update_progress, status);
         }
         InputKind::Iso(info) => info,
     };
@@ -264,7 +298,7 @@ fn convert_into(
             // On cancellation, drop the partially-extracted folder (it is a
             // fresh folder — we bailed above if it already existed).
             if res.is_err() && is_cancelled(cancel) {
-                let _ = std::fs::remove_dir_all(&game_dir);
+                cleanup_dir(&game_dir, CLEANUP_PARTIAL, status);
             }
             res?;
         }
@@ -308,7 +342,7 @@ fn convert_into(
             // On cancellation, drop the partially-extracted folder (it is a
             // fresh folder — we bailed above if it already existed).
             if res.is_err() && is_cancelled(cancel) {
-                let _ = std::fs::remove_dir_all(&game_dir);
+                cleanup_dir(&game_dir, CLEANUP_PARTIAL, status);
             }
             res?;
         }
@@ -346,7 +380,7 @@ fn convert_into(
                 Ok(())
             })();
 
-            let _ = std::fs::remove_dir_all(dest.work_dir.join(".txbm-tmp"));
+            cleanup_dir(&dest.work_dir.join(".txbm-tmp"), CLEANUP_TEMP, status);
             result?;
         }
         IsoKind::BundledContent => {
@@ -389,7 +423,7 @@ fn convert_into(
                 Ok(())
             })();
 
-            let _ = std::fs::remove_dir_all(dest.work_dir.join(".txbm-tmp"));
+            cleanup_dir(&dest.work_dir.join(".txbm-tmp"), CLEANUP_TEMP, status);
             result?;
         }
     }
@@ -477,6 +511,7 @@ fn install_archive(
     x360_format: Xbox360Format,
     cancel: &AtomicBool,
     update_progress: &dyn Fn(u32),
+    status: &dyn Fn(&str),
 ) -> Result<()> {
     let stem = sanitize_name(
         in_path
@@ -491,20 +526,22 @@ fn install_archive(
 
     let result = (|| -> Result<()> {
         // Extraction: 0-50%.
-        archive::extract_to(in_path, &tmp, &mut |done, total| {
+        archive::extract_to(in_path, &tmp, cancel, &mut |done, total| {
             update_progress((done * 50 / total.max(1)) as u32);
         })?;
-        if is_cancelled(cancel) {
-            bail!(CONVERSION_CANCELLED);
-        }
 
         // Archive wrapping a single ISO: convert it as a normal ISO import
         // (0-50% extraction already done, conversion runs on 50-100%). This
         // saves the user from manually unpacking the ISO first.
         if let Some(iso) = single_iso_in(&tmp)? {
-            return convert_into(&iso, dest, x360_format, cancel, &|p| {
-                update_progress(50 + p * 50 / 100)
-            });
+            return convert_into(
+                &iso,
+                dest,
+                x360_format,
+                cancel,
+                &|p| update_progress(50 + p * 50 / 100),
+                status,
+            );
         }
 
         // Otherwise: a set of XBLA/DLC/title-update packages.
@@ -527,7 +564,7 @@ fn install_archive(
         Ok(())
     })();
 
-    let _ = std::fs::remove_dir_all(&tmp);
+    cleanup_dir(&tmp, CLEANUP_TEMP, status);
     result
 }
 
