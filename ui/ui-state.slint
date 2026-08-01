@@ -92,6 +92,10 @@ export global UiState {
     // True while a conversion is running (the item at index 0 of
     // conversion-queue is the one currently being converted).
     in-out property <bool> converting: false;
+    // True for the duration of the confetti burst played when the queue drains
+    // after at least one successful conversion. Set by the update loop, cleared
+    // by the animation itself once it has finished.
+    in-out property <bool> celebrating: false;
     // True while the "cancel all conversions" confirmation modal is shown.
     in-out property <bool> confirming-cancel-all: false;
     // True between "cancel all conversions" and the moment the conversion that

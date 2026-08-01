@@ -22,7 +22,13 @@ fn main() -> anyhow::Result<()> {
     config.contents.remove_sources_games = false;
 
     let cancel = std::sync::atomic::AtomicBool::new(false);
-    txbm_core::convert::perform(iso.into(), &config, &cancel, &|p, _| println!("  {p}%"))?;
+    txbm_core::convert::perform(
+        iso.into(),
+        &config,
+        &cancel,
+        &|p, _| println!("  {p}%"),
+        &|s| println!("  {s}"),
+    )?;
 
     let games = txbm_core::game::scan_drive(&root);
     println!("games found after install:");

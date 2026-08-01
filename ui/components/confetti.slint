@@ -1,0 +1,164 @@
+// SPDX-FileCopyrightText: 2026 Jean-Matthieu Dechriste
+// SPDX-License-Identifier: GPL-3.0-only
+
+// A one-shot confetti burst, fired from two cannons in the bottom corners.
+//
+// Everything is closed-form: a single `t` (0 → 1) drives the whole burst and
+// each piece derives its position, spin and fade from it with plain formulas.
+// There is no per-particle timer and no simulation step, so the cost per frame
+// is just re-evaluating a handful of bindings per piece.
+//
+// The element must only exist while it plays: it reads `animation-tick()`,
+// which keeps the window redrawing for as long as it is alive. Instantiate it
+// behind an `if` and drop it on `finished()`.
+
+// Paper colours. Deliberately outside `MyPalette`: confetti that follows the
+// theme's greys would not read as confetti at all.
+global ConfettiColors {
+    out property <[color]> all: [
+        #ffc93c,
+        #ff6b6b,
+        #4ecdc4,
+        #a06cd5,
+        #5ad07f,
+        #4d9de0,
+        #ff8fab,
+        #f7f7f7,
+    ];
+}
+
+// One piece of paper.
+component ConfettiPiece inherits Rectangle {
+    // Position in the burst and the burst's seed. Slint has no `random()`, so
+    // these two feed the hash below: every piece gets its own trajectory, and
+    // every burst a different choreography.
+    in property <int> index;
+    in property <float> seed;
+    // Burst progress, shared by the whole burst.
+    in property <float> t;
+    // Size of the area the burst plays in, so the trajectories scale with the
+    // window instead of being tuned for one resolution.
+    in property <length> field-width;
+    in property <length> field-height;
+
+    // Cheap hash. The multiplier is kept small on purpose: Slint evaluates in
+    // f32, and the usual `* 43758.5453` would eat the whole mantissa and leave
+    // only a few hundred distinct values, which shows up as visible patterns.
+    pure function noise(salt: float) -> float {
+        return Math.sin((self.index * 12.71 + salt * 78.233 + self.seed * 53.17) * 1rad) * 137.51;
+    }
+
+    // Pseudo-random in [0, 1). Every property below picks its own salt so the
+    // draws stay independent of each other.
+    pure function rnd(salt: float) -> float {
+        return self.noise(salt) - Math.floor(self.noise(salt));
+    }
+
+    // Which cannon this piece comes from: 1 = bottom-left firing right,
+    // -1 = bottom-right firing left. Alternating keeps both sides even.
+    property <float> dir: Math.mod(self.index, 2) == 0 ? 1 : -1;
+    property <length> origin-x: self.dir > 0 ? self.field-width * 0.04 : self.field-width * 0.96;
+    // Just below the bottom edge, so the pieces appear to be shot into frame.
+    property <length> origin-y: self.field-height * 1.02;
+
+    // Launch angle above the horizontal (50°..82°) and a wide speed spread.
+    // The spread matters more than it looks: with a narrow one the whole burst
+    // moves as a single clump, and the screen empties all at once mid-flight.
+    property <angle> launch: (50 + self.rnd(1) * 32) * 1deg;
+    property <float> speed: 0.5 + self.rnd(2) * 1.3;
+
+    // Air drag: the initial impulse dies away exponentially instead of being
+    // linear. This is what makes the pieces hang for a moment at the top of
+    // their arc before gravity wins — a plain parabola looks like a fountain.
+    // Divided by (1 - exp(-4.2)) so `u` still spans 0 → 1.
+    property <float> u: (1 - Math.exp(-4.2 * self.t)) / 0.985;
+
+    // Sideways drift growing with time: the "falling leaf" wobble.
+    property <length> sway: (self.rnd(4) - 0.5) * 80px * self.t * Math.sin((self.rnd(5) * 360 + self.t * (420 + self.rnd(6) * 360)) * 1deg);
+
+    // Travel is expressed as a fraction of the field, so the burst fills a
+    // 800×600 window and a maximised one alike.
+    property <length> cx: self.origin-x + self.dir * Math.cos(self.launch) * self.speed * self.field-width * 0.75 * self.u + self.sway;
+    property <length> cy: self.origin-y - Math.sin(self.launch) * self.speed * self.field-height * self.u + self.field-height * (1.15 + self.rnd(3) * 0.7) * self.t * self.t;
+
+    // A third of the pieces are round, for variety.
+    property <bool> is-round: self.rnd(7) < 0.32;
+    property <length> piece-width: 6px + self.rnd(8) * 5px;
+    property <length> piece-height: self.is-round ? self.piece-width : self.piece-width * (0.85 + self.rnd(9) * 1.1);
+
+    // Tilt in the screen plane, and the flip around the piece's own long axis
+    // (0 = edge-on, 1 = flat). Together they read as a sheet of paper tumbling
+    // in three dimensions.
+    property <angle> tilt: (self.rnd(10) * 360 + self.t * (self.rnd(11) - 0.5) * 1600) * 1deg;
+    property <float> flip: 0.12 + 0.88 * Math.abs(Math.cos((self.rnd(12) * 360 + self.t * (360 + self.rnd(13) * 900)) * 1deg));
+
+    property <color> tint: ConfettiColors.all[Math.min(7, Math.floor(self.rnd(14) * 8))];
+
+    // Staggered fade-out, so the burst thins out instead of blinking off.
+    property <float> fade-start: 0.58 + self.rnd(15) * 0.27;
+    property <float> alpha: Math.clamp((1 - self.t) / (1 - self.fade-start), 0, 1);
+
+    x: self.cx - self.piece-width / 2;
+    y: self.cy - self.piece-height / 2;
+    width: self.piece-width;
+    height: self.piece-height;
+
+    // Carries the tilt. `transform-origin` defaults to the element's centre,
+    // which is what we want here.
+    Rectangle {
+        transform-rotation: root.tilt;
+
+        // The flip is done by squashing the height *inside* the rotated
+        // parent, so it happens along the piece's own axis. Using
+        // `transform-scale-y` instead would squash along the screen axis,
+        // because the scale is applied after the rotation.
+        Rectangle {
+            width: 100%;
+            height: parent.height * root.flip;
+            y: (parent.height - self.height) / 2;
+            border-radius: root.is-round ? self.height / 2 : 1px;
+            // Edge-on pieces get darker: the back of the sheet catching less
+            // light. The alpha rides in the colour rather than in `opacity`,
+            // which would force a compositing layer per piece.
+            background: root.tint.darker(0.5 * (1 - root.flip)).transparentize(1 - root.alpha);
+        }
+    }
+}
+
+export component ConfettiBurst inherits Rectangle {
+    // Fired once the last piece is gone: the caller should drop this element.
+    callback finished();
+
+    in property <int> pieces: 150;
+    in property <duration> duration: 3200ms;
+
+    // Tick at which the burst started, captured on creation. Everything is
+    // measured from it, which is more reliable than an `animate` on a property
+    // set from `init` (Slint may treat that as the initial value).
+    property <duration> started;
+    property <float> seed;
+    property <float> t: Math.clamp((animation-tick() - root.started) / root.duration, 0, 1);
+
+    init => {
+        root.started = animation-tick();
+        // Fractional part of the tick in seconds-ish units: small enough to
+        // stay precise in f32, different on every burst.
+        root.seed = animation-tick() / 997ms - Math.floor(animation-tick() / 997ms);
+    }
+
+    Timer {
+        interval: root.duration + 100ms;
+        triggered => {
+            self.running = false;
+            root.finished();
+        }
+    }
+
+    for i in root.pieces: ConfettiPiece {
+        index: i;
+        seed: root.seed;
+        t: root.t;
+        field-width: root.width;
+        field-height: root.height;
+    }
+}

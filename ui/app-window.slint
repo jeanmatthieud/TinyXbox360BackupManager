@@ -21,12 +21,14 @@ import { TitleUpdatesModal } from "components/title-updates-modal.slint";
 import { ConfirmationModal } from "components/confirmation-modal.slint";
 import { Tooltip } from "tooltip.slint";
 import { ToolboxPage } from "toolbox-page.slint";
+import { DeviceStatusPage } from "device-status-page.slint";
 import { ConversionQueuePage } from "conversion-queue.slint";
 import { SelectTargetModal } from "components/select-target-modal.slint";
 import { BadAvatarTargetModal } from "components/badavatar-target-modal.slint";
 import { FtpTargetModal } from "components/ftp-target-modal.slint";
 import { AuroraHelpModal } from "components/aurora-help-modal.slint";
 import { StorageConfigModal } from "components/storage-config-modal.slint";
+import { ConfettiBurst } from "components/confetti.slint";
 import { UiState } from "ui-state.slint";
 
 export * from "types.slint";
@@ -77,6 +79,7 @@ export component AppWindow inherits Window {
                 if UiState.current-page == Page.Games && UiState.config.view-as == "Grid": GameGridPage { }
                 if UiState.current-page == Page.Games && UiState.config.view-as == "Table": GameTablePage { }
                 if UiState.current-page == Page.Toolbox: ToolboxPage { }
+                if UiState.current-page == Page.DeviceStatus: DeviceStatusPage { }
                 if UiState.current-page == Page.ConversionQueue: ConversionQueuePage { }
                 if UiState.current-page == Page.Settings: SettingsPage { }
                 if UiState.current-page == Page.About: AboutPage { }
@@ -213,6 +216,17 @@ export component AppWindow inherits Window {
         btn-icon: IconSet.X;
         cancelled => Dispatcher.dispatch(Message.AbortQueueAction, "");
         confirmed => Dispatcher.dispatch(Message.ConfirmCancelQueueAction, "");
+    }
+
+    // Whole conversion batch done. Sits below the notifications so the
+    // "queue empty" toast stays readable, and above everything else. Purely
+    // decorative: no TouchArea, so clicks go straight through it.
+    if UiState.celebrating: ConfettiBurst {
+        width: root.width;
+        height: root.height;
+        finished => {
+            UiState.celebrating = false;
+        }
     }
 
     if UiState.notifications.length > 0: Notifications {

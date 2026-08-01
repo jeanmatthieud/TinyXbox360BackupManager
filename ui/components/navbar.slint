@@ -35,12 +35,14 @@ export component Navbar inherits VerticalLayout {
             }
         }
 
+        // Storage / health report of the target. Always available: with no
+        // target it explains how to connect one.
         NavbarButton {
-            active: UiState.current-page == Page.Settings;
-            icon: IconSet.Settings;
-            tooltip: "Settings";
+            active: UiState.current-page == Page.DeviceStatus;
+            icon: IconSet.HardDrive;
+            tooltip: "Device status";
             clicked => {
-                UiState.current-page = Page.Settings;
+                UiState.current-page = Page.DeviceStatus;
             }
         }
     }
@@ -79,6 +81,15 @@ export component Navbar inherits VerticalLayout {
             icon: IconSet.Unplug;
             tooltip: "Disconnect from \{UiState.config.target}";
             clicked => Dispatcher.dispatch(Message.RequestDisconnect, "");
+        }
+
+        NavbarButton {
+            active: UiState.current-page == Page.Settings;
+            icon: IconSet.Settings;
+            tooltip: "Settings";
+            clicked => {
+                UiState.current-page = Page.Settings;
+            }
         }
 
         NavbarButton {

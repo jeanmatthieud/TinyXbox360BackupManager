@@ -5,6 +5,7 @@
 export enum Page {
     Games,
     Toolbox,
+    DeviceStatus,
     ConversionQueue,
     Settings,
     About,
@@ -156,7 +157,18 @@ export struct DisplayedDriveInfo {
     allocation-granularity: int,
 }
 
+// Tone of a notification: picks its icon and accent colour.
+export enum NotificationKind {
+    Info,
+    Success,
+    Error,
+}
+
 export struct Notification {
+    // Stable identity, handed out by the Rust side. Toasts dismiss themselves
+    // by id rather than by row: several can time out in the same frame, and
+    // the first removal would shift the others' indices.
+    id: int,
     text: string,
-    critical: bool,
+    kind: NotificationKind,
 }

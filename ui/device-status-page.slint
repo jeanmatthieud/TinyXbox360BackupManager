@@ -1,0 +1,65 @@
+// SPDX-FileCopyrightText: 2026 Manuel Quarneti <mq1@ik.me> (TinyWiiBackupManager)
+// SPDX-FileContributor: Modified by Jean-Matthieu Dechriste (TinyXbox360BackupManager)
+// SPDX-License-Identifier: GPL-3.0-only
+
+import { ScrollView } from "std-widgets.slint";
+import { UiState } from "ui-state.slint";
+import { Message, Dispatcher } from "messages.slint";
+import { TargetKind } from "types.slint";
+import { IconSet } from "@lucide";
+import { PageHeader } from "components/page-header.slint";
+import { EmptyState } from "components/empty-state.slint";
+import { DriveInfoCard } from "components/toolbox/drive-info-card.slint";
+import {
+    LibraryStorageCard,
+} from "components/toolbox/library-storage-card.slint";
+import { ConsoleCard } from "components/toolbox/console-card.slint";
+import { AuroraScanPathsCard } from "components/toolbox/aurora-scan-paths-card.slint";
+
+// Health / storage report for the currently connected target.
+export component DeviceStatusPage inherits VerticalLayout {
+    init => {
+        if !UiState.config.target.is-empty && !UiState.fetching-aurora-paths {
+            Dispatcher.dispatch(Message.FetchAuroraPaths, "");
+        }
+    }
+
+    PageHeader {
+        title: "Device status";
+    }
+
+    if UiState.config.target.is-empty: EmptyState {
+        boxed: true;
+        icon: IconSet.HardDrive;
+        title: "No target connected";
+        description: "Connect a USB drive or your console to see its filesystem and storage folders";
+        action-icon: IconSet.Zap;
+        // Same rule as the navbar: no target picking while a BadAvatar key
+        // is being written.
+        action-label: UiState.creating-badavatar ? "" : "Select a target";
+        action => {
+            UiState.selecting-target = true;
+        }
+    }
+
+    if !UiState.config.target.is-empty: ScrollView {
+        VerticalLayout {
+            width: 100%;
+            padding: 10px;
+            padding-top: 0px;
+            spacing: 10px;
+            alignment: start;
+
+            if UiState.config.target-kind == TargetKind.Ftp && !UiState.config.target.is-empty: ConsoleCard { }
+
+            if UiState.config.target-kind == TargetKind.Local: DriveInfoCard { }
+
+            // App storage folders (and, on a console, their Aurora coverage).
+            LibraryStorageCard { }
+
+            // Aurora scan paths: always for a console; for a local drive only
+            // when it carries an Aurora install (otherwise nothing to show).
+            if !UiState.config.target.is-empty && (UiState.config.target-kind == TargetKind.Ftp || UiState.aurora-scan-paths.length > 0): AuroraScanPathsCard { }
+        }
+    }
+}

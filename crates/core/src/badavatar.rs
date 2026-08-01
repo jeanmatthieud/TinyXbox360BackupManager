@@ -189,11 +189,20 @@ pub fn create_badavatar(
     };
 
     // 3. Extract each archive into its own subfolder.
-    let aba_dir = extract_component(&aba_archive, "abadavatar", UrlField::Abadavatar, status)?;
-    let xe_dir = extract_component(&xe_archive, "xeunshackle", UrlField::Xeunshackle, status)?;
-    let aurora_dir = extract_component(&aurora_archive, "aurora", UrlField::Aurora, status)?;
+    let aba_dir =
+        extract_component(&aba_archive, "abadavatar", UrlField::Abadavatar, cancel, status)?;
+    let xe_dir =
+        extract_component(&xe_archive, "xeunshackle", UrlField::Xeunshackle, cancel, status)?;
+    let aurora_dir =
+        extract_component(&aurora_archive, "aurora", UrlField::Aurora, cancel, status)?;
     let su_dir = match &su_archive {
-        Some(a) => Some(extract_component(a, "systemupdate", UrlField::SystemUpdate, status)?),
+        Some(a) => Some(extract_component(
+            a,
+            "systemupdate",
+            UrlField::SystemUpdate,
+            cancel,
+            status,
+        )?),
         None => None,
     };
     check_cancel(cancel)?;
@@ -322,6 +331,7 @@ fn extract_component(
     archive_path: &Path,
     subdir: &str,
     field: UrlField,
+    cancel: &AtomicBool,
     status: &dyn Fn(&str),
 ) -> Result<PathBuf> {
     status(&format!("Extracting {}…", field.label()));
@@ -329,8 +339,11 @@ fn extract_component(
         .parent()
         .unwrap_or(archive_path)
         .join(subdir);
-    archive::extract_to(archive_path, &out, &mut |_done, _total| {})
-        .with_context(|| format!("extracting {}", field.label()))?;
+    let res = archive::extract_to(archive_path, &out, cancel, &mut |_done, _total| {});
+    // A cancelled extraction is reported with this module's own marker, as the
+    // top-level message (the GUI matches on `to_string()`, not on the chain).
+    check_cancel(cancel)?;
+    res.with_context(|| format!("extracting {}", field.label()))?;
     Ok(out)
 }
 

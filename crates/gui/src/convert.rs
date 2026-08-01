@@ -35,7 +35,18 @@ pub fn perform_conversion(
                 });
             };
 
-            txbm_core::convert::perform(in_path, config, &cancel, &update_progress)
+            // Phases with no measurable progress (the post-cancellation
+            // cleanup) take over the status line: without this the UI looks
+            // frozen while thousands of extracted files are deleted.
+            let weak3 = weak.clone();
+            let set_status = move |text: &str| {
+                let text = SharedString::from(text);
+                let _ = weak3.upgrade_in_event_loop(move |app| {
+                    app.global::<UiState<'_>>().set_status(text);
+                });
+            };
+
+            txbm_core::convert::perform(in_path, config, &cancel, &update_progress, &set_status)
         }
     };
 
@@ -43,6 +54,8 @@ pub fn perform_conversion(
         let dispatcher = app.global::<Dispatcher<'_>>();
 
         dispatcher.invoke_dispatch(Message::SetStatus, SharedString::new());
+
+        let succeeded = res.is_ok();
 
         match res {
             Ok(()) => {}
@@ -61,8 +74,10 @@ pub fn perform_conversion(
         }
 
         // Drop the finished conversion and move on to the next one (even on
-        // failure, so the queue doesn't stall).
-        dispatcher.invoke_dispatch(Message::ConversionFinished, SharedString::new());
+        // failure, so the queue doesn't stall). The payload tells the handler
+        // whether this one is worth celebrating when the queue drains.
+        let outcome = if succeeded { "ok" } else { "" };
+        dispatcher.invoke_dispatch(Message::ConversionFinished, outcome.into());
 
         dispatcher.invoke_dispatch(Message::RefreshAll, SharedString::new());
     });

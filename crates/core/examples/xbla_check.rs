@@ -21,7 +21,13 @@ fn main() -> Result<()> {
 
     println!("installing {input} into {target}…");
     let cancel = std::sync::atomic::AtomicBool::new(false);
-    txbm_core::convert::perform(input.into(), &config, &cancel, &|p, _| println!("  {p}%"))?;
+    txbm_core::convert::perform(
+        input.into(),
+        &config,
+        &cancel,
+        &|p, _| println!("  {p}%"),
+        &|s| println!("  {s}"),
+    )?;
 
     println!("rescan:");
     for game in txbm_core::game::scan_drive(std::path::Path::new(&target)) {
