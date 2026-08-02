@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 use crate::{
-    AppWindow, Dispatcher, DisplayedConfig, DisplayedDriveInfo, DisplayedGame,
+    AppWindow, Dispatcher, DisplayedConfig, DisplayedDriveInfo, DisplayedGame, DisplayedGameToAdd,
     DisplayedStoragePath, DisplayedTitleUpdate, Message, Notification, Page, PendingQueueAction,
     UiState, convert::perform_conversion, covers, dialogs, game_details, state::State,
     title_updates, util,
@@ -52,6 +52,57 @@ static TITLE_UPDATES_RESULT: Mutex<
 > = Mutex::new(None);
 
 impl State {
+    /// Fills the "add these conversions to the queue?" confirmation from the
+    /// picked files, flagging each one that would overwrite an installed game.
+    ///
+    /// The check is done here, before the queue is confirmed, rather than left
+    /// to the conversion: the user gets to see it while they can still back
+    /// out. It costs no I/O — the TitleID comes from the inspection the pick
+    /// already did, and the installed games are the ones the last scan found.
+    ///
+    /// It is therefore only as good as the TitleID the pick could read: ISOs
+    /// and Arcade packages are covered, archives never are (see
+    /// [`util::PickedGame::installs_title_id`]). An input with no TitleID is
+    /// queued silently — the conversion overwrites just the same, it simply
+    /// isn't announced.
+    fn set_games_to_add(&mut self, picked: Vec<util::PickedGame>, weak: &Weak<AppWindow>) {
+        let displayed = picked
+            .iter()
+            .map(|game| {
+                let name = match game.path.file_name() {
+                    Some(filename) => filename.to_string_lossy().to_shared_string(),
+                    None => "?".to_shared_string(),
+                };
+
+                // An `incomplete` entry only holds DLC/title updates for that
+                // TitleID: installing the game itself completes it instead of
+                // overwriting anything, so it stays unflagged even though a
+                // card for that game is visible in the library.
+                let installed = game.installs_title_id.as_deref().and_then(|tid| {
+                    self.games
+                        .iter()
+                        .find(|g| !g.incomplete && g.id.eq_ignore_ascii_case(tid))
+                });
+
+                DisplayedGameToAdd {
+                    name,
+                    already_installed: installed.is_some(),
+                    installed_title: installed
+                        .map(|g| g.title.to_shared_string())
+                        .unwrap_or_default(),
+                }
+            })
+            .collect::<Vec<_>>();
+
+        let conflicts = displayed.iter().filter(|g| g.already_installed).count() as i32;
+        self.games_to_add = picked.into_iter().map(|g| g.path).collect();
+        self.displayed_games_to_add.set_vec(displayed);
+
+        let app = weak.upgrade().unwrap();
+        app.global::<UiState<'_>>()
+            .set_games_to_add_conflicts(conflicts);
+    }
+
     /// Cancels the whole conversion queue: the running item (index 0) is only
     /// signalled to stop — it bails at its next cancellation checkpoint, cleans
     /// up its partial output, and is removed by `ConversionFinished` — while
@@ -809,21 +860,12 @@ impl State {
                     dialogs::pick_games(&window_handle)
                 };
 
-                self.games_to_add = paths
+                let picked = paths
                     .into_iter()
                     .filter_map(util::should_add_game)
                     .collect();
 
-                let displayed_games_to_add = self
-                    .games_to_add
-                    .iter()
-                    .map(|p| match p.file_name() {
-                        Some(filename) => filename.to_string_lossy().to_shared_string(),
-                        None => "?".to_shared_string(),
-                    })
-                    .collect::<Vec<_>>();
-
-                self.displayed_games_to_add.set_vec(displayed_games_to_add);
+                self.set_games_to_add(picked, weak);
             }
             Message::ConfirmGamesToAdd => {
                 while let Some(path) = self.games_to_add.pop_front() {
@@ -838,6 +880,7 @@ impl State {
                 // Queueing new work supersedes an in-flight "cancel all", so
                 // the fresh batch is eligible for the celebration again.
                 let app = weak.upgrade().unwrap();
+                app.global::<UiState<'_>>().set_games_to_add_conflicts(0);
                 app.global::<UiState<'_>>().set_cancelling_queue(false);
                 self.batch_cancelled = false;
 
@@ -934,6 +977,8 @@ impl State {
             Message::ClearGamesToAdd => {
                 self.games_to_add.clear();
                 self.displayed_games_to_add.clear();
+                let app = weak.upgrade().unwrap();
+                app.global::<UiState<'_>>().set_games_to_add_conflicts(0);
             }
             Message::TestFtp => {
                 let ftp_config = self.config.contents.ftp_config();
@@ -1317,14 +1362,8 @@ impl State {
                 if app.global::<UiState<'_>>().get_current_page() == Page::Games {
                     let path = PathBuf::from(&payload);
 
-                    if let Some(path) = util::should_add_game(path)
-                        && let Some(filename) = path.file_name()
-                    {
-                        let displayed_games_to_add =
-                            vec![filename.to_string_lossy().to_shared_string()];
-
-                        self.games_to_add = VecDeque::from([path]);
-                        self.displayed_games_to_add.set_vec(displayed_games_to_add);
+                    if let Some(picked) = util::should_add_game(path) {
+                        self.set_games_to_add(vec![picked], weak);
                     }
                 }
             }

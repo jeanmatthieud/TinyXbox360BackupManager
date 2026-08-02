@@ -8,6 +8,7 @@ import {
     DisplayedDriveInfo,
     DisplayedGame,
     DisplayedGameComponent,
+    DisplayedGameToAdd,
     DisplayedRecentLocation,
     DisplayedRemovableDrive,
     DisplayedStoragePath,
@@ -82,7 +83,10 @@ export global UiState {
     in-out property <bool> has-games: false;
     in-out property <[Notification]> notifications;
     in-out property <[string]> conversion-queue;
-    in-out property <[string]> games-to-add;
+    in-out property <[DisplayedGameToAdd]> games-to-add;
+    // How many `games-to-add` entries would overwrite an installed game.
+    // Counted on the Rust side: Slint models can't be folded over.
+    in-out property <int> games-to-add-conflicts: 0;
     in-out property <string> status;
     in-out property <string> latest-version;
     // True while downloading missing covers.

@@ -2,7 +2,7 @@
 // SPDX-FileContributor: Modified by Jean-Matthieu Dechriste (TinyXbox360BackupManager)
 // SPDX-License-Identifier: GPL-3.0-only
 
-use crate::{DisplayedGame, DisplayedTitleUpdate, Notification};
+use crate::{DisplayedGame, DisplayedGameToAdd, DisplayedTitleUpdate, Notification};
 use slint::{SharedString, VecModel};
 use std::{
     collections::VecDeque,
@@ -23,7 +23,7 @@ pub struct State {
     pub conversion_queue: VecDeque<QueuedConversion>,
     pub displayed_conversion_queue: Rc<VecModel<SharedString>>,
     pub games_to_add: VecDeque<PathBuf>,
-    pub displayed_games_to_add: Rc<VecModel<SharedString>>,
+    pub displayed_games_to_add: Rc<VecModel<DisplayedGameToAdd>>,
     pub notifications: Rc<VecModel<Notification>>,
     pub is_converting: bool,
     /// Conversions that succeeded since the queue was last empty. Drives the

@@ -303,17 +303,19 @@ fn convert_into(
                 None => name,
             };
             let game_dir = dest.xex_dir.join(&name);
-            if game_dir.exists() {
-                bail!("the folder {} already exists", game_dir.display());
-            }
+            // Re-adding a game overwrites it, like GOD re-conversion does: the
+            // extraction writes over the existing files in place (mirroring the
+            // FTP upload, which merges too). The user is warned before the
+            // conversion is queued.
+            let existed = game_dir.exists();
 
             phase("Extracting the Xbox 360 game (XEX)");
             let res = extract::extract_iso(in_path, &game_dir, cancel, &mut |done, total| {
                 update_progress((done * 100 / total.max(1)) as u32);
             });
-            // On cancellation, drop the partially-extracted folder (it is a
-            // fresh folder — we bailed above if it already existed).
-            if res.is_err() && is_cancelled(cancel) {
+            // On cancellation, drop the partially-extracted folder — but only
+            // when we created it: a pre-existing game must survive the abort.
+            if res.is_err() && is_cancelled(cancel) && !existed {
                 cleanup_dir(&game_dir, CLEANUP_PARTIAL, status);
             }
             res?;
@@ -349,17 +351,16 @@ fn convert_into(
                 None => name,
             };
             let game_dir = dest.xbe_dir.join(&name);
-            if game_dir.exists() {
-                bail!("the folder {} already exists", game_dir.display());
-            }
+            // Same overwrite semantics as the Xbox 360 extraction above.
+            let existed = game_dir.exists();
 
             phase("Extracting the Original Xbox game (XBE)");
             let res = extract::extract_iso(in_path, &game_dir, cancel, &mut |done, total| {
                 update_progress((done * 100 / total.max(1)) as u32);
             });
-            // On cancellation, drop the partially-extracted folder (it is a
-            // fresh folder — we bailed above if it already existed).
-            if res.is_err() && is_cancelled(cancel) {
+            // On cancellation, drop the partially-extracted folder — but only
+            // when we created it: a pre-existing game must survive the abort.
+            if res.is_err() && is_cancelled(cancel) && !existed {
                 cleanup_dir(&game_dir, CLEANUP_PARTIAL, status);
             }
             res?;

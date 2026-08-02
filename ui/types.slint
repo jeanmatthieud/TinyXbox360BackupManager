@@ -83,6 +83,19 @@ export struct DisplayedRemovableDrive {
     is-fat32: bool,
 }
 
+// One entry of the "add these conversions to the queue?" confirmation.
+export struct DisplayedGameToAdd {
+    // Source file name.
+    name: string,
+    // True when a game with the same TitleID is already installed on the
+    // target: queueing this one overwrites it. Detected before the queue is
+    // confirmed, from the already-scanned library (no extra I/O).
+    already-installed: bool,
+    // Title of the game it would overwrite, empty when `already-installed`
+    // is false.
+    installed-title: string,
+}
+
 export struct DisplayedGame {
     path: string,
     is-x360: bool,

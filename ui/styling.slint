@@ -17,4 +17,7 @@ export global MyPalette {
     out property <brush> accent-foreground: Palette.accent-foreground;
     out property <brush> overlay: Palette.alternate-background.darker(0.5).transparentize(0.5);
     out property <brush> destructive: red;
+    // Amber, for "this is not an error but you should read it" notices
+    // (e.g. a queued game that will overwrite an installed one).
+    out property <brush> warning: is-dark ? #e0a33a : #a86a00;
 }

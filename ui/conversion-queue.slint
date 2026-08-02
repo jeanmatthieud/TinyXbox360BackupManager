@@ -89,6 +89,11 @@ export component ConversionQueuePage inherits VerticalLayout {
     if UiState.conversion-queue.length > 0: ScrollView {
         width: parent.width;
         viewport-height: v.preferred-height;
+        // Without this the viewport would take the content's preferred width —
+        // and a Text keeps the full text width as preferred width even with
+        // `overflow: elide`. Long game titles would widen the whole queue
+        // instead of being elided.
+        viewport-width: self.visible-width;
 
         v := VerticalLayout {
             padding: 10px;
