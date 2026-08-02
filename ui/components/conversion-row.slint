@@ -1,35 +1,66 @@
-// SPDX-FileCopyrightText: 2026 Manuel Quarneti <mq1@ik.me>
+// SPDX-FileCopyrightText: 2026 Manuel Quarneti <mq1@ik.me> (TinyWiiBackupManager)
+// SPDX-FileContributor: Modified by Jean-Matthieu Dechriste (TinyXbox360BackupManager)
 // SPDX-License-Identifier: GPL-3.0-only
 
 import { IconSet } from "@lucide";
 import { IconButton } from "icon-button.slint";
-import { MyPalette } from "../styling.slint";
-import { UiState } from "../ui-state.slint";
 
 export component ConversionRow inherits Rectangle {
     in property <string> label;
-    in property <bool> cancellable: true;
+    // Reordering: the buttons are always shown so the rows stay aligned, and
+    // are disabled at the ends of the list.
+    in property <bool> can-move-up: false;
+    in property <bool> can-move-down: false;
 
     callback cancel();
+    callback move-up();
+    callback move-down();
 
-    height: 24px;
+    height: 28px;
 
-    Text {
-        x: 5px;
-        y: 5px;
-        text: label;
-        overflow: elide;
-    }
+    HorizontalLayout {
+        padding-left: 5px;
+        padding-right: 2px;
+        spacing: 2px;
+        cross-axis-alignment: CrossAxisAlignment.center;
 
-    IconButton {
-        visible: cancellable;
-        x: parent.width - 24px;
-        y: 0px;
-        icon: IconSet.X;
-        tooltip: "Cancel conversion";
-        height: 24px;
-        width: 24px;
-        squared: true;
-        clicked => cancel();
+        Text {
+            horizontal-stretch: 1;
+            text: label;
+            overflow: elide;
+            vertical-alignment: center;
+        }
+
+        IconButton {
+            horizontal-stretch: 0;
+            icon: IconSet.ChevronUp;
+            tooltip: "Move up in the queue";
+            disabled: !can-move-up;
+            height: 24px;
+            width: 24px;
+            squared: true;
+            clicked => move-up();
+        }
+
+        IconButton {
+            horizontal-stretch: 0;
+            icon: IconSet.ChevronDown;
+            tooltip: "Move down in the queue";
+            disabled: !can-move-down;
+            height: 24px;
+            width: 24px;
+            squared: true;
+            clicked => move-down();
+        }
+
+        IconButton {
+            horizontal-stretch: 0;
+            icon: IconSet.X;
+            tooltip: "Remove from the queue";
+            height: 24px;
+            width: 24px;
+            squared: true;
+            clicked => cancel();
+        }
     }
 }

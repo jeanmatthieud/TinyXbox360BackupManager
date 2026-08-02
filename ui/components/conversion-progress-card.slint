@@ -1,0 +1,101 @@
+// SPDX-FileCopyrightText: 2026 Jean-Matthieu Dechriste (TinyXbox360BackupManager)
+// SPDX-License-Identifier: GPL-3.0-only
+
+import { IconSet } from "@lucide";
+import { MyPalette } from "../styling.slint";
+import { UiState } from "../ui-state.slint";
+import { Card } from "card.slint";
+import { IconButton } from "icon-button.slint";
+import { ProgressBar } from "progress-bar.slint";
+
+// The conversion currently running (index 0 of the queue), shown as a card of
+// its own: it is not listed among the pending items, which are reorderable.
+export component ConversionProgressCard inherits Card {
+    // Secondary line: the step the percentage refers to, plus the measured
+    // speed when there is one (only the FTP upload measures a speed).
+    pure function details() -> string {
+        if !UiState.conversion-phase.is-empty && !UiState.conversion-speed.is-empty {
+            UiState.conversion-phase + "  ·  " + UiState.conversion-speed
+        } else if !UiState.conversion-phase.is-empty {
+            UiState.conversion-phase
+        } else {
+            UiState.conversion-speed
+        }
+    }
+
+    height: v.preferred-height;
+
+    v := VerticalLayout {
+        padding: 10px;
+        spacing: 6px;
+
+        HorizontalLayout {
+            spacing: 8px;
+            cross-axis-alignment: CrossAxisAlignment.center;
+
+            Text {
+                horizontal-stretch: 1;
+                text: "↑  " + UiState.conversion-label;
+                font-weight: 600;
+                overflow: elide;
+                vertical-alignment: center;
+            }
+
+            // Stops this conversion only: the pending items stay queued and the
+            // next one starts right after.
+            IconButton {
+                horizontal-stretch: 0;
+                icon: IconSet.X;
+                tooltip: UiState.cancelling-current
+                    ? "Cancellation already requested"
+                    : "Cancel this conversion";
+                disabled: UiState.cancelling-current || UiState.cancelling-queue;
+                height: 24px;
+                width: 24px;
+                squared: true;
+                clicked => {
+                    UiState.confirming-cancel-current = true;
+                }
+            }
+        }
+
+        HorizontalLayout {
+            spacing: 8px;
+            cross-axis-alignment: CrossAxisAlignment.center;
+
+            VerticalLayout {
+                horizontal-stretch: 1;
+                alignment: center;
+
+                ProgressBar {
+                    progress: UiState.conversion-progress;
+                    fill: UiState.cancelling-current || UiState.cancelling-queue
+                        ? MyPalette.destructive
+                        : MyPalette.accent-background;
+                }
+            }
+
+            Text {
+                horizontal-stretch: 0;
+                min-width: 40px;
+                text: Math.round(UiState.conversion-progress * 100) + " %";
+                horizontal-alignment: right;
+                vertical-alignment: center;
+            }
+        }
+
+        if UiState.cancelling-current || !details().is-empty: Text {
+            // While cancelling, the phase line still wins when there is one:
+            // the cleanup pushed by the core (deleting thousands of extracted
+            // files) is exactly what has to stay visible here.
+            text: UiState.cancelling-current && details().is-empty
+                ? "Cancelling this conversion..."
+                : details();
+            color: UiState.cancelling-current
+                ? MyPalette.destructive
+                : MyPalette.foreground.transparentize(0.4);
+            font-size: 12px;
+            overflow: elide;
+        }
+    }
+}

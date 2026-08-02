@@ -110,12 +110,15 @@ pub fn inspect_input(path: &Path) -> Result<InputKind> {
 /// `status` receives a short human-readable line that supersedes the progress
 /// display while a non-measurable phase runs (currently the post-cancellation
 /// cleanup); an empty string hands the status line back to `update_progress`.
+/// `phase` names the step the percentage currently refers to (extraction, GOD
+/// conversion, upload...); it is announced as each step starts.
 pub fn perform(
     in_path: PathBuf,
     config: &Config,
     cancel: &AtomicBool,
     update_progress: &dyn Fn(u32, Option<f64>),
     status: &dyn Fn(&str),
+    phase: &dyn Fn(&str),
 ) -> Result<()> {
     let target =
         Target::from_config(&config.contents).context("no target selected")?;
@@ -132,7 +135,7 @@ pub fn perform(
             };
             convert_into(&in_path, &dest, x360_format, cancel, &|p| {
                 update_progress(p, None)
-            }, status)?;
+            }, status, phase)?;
         }
         Target::Ftp(ftp) => {
             let stem = sanitize_name(
@@ -156,10 +159,12 @@ pub fn perform(
                     cancel,
                     &|p| update_progress(p * 50 / 100, None),
                     status,
+                    phase,
                 )?;
 
                 // Direct upload to the console, to its resolved storage
                 // locations: 50-100%.
+                phase("Uploading to the console");
                 let mut session = FtpSession::connect(ftp)?;
                 let hdd = ftp_hdd_root(&mut session);
                 let storage = ftp_layout(&mut session, &hdd).storage;
@@ -248,16 +253,26 @@ fn convert_into(
     cancel: &AtomicBool,
     update_progress: &dyn Fn(u32),
     status: &dyn Fn(&str),
+    phase: &dyn Fn(&str),
 ) -> Result<()> {
     let info = match inspect_input(in_path)? {
         InputKind::StfsPackage(package) => {
+            phase("Copying the package");
             install_stfs_package(&package, &dest.god_dir, cancel, &mut |done, total| {
                 update_progress((done * 100 / total.max(1)) as u32);
             })?;
             return Ok(());
         }
         InputKind::Archive => {
-            return install_archive(in_path, dest, x360_format, cancel, update_progress, status);
+            return install_archive(
+                in_path,
+                dest,
+                x360_format,
+                cancel,
+                update_progress,
+                status,
+                phase,
+            );
         }
         InputKind::Iso(info) => info,
     };
@@ -292,6 +307,7 @@ fn convert_into(
                 bail!("the folder {} already exists", game_dir.display());
             }
 
+            phase("Extracting the Xbox 360 game (XEX)");
             let res = extract::extract_iso(in_path, &game_dir, cancel, &mut |done, total| {
                 update_progress((done * 100 / total.max(1)) as u32);
             });
@@ -314,6 +330,7 @@ fn convert_into(
             let content_dir = &dest.god_dir;
             std::fs::create_dir_all(content_dir)?;
 
+            phase("GOD conversion");
             god::convert_to_god(in_path, content_dir, title.as_deref(), cancel, &mut |done, total| {
                 update_progress((done * 100 / total.max(1)) as u32);
             })?;
@@ -336,6 +353,7 @@ fn convert_into(
                 bail!("the folder {} already exists", game_dir.display());
             }
 
+            phase("Extracting the Original Xbox game (XBE)");
             let res = extract::extract_iso(in_path, &game_dir, cancel, &mut |done, total| {
                 update_progress((done * 100 / total.max(1)) as u32);
             });
@@ -359,9 +377,12 @@ fn convert_into(
             }
 
             let result = (|| -> Result<()> {
+                phase("Extracting the disc");
                 extract::extract_iso(in_path, &tmp, cancel, &mut |done, total| {
                     update_progress((done * 100 / total.max(1)) as u32);
                 })?;
+
+                phase("Merging the content");
 
                 // Expected structure: Content/0000000000000000/<TitleID>/...
                 let extracted_content = find_dir_ci(&tmp, "Content")
@@ -397,6 +418,7 @@ fn convert_into(
 
             let result = (|| -> Result<()> {
                 // Extraction: 0-80%.
+                phase("Extracting the disc");
                 extract::extract_iso(in_path, &tmp, cancel, &mut |done, total| {
                     update_progress((done * 80 / total.max(1)) as u32);
                 })?;
@@ -416,6 +438,7 @@ fn convert_into(
                 }
 
                 // Installation: 80-100%.
+                phase("Installing the packages");
                 install_packages(&packages, &dest.god_dir, cancel, &|p| {
                     update_progress(80 + p * 20 / 100)
                 })?;
@@ -512,6 +535,7 @@ fn install_archive(
     cancel: &AtomicBool,
     update_progress: &dyn Fn(u32),
     status: &dyn Fn(&str),
+    phase: &dyn Fn(&str),
 ) -> Result<()> {
     let stem = sanitize_name(
         in_path
@@ -526,6 +550,7 @@ fn install_archive(
 
     let result = (|| -> Result<()> {
         // Extraction: 0-50%.
+        phase("Extracting the archive");
         archive::extract_to(in_path, &tmp, cancel, &mut |done, total| {
             update_progress((done * 50 / total.max(1)) as u32);
         })?;
@@ -541,6 +566,7 @@ fn install_archive(
                 cancel,
                 &|p| update_progress(50 + p * 50 / 100),
                 status,
+                phase,
             );
         }
 
@@ -557,6 +583,7 @@ fn install_archive(
         }
 
         // Installation: 50-100%, weighted by package size.
+        phase("Installing the packages");
         install_packages(&packages, &dest.god_dir, cancel, &|p| {
             update_progress(50 + p * 50 / 100)
         })?;
@@ -750,7 +777,7 @@ mod tests {
         zip.finish().unwrap();
 
         let root = dir.join("root");
-        convert_into(&zip_path, &ConvertDest::under(&root), Xbox360Format::God, &AtomicBool::new(false), &|_| {}).unwrap();
+        convert_into(&zip_path, &ConvertDest::under(&root), Xbox360Format::God, &AtomicBool::new(false), &|_| {}, &|_| {}, &|_| {}).unwrap();
 
         let title_dir = root.join(DEFAULT_GOD_DIR).join("58410889");
         assert!(title_dir.join("000D0000/ArcadeGamePackage").is_file());
@@ -774,7 +801,7 @@ mod tests {
         std::fs::write(&package, stfs_package(stfs::CONTENT_TYPE_ARCADE, 0x584108A1)).unwrap();
 
         let root = dir.join("root");
-        convert_into(&package, &ConvertDest::under(&root), Xbox360Format::God, &AtomicBool::new(false), &|_| {}).unwrap();
+        convert_into(&package, &ConvertDest::under(&root), Xbox360Format::God, &AtomicBool::new(false), &|_| {}, &|_| {}, &|_| {}).unwrap();
         assert!(
             root.join(DEFAULT_GOD_DIR)
                 .join("584108A1/000D0000/SomeArcadeGame")
@@ -801,7 +828,7 @@ mod tests {
         zip.finish().unwrap();
 
         let root = dir.join("root");
-        let err = convert_into(&zip_path, &ConvertDest::under(&root), Xbox360Format::God, &AtomicBool::new(false), &|_| {}).unwrap_err();
+        let err = convert_into(&zip_path, &ConvertDest::under(&root), Xbox360Format::God, &AtomicBool::new(false), &|_| {}, &|_| {}, &|_| {}).unwrap_err();
         assert!(err.to_string().contains("no Arcade package"));
 
         std::fs::remove_dir_all(&dir).unwrap();

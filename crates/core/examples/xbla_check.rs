@@ -27,6 +27,7 @@ fn main() -> Result<()> {
         &cancel,
         &|p, _| println!("  {p}%"),
         &|s| println!("  {s}"),
+        &|s| println!("  [{s}]"),
     )?;
 
     println!("rescan:");

@@ -186,7 +186,7 @@ export component AppWindow inherits Window {
     if UiState.confirming-cancel-all: ConfirmationModal {
         Text {
             text: UiState.converting
-                ? "Cancel all conversions?\nThe conversion in progress will be stopped and its partial files removed."
+                ? "Cancel all conversions?\nThe conversion in progress will be stopped and its partial output cleaned up where possible; anything already written to the target is left in place."
                 : "Cancel all pending conversions?";
         }
         destructive: true;
@@ -197,6 +197,22 @@ export component AppWindow inherits Window {
         confirmed => {
             Dispatcher.dispatch(Message.CancelAllConversions, "");
             UiState.confirming-cancel-all = false;
+        }
+    }
+
+    if UiState.confirming-cancel-current: ConfirmationModal {
+        Text {
+            text: "Cancel the conversion of \{UiState.conversion-label}?\nIts partial output is cleaned up where possible, but anything already written to the target is left in place. The other queued games are kept and the next one starts right away.";
+            wrap: word-wrap;
+        }
+        destructive: true;
+        btn-icon: IconSet.X;
+        cancelled => {
+            UiState.confirming-cancel-current = false;
+        }
+        confirmed => {
+            Dispatcher.dispatch(Message.CancelConversion, "0");
+            UiState.confirming-cancel-current = false;
         }
     }
 

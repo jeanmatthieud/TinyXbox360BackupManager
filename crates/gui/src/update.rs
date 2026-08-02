@@ -857,6 +857,12 @@ impl State {
                     let ui = app.global::<UiState<'_>>();
                     ui.set_converting(false);
                     ui.set_cancelling_queue(false);
+                    ui.set_cancelling_current(false);
+                    ui.set_confirming_cancel_current(false);
+                    ui.set_conversion_label(SharedString::new());
+                    ui.set_conversion_progress(0.0);
+                    ui.set_conversion_speed(SharedString::new());
+                    ui.set_conversion_phase(SharedString::new());
 
                     // The whole batch went through: celebrate. Skipped when a
                     // disconnect/quit is waiting on the queue — the window is
@@ -879,7 +885,27 @@ impl State {
                 };
 
                 let app = weak.upgrade().unwrap();
-                app.global::<UiState<'_>>().set_converting(true);
+                let ui = app.global::<UiState<'_>>();
+                ui.set_converting(true);
+
+                // Fresh progress card for this item: the previous one's
+                // percentage/speed must not linger while this conversion starts.
+                let QueuedConversion::Standard(in_path) = &conv;
+                ui.set_conversion_label(
+                    in_path
+                        .file_name()
+                        .unwrap_or_default()
+                        .to_string_lossy()
+                        .to_shared_string(),
+                );
+                ui.set_conversion_progress(0.0);
+                ui.set_conversion_speed(SharedString::new());
+                ui.set_conversion_phase(SharedString::new());
+                ui.set_cancelling_current(false);
+                // The previous item may have finished on its own while its
+                // "cancel this conversion?" modal was still up: closing it here
+                // makes sure a late confirmation can't hit the next game.
+                ui.set_confirming_cancel_current(false);
 
                 self.conversion_cancel
                     .store(false, std::sync::atomic::Ordering::Relaxed);
@@ -1222,13 +1248,52 @@ impl State {
             }
             Message::CancelConversion => {
                 let i = payload.parse().unwrap();
-                // Index 0 is the conversion currently running, which can't be
-                // interrupted mid-flight; ignore a cancel request on it.
+
+                // Index 0 is the conversion currently running: it can't be
+                // dropped from the queue on the spot, only signalled to stop. It
+                // bails at its next checkpoint and `ConversionFinished` removes
+                // it, so the queue carries on with the next item — unlike
+                // "cancel all", the pending ones are left alone.
                 if self.is_converting && i == 0 {
+                    self.conversion_cancel
+                        .store(true, std::sync::atomic::Ordering::Relaxed);
+
+                    // A batch the user cancelled part of isn't worth confetti,
+                    // even if this item happens to finish cleanly before it
+                    // notices the flag.
+                    self.batch_cancelled = true;
+
+                    let app = weak.upgrade().unwrap();
+                    app.global::<UiState<'_>>().set_cancelling_current(true);
                     return;
                 }
+
                 let _ = self.conversion_queue.remove(i);
                 let _ = self.displayed_conversion_queue.remove(i);
+            }
+            Message::MoveConversionUp | Message::MoveConversionDown => {
+                let i: usize = payload.parse().unwrap();
+                let up = message == Message::MoveConversionUp;
+                let j = if up { i.wrapping_sub(1) } else { i + 1 };
+
+                // The running conversion (index 0) is pinned: nothing may be
+                // moved into its slot, and it can't be moved itself.
+                let first_pending = if self.is_converting { 1 } else { 0 };
+                if i < first_pending
+                    || j < first_pending
+                    || i >= self.conversion_queue.len()
+                    || j >= self.conversion_queue.len()
+                {
+                    return;
+                }
+
+                self.conversion_queue.swap(i, j);
+
+                // VecModel has no swap: take the lower one out and put it back
+                // at the higher index, which shifts the other one up by one.
+                let (lo, hi) = if up { (j, i) } else { (i, j) };
+                let row = self.displayed_conversion_queue.remove(lo);
+                self.displayed_conversion_queue.insert(hi, row);
             }
             Message::CancelAllConversions => {
                 self.cancel_all_conversions(weak);
