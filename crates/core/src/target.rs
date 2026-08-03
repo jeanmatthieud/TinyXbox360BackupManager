@@ -11,7 +11,7 @@
 //!   2. Aurora's own scan paths (read from its SQLite databases over FTP);
 //!   3. built-in defaults (`Content/0000000000000000` + `Games`).
 
-use crate::config::{ConfigContents, TargetKind};
+use crate::config::{ConfigContents, GodLayout, TargetKind};
 use crate::data_dir::DATA_DIR;
 use crate::drive_info::DriveInfo;
 use crate::ftp::{FtpConfig, FtpSession};
@@ -30,9 +30,12 @@ pub const SCAN_CANCELLED: &str = "scan cancelled";
 /// holds separate `usb` and `ftp` sections for the two connection kinds.
 pub const MANIFEST_NAME: &str = ".txbm.json";
 
-/// Default scan depth for an extracted-games location (allows one nested
-/// level, e.g. `Games/<Publisher>/<Game>`); GOD locations use depth 1.
-const EXTRACTED_DEFAULT_DEPTH: u32 = 2;
+/// Default scan depth for a storage location: one nested level is allowed, both
+/// for extracted games (`Games/<Publisher>/<Game>`) and for GOD containers
+/// (`Content/0000000000000000/<Name>/<TitleID>`, the layout third-party
+/// managers produce — see [`crate::god_dirs`]). Costs nothing on a flat
+/// library, where every child is recognized as a game and never descended into.
+pub const DEFAULT_SCAN_DEPTH: u32 = 2;
 
 #[derive(Debug, Clone)]
 pub enum Target {
@@ -88,10 +91,23 @@ impl Target {
     /// `update_progress` receives a percentage (0-100).
     pub fn delete_game(&self, game: &Game, update_progress: &dyn Fn(u32)) -> Result<()> {
         match self {
-            Target::Local(_) => {
+            Target::Local(root) => {
                 let total = crate::util::file_count(&game.path).max(1);
                 let mut done: u64 = 0;
-                remove_dir_all_with_progress(&game.path, &mut done, total, update_progress)
+                remove_dir_all_with_progress(&game.path, &mut done, total, update_progress)?;
+
+                // A nested layout (`<Name>/<TitleID>`, `Games/<Publisher>/<Game>`)
+                // leaves the named parent behind, empty. Drop it — but never a
+                // storage root, however empty the last deletion left it. The
+                // layout is only resolved once the folder is known to be empty,
+                // which a flat library never reaches.
+                if let Some(parent) = game.path.parent()
+                    && dir_is_empty(parent)
+                    && !local_layout(root).is_storage_root(&parent.to_string_lossy())
+                {
+                    let _ = std::fs::remove_dir(parent);
+                }
+                Ok(())
             }
             Target::Ftp(ftp) => {
                 let mut session = FtpSession::connect(ftp)?;
@@ -99,11 +115,27 @@ impl Target {
                 let result = session.remove_dir_recursive(&remote, &mut |done, total| {
                     update_progress((done * 100 / total.max(1)) as u32);
                 });
+                // Same parent pruning as locally. Resolving the layout means
+                // reading Aurora's databases, so it only happens for the folder
+                // the deletion actually emptied.
+                let (parent, _) = crate::ftp::parent_and_name(&remote);
+                if result.is_ok() && session.list_dir(&parent).is_empty() {
+                    let hdd = ftp_hdd_root(&mut session);
+                    if !ftp_layout(&mut session, &hdd).is_storage_root(&parent) {
+                        let _ = session.remove_empty_dir(&parent);
+                    }
+                }
                 session.quit();
                 result
             }
         }
     }
+}
+
+/// True when `dir` holds nothing (an unreadable directory counts as non-empty,
+/// so it is left alone).
+fn dir_is_empty(dir: &Path) -> bool {
+    std::fs::read_dir(dir).is_ok_and(|mut e| e.next().is_none())
 }
 
 /// Local equivalent of `fs::remove_dir_all` reporting per-file progress.
@@ -174,16 +206,13 @@ impl StorageConfig {
     /// Scan locations covering the install destinations, de-duplicated (the
     /// two extracted dirs often point to the same folder).
     fn scan_locations(&self) -> Vec<ScanLocation> {
-        let mut locs = vec![ScanLocation {
-            path: self.god_dir.clone(),
-            depth: 1,
-        }];
-        for dir in [&self.xbe_dir, &self.xex_dir] {
+        let mut locs = Vec::new();
+        for dir in [&self.god_dir, &self.xbe_dir, &self.xex_dir] {
             push_unique_location(
                 &mut locs,
                 ScanLocation {
                     path: dir.clone(),
-                    depth: EXTRACTED_DEFAULT_DEPTH,
+                    depth: DEFAULT_SCAN_DEPTH,
                 },
             );
         }
@@ -197,6 +226,40 @@ fn push_unique_location(locs: &mut Vec<ScanLocation>, loc: ScanLocation) {
     let key = normalize_path(&loc.path);
     if !locs.iter().any(|l| normalize_path(&l.path) == key) {
         locs.push(loc);
+    }
+}
+
+/// Adds `loc` unless an already-listed location already walks the same tree —
+/// the same folder, or an ancestor of it.
+///
+/// An ancestor that is scanned too shallowly to reach the games inside `loc`
+/// has its depth raised instead of `loc` being pushed next to it: nothing
+/// de-duplicates scan results, so two locations walking the same tree would
+/// list every game they both reach twice (double-counted size, ghost rows after
+/// a deletion). Raising the depth of the closest ancestor keeps a single walk
+/// that reaches everything both locations wanted.
+fn push_uncovered_location(locs: &mut Vec<ScanLocation>, loc: ScanLocation) {
+    let key = normalize_path(&loc.path);
+    // Closest already-listed ancestor (or `loc` itself), i.e. the one whose
+    // depth has to grow the least to cover `loc`.
+    let closest = locs
+        .iter_mut()
+        .filter_map(|l| {
+            let base = normalize_path(&l.path);
+            let below = if key == base {
+                0
+            } else {
+                key.strip_prefix(&format!("{base}/"))?.split('/').count() as u32
+            };
+            Some((below, l))
+        })
+        .min_by_key(|(below, _)| *below);
+
+    match closest {
+        // Levels between the ancestor and `loc`, plus the levels `loc` itself
+        // needs below its own root.
+        Some((below, l)) => l.depth = l.depth.max(below + loc.depth),
+        None => locs.push(loc),
     }
 }
 
@@ -214,6 +277,23 @@ fn normalize_path(p: &str) -> String {
 pub struct TargetLayout {
     pub scan_locations: Vec<ScanLocation>,
     pub storage: StorageConfig,
+}
+
+impl TargetLayout {
+    /// True when `path` is one of the target's own storage/scan roots — a
+    /// folder the app must never delete, however empty it looks.
+    pub fn is_storage_root(&self, path: &str) -> bool {
+        let key = normalize_path(path);
+        self.scan_locations
+            .iter()
+            .map(|l| l.path.as_str())
+            .chain([
+                self.storage.god_dir.as_str(),
+                self.storage.xbe_dir.as_str(),
+                self.storage.xex_dir.as_str(),
+            ])
+            .any(|p| normalize_path(p) == key)
+    }
 }
 
 /// One set of storage directories, as stored in a manifest section. Paths are
@@ -648,8 +728,23 @@ pub fn ftp_layout(session: &mut FtpSession, hdd: &str) -> TargetLayout {
     //    suggesting install destinations among them.
     if let Some(aurora) = aurora_paths(session).ok().filter(|a| !a.is_empty()) {
         let storage = suggest_storage(&aurora.locations, &format!("/{hdd}"));
+        // Aurora indexes `Content/0000000000000000` implicitly on every device,
+        // so that folder is almost never listed in its "Manage Paths" screen.
+        // Scanning its paths alone would hide every GOD container — including
+        // the ones we install ourselves — so the install destinations are
+        // always scanned too, unless Aurora already covers them.
+        let mut scan_locations = aurora.locations;
+        for dir in [&storage.god_dir, &storage.xbe_dir, &storage.xex_dir] {
+            push_uncovered_location(
+                &mut scan_locations,
+                ScanLocation {
+                    path: dir.clone(),
+                    depth: DEFAULT_SCAN_DEPTH,
+                },
+            );
+        }
         return TargetLayout {
-            scan_locations: aurora.locations,
+            scan_locations,
             storage,
         };
     }
@@ -730,29 +825,37 @@ pub struct StorageStatus {
     pub aurora_compared: bool,
 }
 
-/// True when `app_path` is scanned by Aurora, either directly or via an
-/// ancestor scan path whose scan depth actually reaches into it.
+/// True when Aurora's scan paths reach the games this app writes under
+/// `app_path`, either because it scans `app_path` itself or via an ancestor
+/// scanned deeply enough.
 ///
-/// Games are installed as *direct children* of `app_path`, so Aurora sees them
-/// only if it scans `app_path` itself (depth ≥ 1, always true) or an ancestor
-/// deep enough to reach `app_path`'s children. If `app_path` sits `k` folder
-/// levels below an Aurora location, those children are at level `k + 1`, so the
-/// location's `depth` must be at least `k + 1` (i.e. `k < depth`).
-fn path_covered(aurora: &[ScanLocation], app_path: &str) -> bool {
+/// `game_levels` is how deep below `app_path` a game folder is written — 1 for
+/// a direct child (extracted games, flat GOD layout), 2 for a nested GOD layout
+/// (`<Name>/<TitleID>`). The check is purely configuration-based: it compares
+/// Aurora's configured depth against the depth this app's settings imply, and
+/// never looks at the games actually present.
+///
+/// If `app_path` sits `k` folder levels below an Aurora location, its games are
+/// at level `k + game_levels`, so that location's `depth` must be at least
+/// that. Note that `depth` alone is no longer always sufficient for `k = 0`: a
+/// nested layout needs depth ≥ 2 even on the storage folder itself.
+fn path_covered(aurora: &[ScanLocation], app_path: &str, game_levels: u32) -> bool {
     let a = normalize_path(app_path);
     aurora.iter().any(|loc| {
         let l = normalize_path(&loc.path);
         if l.is_empty() {
             return false;
         }
-        if a == l {
-            return true;
-        }
         // How far `app_path` sits below this Aurora location, in folder levels.
-        match a.strip_prefix(&format!("{l}/")) {
-            Some(rest) => rest.split('/').count() as u32 <= loc.depth.saturating_sub(1),
-            None => false,
-        }
+        let below = if a == l {
+            0
+        } else {
+            match a.strip_prefix(&format!("{l}/")) {
+                Some(rest) => rest.split('/').count() as u32,
+                None => return false,
+            }
+        };
+        loc.depth >= below + game_levels
     })
 }
 
@@ -760,29 +863,41 @@ fn path_covered(aurora: &[ScanLocation], app_path: &str) -> bool {
 /// destination (GOD, extracted XBE, extracted XEX), always kept separate so the
 /// user sees the three distinct choices even when two point to the same folder.
 /// `display` formats a stored dir for the UI; `covered` tells whether Aurora
-/// scans it.
+/// reaches games written `game_levels` folders below the dir — 1 for extracted
+/// games (always direct children), the configured [`GodLayout`] for the GOD
+/// directory.
 fn storage_path_rows(
     storage: &StorageConfig,
+    god_layout: GodLayout,
     display: impl Fn(&str) -> String,
-    covered: impl Fn(&str) -> bool,
+    covered: impl Fn(&str, u32) -> bool,
 ) -> Vec<StoragePathStatus> {
-    let row = |label: &str, dir: &str| StoragePathStatus {
+    let row = |label: &str, dir: &str, game_levels: u32| StoragePathStatus {
         label: label.to_string(),
         aurora_path: display(dir),
         path: dir.to_string(),
-        covered_by_aurora: covered(dir),
+        covered_by_aurora: covered(dir, game_levels),
     };
     vec![
-        row("GOD Storage - Xbox360 games", &storage.god_dir),
-        row("XEX Storage - Xbox360 extracted games", &storage.xex_dir),
-        row("XBE Storage - Xbox OG games", &storage.xbe_dir),
+        row(
+            "GOD Storage - Xbox360 games",
+            &storage.god_dir,
+            god_layout.title_levels(),
+        ),
+        row("XEX Storage - Xbox360 extracted games", &storage.xex_dir, 1),
+        row("XBE Storage - Xbox OG games", &storage.xbe_dir, 1),
     ]
 }
 
 /// Reads the app's storage layout and Aurora's scan paths from a console, and
-/// reports which app folders Aurora is (not) configured to scan. Involves FTP
-/// I/O; run off the UI thread.
-pub fn ftp_storage_status(session: &mut FtpSession, hdd: &str) -> StorageStatus {
+/// reports which app folders Aurora is (not) configured to scan. `god_layout`
+/// is the configured GOD layout, which decides how deep Aurora must scan the
+/// GOD directory. Involves FTP I/O; run off the UI thread.
+pub fn ftp_storage_status(
+    session: &mut FtpSession,
+    hdd: &str,
+    god_layout: GodLayout,
+) -> StorageStatus {
     let root = format!("/{hdd}");
     let manifest = read_ftp_manifest(session);
 
@@ -804,9 +919,12 @@ pub fn ftp_storage_status(session: &mut FtpSession, hdd: &str) -> StorageStatus 
         .map(|l| format!("{}  (depth {})", aurora_console_path(&l.path), l.depth))
         .collect();
 
-    let paths = storage_path_rows(&storage, |p| aurora_console_path(p), |p| {
-        path_covered(&aurora_locs, p)
-    });
+    let paths = storage_path_rows(
+        &storage,
+        god_layout,
+        |p| aurora_console_path(p),
+        |p, levels| path_covered(&aurora_locs, p, levels),
+    );
 
     let aurora_compared = aurora_error.is_none();
     let has_uncovered = aurora_compared && paths.iter().any(|p| !p.covered_by_aurora);
@@ -892,7 +1010,7 @@ pub fn local_aurora_paths(mount: &Path) -> Result<AuroraScan> {
 /// on a drive (relative to the mount). When the drive carries an Aurora install
 /// (a bootable USB key), its scan paths are mapped onto the mount and the app's
 /// folders are checked against them, just like for a console.
-pub fn local_storage_status(mount: &Path) -> StorageStatus {
+pub fn local_storage_status(mount: &Path, god_layout: GodLayout) -> StorageStatus {
     let storage = local_layout(mount).storage;
 
     let aurora = local_aurora_paths(mount).ok().filter(|a| !a.is_empty());
@@ -936,8 +1054,9 @@ pub fn local_storage_status(mount: &Path) -> StorageStatus {
     let aurora_compared = aurora.is_some();
     let paths = storage_path_rows(
         &storage,
+        god_layout,
         |p| relativize_local(mount, p),
-        |p| aurora_compared && path_covered(&aurora_locs, p),
+        |p, levels| aurora_compared && path_covered(&aurora_locs, p, levels),
     );
     let has_uncovered = aurora_compared && paths.iter().any(|p| !p.covered_by_aurora);
 
@@ -1529,4 +1648,80 @@ fn push_extracted_ftp(
         search_term,
         incomplete: false,
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn loc(path: &str, depth: u32) -> ScanLocation {
+        ScanLocation {
+            path: path.to_string(),
+            depth,
+        }
+    }
+
+    #[test]
+    fn a_partially_covering_ancestor_is_deepened_not_duplicated() {
+        // Aurora scans the whole device shallowly; the storage dirs must not be
+        // added next to it, or every game under them would be listed twice.
+        let mut locs = vec![loc("/Hdd1", 2)];
+        push_uncovered_location(&mut locs, loc("/Hdd1/Games", DEFAULT_SCAN_DEPTH));
+        assert_eq!(locs.len(), 1);
+        // `/Hdd1/Games` sits 1 level below, its games up to 2 levels lower.
+        assert_eq!(locs[0].depth, 3);
+
+        // An ancestor already deep enough is left alone.
+        let mut locs = vec![loc("/Hdd1", 4)];
+        push_uncovered_location(&mut locs, loc("/Hdd1/Games", DEFAULT_SCAN_DEPTH));
+        assert_eq!(locs.len(), 1);
+        assert_eq!(locs[0].depth, 4);
+
+        // The same folder, scanned less deeply than we need: deepened in place.
+        let mut locs = vec![loc("/Hdd1/GAMES/", 1)];
+        push_uncovered_location(&mut locs, loc("/Hdd1/games", DEFAULT_SCAN_DEPTH));
+        assert_eq!(locs.len(), 1);
+        assert_eq!(locs[0].depth, DEFAULT_SCAN_DEPTH);
+
+        // An unrelated location is pushed as-is.
+        let mut locs = vec![loc("/Hdd1/Games", 2)];
+        push_uncovered_location(&mut locs, loc("/Usb0/Games", DEFAULT_SCAN_DEPTH));
+        assert_eq!(locs.len(), 2);
+    }
+
+    #[test]
+    fn coverage_follows_the_configured_god_layout() {
+        // Aurora scanning the GOD dir itself at depth 1 sees flat TitleID
+        // folders, but not the ones a nested layout writes one level deeper.
+        let aurora = vec![loc("/Hdd1/Content/0000000000000000", 1)];
+        let god = "/Hdd1/Content/0000000000000000";
+        assert!(path_covered(&aurora, god, GodLayout::TitleId.title_levels()));
+        assert!(!path_covered(
+            &aurora,
+            god,
+            GodLayout::NameSlashTitleId.title_levels()
+        ));
+
+        // Depth 2 on the same folder covers both layouts.
+        let aurora = vec![loc("/Hdd1/Content/0000000000000000", 2)];
+        assert!(path_covered(
+            &aurora,
+            god,
+            GodLayout::NameDashTitleId.title_levels()
+        ));
+
+        // Ancestor scan path: the device root needs depth 3 for a flat layout
+        // (Content + 0000000000000000 + <TitleID>), 4 for a nested one.
+        let aurora = vec![loc("/Hdd1", 3)];
+        assert!(path_covered(&aurora, god, GodLayout::TitleId.title_levels()));
+        assert!(!path_covered(
+            &aurora,
+            god,
+            GodLayout::TitleIdDashName.title_levels()
+        ));
+
+        // Extracted games are always direct children of their storage dir.
+        assert!(path_covered(&vec![loc("/Hdd1/Games", 1)], "/Hdd1/Games", 1));
+        assert!(!path_covered(&vec![loc("/Usb0/Games", 3)], "/Hdd1/Games", 1));
+    }
 }

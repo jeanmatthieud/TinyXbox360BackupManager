@@ -203,7 +203,7 @@ impl Drop for FtpSession {
     }
 }
 
-fn parent_and_name(remote_dir: &str) -> (String, String) {
+pub(crate) fn parent_and_name(remote_dir: &str) -> (String, String) {
     let trimmed = remote_dir.trim_end_matches('/');
     match trimmed.rsplit_once('/') {
         Some((parent, name)) if !parent.is_empty() => (parent.to_string(), name.to_string()),
@@ -547,6 +547,23 @@ impl FtpSession {
     /// Ensures a remote directory exists, creating every missing level.
     pub fn ensure_dir(&mut self, remote_dir: &str) -> Result<()> {
         self.cwd_create(remote_dir)
+    }
+
+    /// Removes a remote directory only if it holds nothing, and reports
+    /// whether it was removed. Used to prune the named parent folder a nested
+    /// GOD layout leaves behind once its game is gone; a parent that still
+    /// holds another game is left untouched.
+    pub fn remove_empty_dir(&mut self, remote_dir: &str) -> Result<bool> {
+        if !self.list_dir(remote_dir).is_empty() {
+            return Ok(false);
+        }
+        let (parent, name) = parent_and_name(remote_dir);
+        self.cwd(&parent)
+            .with_context(|| format!("entering {parent}"))?;
+        self.stream
+            .rmdir(&name)
+            .with_context(|| format!("removing {remote_dir}"))?;
+        Ok(true)
     }
 
     /// Removes a single file from a remote directory.

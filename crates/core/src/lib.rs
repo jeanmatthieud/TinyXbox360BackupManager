@@ -17,6 +17,7 @@ pub mod ftp;
 pub mod game;
 pub mod game_details;
 pub mod god;
+pub mod god_dirs;
 pub mod iso_info;
 pub mod mobcat;
 pub mod scan;

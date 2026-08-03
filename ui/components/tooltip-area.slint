@@ -8,6 +8,9 @@ export component TooltipArea inherits Rectangle {
     in property <string> tooltip;
     out property <bool> has-hover: t.has-hover;
     in property <bool> disabled: false;
+    // Corner radius of the disabled veil, to match a rounded element it covers
+    // (a Card, typically); square by default.
+    in property <length> veil-border-radius: 0px;
     // When > 0, holding the pointer for this long fires `long-pressed` on the
     // press instead of `clicked` on release. Opt-in, used for hidden debug
     // affordances; 0ms keeps the plain click-only behaviour.
@@ -40,6 +43,7 @@ export component TooltipArea inherits Rectangle {
         width: r.width;
         height: r.height;
         background: MyPalette.background.transparentize(0.4);
+        border-radius: veil-border-radius;
     }
 
     t := TouchArea {

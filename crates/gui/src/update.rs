@@ -295,6 +295,12 @@ impl State {
 
                 message_queue.push_back((Message::SyncConfig, SharedString::new()));
             }
+            Message::SetGodLayout => {
+                let value = payload.parse().unwrap();
+                self.config.contents.god_layout = value;
+
+                message_queue.push_back((Message::SyncConfig, SharedString::new()));
+            }
             Message::SetThemePreference => {
                 let value = payload.parse().unwrap();
                 self.config.contents.theme_preference = value;
@@ -1130,6 +1136,7 @@ impl State {
             }
             Message::FetchAuroraPaths => {
                 let app = weak.upgrade().unwrap();
+                let god_layout = self.config.contents.god_layout;
                 match Target::from_config(&self.config.contents) {
                     None => return,
                     // Local drive: read the layout (and any Aurora install on
@@ -1139,7 +1146,7 @@ impl State {
                     // worker thread like the FTP branch below.
                     Some(Target::Local(mount)) => {
                         app.global::<UiState<'_>>().set_fetching_aurora_paths(true);
-                        let status = txbm_core::target::local_storage_status(&mount);
+                        let status = txbm_core::target::local_storage_status(&mount, god_layout);
                         set_storage_status(&app, status);
                     }
                     // Console over FTP: read over the network on a thread.
@@ -1153,8 +1160,11 @@ impl State {
                             // One connection feeds both Toolbox cards.
                             let res = FtpSession::connect(&ftp).map(|mut session| {
                                 let hdd = txbm_core::target::ftp_hdd_root(&mut session);
-                                let status =
-                                    txbm_core::target::ftp_storage_status(&mut session, &hdd);
+                                let status = txbm_core::target::ftp_storage_status(
+                                    &mut session,
+                                    &hdd,
+                                    god_layout,
+                                );
                                 session.quit();
                                 status
                             });

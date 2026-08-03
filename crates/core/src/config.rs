@@ -57,6 +57,7 @@ pub struct ConfigContents {
     pub mount_point: PathBuf,
     pub remove_sources_games: bool,
     pub xbox360_format: Xbox360Format,
+    pub god_layout: GodLayout,
     pub sort_by: SortBy,
     pub view_as: ViewAs,
     pub theme_preference: ThemePreference,
@@ -86,6 +87,7 @@ impl Default for ConfigContents {
             mount_point: PathBuf::new(),
             remove_sources_games: false,
             xbox360_format: Xbox360Format::God,
+            god_layout: GodLayout::TitleId,
             sort_by: SortBy::NameDescending,
             view_as: ViewAs::Grid,
             theme_preference: ThemePreference::System,
@@ -253,6 +255,78 @@ pub enum Xbox360Format {
     God,
     /// Extract to a folder holding `default.xex`.
     Xex,
+}
+
+/// How `<TitleID>` folders are arranged inside the GOD storage directory
+/// (`Content/0000000000000000`).
+///
+/// Only [`GodLayout::TitleId`] is the layout the console's own dashboard
+/// expects; the others nest the `<TitleID>` folder under a human-readable
+/// parent, which Aurora tolerates because it identifies containers from their
+/// STFS header rather than from their position in the tree. They exist for
+/// interoperability with third-party managers (e.g. x360tm's "Game Tidy"),
+/// which is why the UI flags them as experimental.
+///
+/// The layout only decides where a *new* game is written: an existing
+/// `<TitleID>` folder is always reused wherever it already sits, so switching
+/// the setting never scatters duplicates of an already-installed game.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default, Display, FromStr)]
+#[serde(rename_all = "snake_case")]
+pub enum GodLayout {
+    /// `Content/0000000000000000/<TitleID>` — the standard layout.
+    #[default]
+    TitleId,
+    /// `Content/0000000000000000/<Name>/<TitleID>`.
+    NameSlashTitleId,
+    /// `Content/0000000000000000/<Name> - <TitleID>/<TitleID>`.
+    NameDashTitleId,
+    /// `Content/0000000000000000/<TitleID> - <Name>/<TitleID>`.
+    TitleIdDashName,
+}
+
+impl GodLayout {
+    /// How many folder levels below the GOD storage directory a game's
+    /// `<TitleID>` folder is written: 1 for the flat layout, 2 for the nested
+    /// ones. This is the depth a scanner (Aurora's included) must reach into
+    /// the GOD directory to see the games this app installs there.
+    pub fn title_levels(&self) -> u32 {
+        match self {
+            GodLayout::TitleId => 1,
+            GodLayout::NameSlashTitleId
+            | GodLayout::NameDashTitleId
+            | GodLayout::TitleIdDashName => 2,
+        }
+    }
+
+    /// Name of the folder that must hold the `<TitleID>` folder, or `None`
+    /// when the TitleID folder sits directly in the GOD directory.
+    ///
+    /// `name` is the game's display name; it is sanitized and truncated to the
+    /// FATX limit. An empty name degrades to the TitleID, which keeps the
+    /// layout structurally valid (`<TitleID>/<TitleID>`) rather than producing
+    /// a folder with a stray separator.
+    pub fn parent_folder(&self, title_id: &str, name: &str) -> Option<String> {
+        let name = name.trim();
+        let name = if name.is_empty() {
+            title_id.to_string()
+        } else {
+            crate::util::sanitize_name(name)
+        };
+        let folder = match self {
+            GodLayout::TitleId => return None,
+            GodLayout::NameSlashTitleId => name.to_string(),
+            GodLayout::NameDashTitleId => format!("{name} - {title_id}"),
+            GodLayout::TitleIdDashName => format!("{title_id} - {name}"),
+        };
+        Some(
+            folder
+                .chars()
+                .take(crate::game::FATX_MAX_NAME)
+                .collect::<String>()
+                .trim_end()
+                .to_string(),
+        )
+    }
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default, Display, FromStr)]

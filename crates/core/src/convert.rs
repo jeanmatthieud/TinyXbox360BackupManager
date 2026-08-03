@@ -3,7 +3,7 @@
 //! High-level pipeline: from an ISO, does what is needed on the target
 //! (local drive or FTP console).
 
-use crate::config::{Config, Xbox360Format};
+use crate::config::{Config, GodLayout, Xbox360Format};
 use crate::data_dir::DATA_DIR;
 use crate::ftp::FtpSession;
 use crate::iso_info::{self, IsoInfo, IsoKind};
@@ -27,19 +27,32 @@ struct ConvertDest {
     /// `default.xex`), used when the storage format is [`Xbox360Format::Xex`].
     xex_dir: PathBuf,
     work_dir: PathBuf,
+    /// How `<TitleID>` folders are arranged inside `god_dir` (see
+    /// [`crate::god_dirs`]).
+    god_layout: GodLayout,
 }
 
 impl ConvertDest {
     /// Standard staging layout under `root` (`Content/0000000000000000`,
     /// `Games Xbox`, `Games Xbox360`), used for the FTP staging folder and archive
     /// recursion.
+    ///
+    /// Staging always stays flat: the configured layout is applied when the
+    /// tree is uploaded to the target, where existing folders can be seen.
     fn under(root: &Path) -> Self {
         Self {
             god_dir: root.join(DEFAULT_GOD_DIR),
             xbe_dir: root.join(DEFAULT_XBE_DIR),
             xex_dir: root.join(DEFAULT_XEX_DIR),
             work_dir: root.to_path_buf(),
+            god_layout: GodLayout::TitleId,
         }
+    }
+
+    /// Directory that must hold the `<TitleID>` folder of this game: an
+    /// existing one wherever it sits, otherwise per the configured layout.
+    fn title_parent(&self, title_id: &str, name: Option<&str>) -> PathBuf {
+        crate::god_dirs::local_title_parent(&self.god_dir, title_id, name, self.god_layout)
     }
 }
 
@@ -132,6 +145,7 @@ pub fn perform(
                 xbe_dir: PathBuf::from(&storage.xbe_dir),
                 xex_dir: PathBuf::from(&storage.xex_dir),
                 work_dir: root.clone(),
+                god_layout: config.contents.god_layout,
             };
             convert_into(&in_path, &dest, x360_format, cancel, &|p| {
                 update_progress(p, None)
@@ -192,12 +206,14 @@ pub fn perform(
                     // Each staging sub-tree is uploaded to its own storage
                     // directory: GOD containers, extracted Original Xbox (XBE)
                     // and extracted Xbox 360 (XEX) games.
-                    let uploads: [(PathBuf, &String); 3] = [
-                        (staging.join(DEFAULT_GOD_DIR), &storage.god_dir),
-                        (staging.join(DEFAULT_XBE_DIR), &storage.xbe_dir),
-                        (staging.join(DEFAULT_XEX_DIR), &storage.xex_dir),
+                    // `is_god` marks the sub-tree whose entries are `<TitleID>`
+                    // folders, the only one the GOD layout applies to.
+                    let uploads: [(PathBuf, &String, bool); 3] = [
+                        (staging.join(DEFAULT_GOD_DIR), &storage.god_dir, true),
+                        (staging.join(DEFAULT_XBE_DIR), &storage.xbe_dir, false),
+                        (staging.join(DEFAULT_XEX_DIR), &storage.xex_dir, false),
                     ];
-                    for (staging_sub, remote) in &uploads {
+                    for (staging_sub, remote, is_god) in &uploads {
                         if !staging_sub.is_dir() {
                             continue;
                         }
@@ -207,7 +223,22 @@ pub fn perform(
                             }
                             let name = entry.file_name().to_string_lossy().to_string();
                             let base = sent_before;
-                            let remote_path = format!("{remote}/{name}");
+                            // A GOD title goes where that TitleID already sits
+                            // on the console — whatever layout put it there —
+                            // so re-adding a game overwrites it instead of
+                            // dropping a flat duplicate beside it.
+                            let remote_path = if *is_god {
+                                let parent = crate::god_dirs::ftp_title_parent(
+                                    &mut session,
+                                    remote,
+                                    &name,
+                                    staged_title_name(&entry.path()).as_deref(),
+                                    config.contents.god_layout,
+                                );
+                                format!("{parent}/{name}")
+                            } else {
+                                format!("{remote}/{name}")
+                            };
 
                             session.upload_dir(
                                 &entry.path(),
@@ -245,6 +276,17 @@ pub fn perform(
     Ok(())
 }
 
+/// Game name of a freshly staged `<TitleID>` folder, read from the STFS header
+/// of the package it holds. Used to name the parent folder of a nested GOD
+/// layout; `None` falls back to the bundled game list.
+fn staged_title_name(title_dir: &Path) -> Option<String> {
+    std::fs::read_dir(title_dir)
+        .ok()?
+        .flatten()
+        .filter(|e| e.path().is_dir())
+        .find_map(|e| stfs::title_from_dir(&e.path()))
+}
+
 /// Converts/extracts `in_path` into `dest`'s storage folders.
 fn convert_into(
     in_path: &Path,
@@ -258,7 +300,7 @@ fn convert_into(
     let info = match inspect_input(in_path)? {
         InputKind::StfsPackage(package) => {
             phase("Copying the package");
-            install_stfs_package(&package, &dest.god_dir, cancel, &mut |done, total| {
+            install_stfs_package(&package, dest, cancel, &mut |done, total| {
                 update_progress((done * 100 / total.max(1)) as u32);
             })?;
             return Ok(());
@@ -329,11 +371,16 @@ fn convert_into(
                     .next()
                     .map(|t| t.name)
             });
-            let content_dir = &dest.god_dir;
-            std::fs::create_dir_all(content_dir)?;
+            // iso2god creates the `<TitleID>` folder itself, so it is handed
+            // the directory that folder must live in.
+            let content_dir = match info.title_id.as_deref() {
+                Some(tid) => dest.title_parent(tid, title.as_deref()),
+                None => dest.god_dir.clone(),
+            };
+            std::fs::create_dir_all(&content_dir)?;
 
             phase("GOD conversion");
-            god::convert_to_god(in_path, content_dir, title.as_deref(), cancel, &mut |done, total| {
+            god::convert_to_god(in_path, &content_dir, title.as_deref(), cancel, &mut |done, total| {
                 update_progress((done * 100 / total.max(1)) as u32);
             })?;
         }
@@ -393,10 +440,13 @@ fn convert_into(
                          in this image (is it really an install disc / DLC?)",
                     )?;
 
-                let content_target = &dest.god_dir;
-                std::fs::create_dir_all(content_target)?;
+                // Each entry is a `<TitleID>` folder: merge it into wherever
+                // that title already lives on the target, or into the place
+                // the configured layout asks for.
                 for entry in std::fs::read_dir(&extracted_content)?.flatten() {
                     let name = entry.file_name().to_string_lossy().to_string();
+                    let content_target = dest.title_parent(&name, None);
+                    std::fs::create_dir_all(&content_target)?;
                     merge_move(&entry.path(), &content_target.join(&name))?;
                 }
                 Ok(())
@@ -440,7 +490,7 @@ fn convert_into(
 
                 // Installation: 80-100%.
                 phase("Installing the packages");
-                install_packages(&packages, &dest.god_dir, cancel, &|p| {
+                install_packages(&packages, dest, cancel, &|p| {
                     update_progress(80 + p * 20 / 100)
                 })?;
                 update_progress(100);
@@ -456,12 +506,12 @@ fn convert_into(
 }
 
 /// Copies an STFS package as-is (original file name, truncated to the FATX
-/// limit) to root/Content/0000000000000000/<TitleID>/<content type>/.
-/// Only Arcade, DLC and title-update packages are accepted.
+/// limit) to the game's `<TitleID>/<content type>/` folder inside `dest`'s GOD
+/// directory. Only Arcade, DLC and title-update packages are accepted.
 /// `update_progress` receives (copied bytes, total bytes).
 fn install_stfs_package(
     info: &StfsInfo,
-    god_dir: &Path,
+    dest: &ConvertDest,
     cancel: &AtomicBool,
     update_progress: &mut dyn FnMut(u64, u64),
 ) -> Result<()> {
@@ -493,7 +543,8 @@ fn install_stfs_package(
         file_name.chars().take(crate::game::FATX_MAX_NAME).collect()
     };
 
-    let dest_dir = god_dir
+    let dest_dir = dest
+        .title_parent(&info.title_id, info.name())
         .join(&info.title_id)
         .join(info.content_type_dir());
     std::fs::create_dir_all(&dest_dir)?;
@@ -585,7 +636,7 @@ fn install_archive(
 
         // Installation: 50-100%, weighted by package size.
         phase("Installing the packages");
-        install_packages(&packages, &dest.god_dir, cancel, &|p| {
+        install_packages(&packages, dest, cancel, &|p| {
             update_progress(50 + p * 50 / 100)
         })?;
         update_progress(100);
@@ -673,7 +724,7 @@ fn find_installable_packages_excluding(dir: &Path, exclude: &[&str]) -> Result<V
 /// folder), weighting `update_progress` (0-100) by package size.
 fn install_packages(
     packages: &[StfsInfo],
-    god_dir: &Path,
+    dest: &ConvertDest,
     cancel: &AtomicBool,
     update_progress: &dyn Fn(u32),
 ) -> Result<()> {
@@ -683,7 +734,7 @@ fn install_packages(
         .sum();
     let mut done_before: u64 = 0;
     for package in packages {
-        install_stfs_package(package, god_dir, cancel, &mut |done, _| {
+        install_stfs_package(package, dest, cancel, &mut |done, _| {
             update_progress(((done_before + done) * 100 / total.max(1)) as u32);
         })?;
         done_before += std::fs::metadata(&package.path).map(|m| m.len()).unwrap_or(0);
@@ -831,6 +882,45 @@ mod tests {
         let root = dir.join("root");
         let err = convert_into(&zip_path, &ConvertDest::under(&root), Xbox360Format::God, &AtomicBool::new(false), &|_| {}, &|_| {}, &|_| {}).unwrap_err();
         assert!(err.to_string().contains("no Arcade package"));
+
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn nested_god_layout_is_written_then_reused_and_scanned() {
+        let dir = std::env::temp_dir().join("txbm-convert-test-nested");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let package = dir.join("SomeArcadeGame");
+        std::fs::write(&package, stfs_package(stfs::CONTENT_TYPE_ARCADE, 0x584108A1)).unwrap();
+
+        let root = dir.join("root");
+        let dest = ConvertDest {
+            god_layout: GodLayout::NameSlashTitleId,
+            ..ConvertDest::under(&root)
+        };
+        convert_into(&package, &dest, Xbox360Format::God, &AtomicBool::new(false), &|_| {}, &|_| {}, &|_| {}).unwrap();
+
+        // The staged package carries no readable name here, so the parent
+        // folder falls back to the bundled game list, then to the TitleID.
+        let god = root.join(DEFAULT_GOD_DIR);
+        let title_dir = crate::god_dirs::local_title_parent(&god, "584108A1", None, GodLayout::TitleId)
+            .join("584108A1");
+        assert_ne!(title_dir, god.join("584108A1"), "should be nested");
+        assert!(title_dir.join("000D0000/SomeArcadeGame").is_file());
+
+        // The extra level does not hide the game from the scanner.
+        let games = crate::game::scan_drive(&root);
+        assert_eq!(games.len(), 1);
+        assert_eq!(games[0].id, "584108A1");
+        assert_eq!(games[0].path, title_dir);
+
+        // Re-adding it while configured flat reuses the nested folder rather
+        // than creating a duplicate.
+        convert_into(&package, &ConvertDest::under(&root), Xbox360Format::God, &AtomicBool::new(false), &|_| {}, &|_| {}, &|_| {}).unwrap();
+        assert!(!god.join("584108A1").exists());
+        assert_eq!(crate::game::scan_drive(&root).len(), 1);
 
         std::fs::remove_dir_all(&dir).unwrap();
     }
