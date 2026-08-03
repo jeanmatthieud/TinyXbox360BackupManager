@@ -3,11 +3,17 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 import { Card } from "card.slint";
+import { TooltipArea } from "tooltip-area.slint";
 
 // Outer shell shared by every Toolbox card: a full-width Card whose body is a
 // padded, evenly-spaced vertical stack. Drop the card content (header, lines,
 // body, action rows) straight in as children.
 export component ToolboxCard inherits Card {
+    // Locks the whole card behind the standard disabled veil, e.g. while the
+    // conversion queue is running. `disabled-tooltip` says why.
+    in property <bool> disabled: false;
+    in property <string> disabled-tooltip;
+
     width: 100%;
 
     VerticalLayout {
@@ -15,5 +21,12 @@ export component ToolboxCard inherits Card {
         spacing: 10px;
 
         @children
+    }
+
+    // Declared last so it covers the whole card and swallows every click.
+    if disabled: TooltipArea {
+        disabled: true;
+        tooltip: disabled-tooltip;
+        veil-border-radius: root.border-radius;
     }
 }
