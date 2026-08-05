@@ -45,6 +45,75 @@ pub struct Game {
     /// no actual game package installed (e.g. the base install was removed
     /// or never completed).
     pub incomplete: bool,
+    /// `Content/0000000000000000/<TitleID>` folder holding this game's DLC and
+    /// title updates, when it isn't [`Self::path`] itself.
+    ///
+    /// A GOD or Arcade game *is* that folder, so this stays `None`. An
+    /// extracted game lives elsewhere (`Games`, `Games Xbox`…) while its
+    /// installed content stays under `Content`, so [`merge_extracted_content`]
+    /// points it here once the scan has found both halves.
+    pub content_dir: Option<PathBuf>,
+}
+
+impl Game {
+    /// Folder to look into for installed DLC / title updates.
+    pub fn content_dir(&self) -> &Path {
+        self.content_dir.as_deref().unwrap_or(&self.path)
+    }
+}
+
+/// Folds the DLC-only `<TitleID>` entries into the extracted games they
+/// belong to, and drops them from the list.
+///
+/// DLC and title updates always install under
+/// `Content/0000000000000000/<TitleID>`, whatever the format of the game they
+/// patch. For a GOD game that folder *is* the game, but an extracted game
+/// lives in its own folder, so the scan sees the two halves as two unrelated
+/// entries — the extracted game, and a stray `incomplete` one holding only
+/// the content. Matching them by TitleID gives the user one entry per game,
+/// with its content listed in its info modal.
+///
+/// A leftover `incomplete` entry with no extracted counterpart is kept: there
+/// really is orphaned content installed, and nothing else surfaces it.
+pub fn merge_extracted_content(games: &mut Vec<Game>) {
+    // TitleIDs claimed by an extracted game. Games whose ID couldn't be
+    // resolved (no folder suffix, unreadable executable) can't be matched,
+    // and are skipped.
+    let claimed: Vec<String> = games
+        .iter()
+        .filter(|g| {
+            matches!(
+                g.format,
+                GameFormat::ExtractedXex | GameFormat::ExtractedXbe
+            ) && !g.id.is_empty()
+        })
+        .map(|g| g.id.clone())
+        .collect();
+    if claimed.is_empty() {
+        return;
+    }
+
+    // Keyed by TitleID rather than by index: the scan walks the `Content`
+    // location first, so the entries being removed sit *before* their merge
+    // targets and would shift every index.
+    let mut merged: Vec<(String, PathBuf, u64)> = Vec::new();
+    games.retain(|game| {
+        if !game.incomplete || !claimed.contains(&game.id) {
+            return true;
+        }
+        merged.push((game.id.clone(), game.path.clone(), game.size));
+        false
+    });
+
+    for (id, content_dir, size) in merged {
+        let Some(game) = games.iter_mut().find(|g| g.id == id && !g.incomplete) else {
+            continue;
+        };
+        game.content_dir = Some(content_dir);
+        // The content lives outside the game folder, so its bytes weren't
+        // counted in the extracted game's own size.
+        game.size += size;
+    }
 }
 
 /// STFS content types considered as installed games under
@@ -98,6 +167,7 @@ pub fn scan_drive(drive_dir: &Path) -> Vec<Game> {
         // skipped), so this walk never returns an error.
         let _ = crate::scan::walk(&mut scanner, &PathBuf::from(&location.path), location.depth);
     }
+    merge_extracted_content(&mut scanner.games);
     scanner.games
 }
 
@@ -170,6 +240,7 @@ fn push_god_games_local(title_dir: &Path, title_id_raw: &str, games: &mut Vec<Ga
             is_x360,
             search_term,
             incomplete: false,
+            content_dir: None,
         });
     }
 
@@ -199,6 +270,7 @@ fn push_god_games_local(title_dir: &Path, title_id_raw: &str, games: &mut Vec<Ga
         is_x360: true,
         search_term,
         incomplete: true,
+        content_dir: None,
     });
     true
 }
@@ -222,13 +294,16 @@ fn push_extracted_local(
     games: &mut Vec<Game>,
 ) {
     let (title, mut id) = split_title_id_suffix(folder_name);
-    // Game added by hand (no TitleID suffix): read it from the XBE, which is
-    // cheap on a local target.
-    if id.is_none()
-        && format == GameFormat::ExtractedXbe
-        && let Some(xbe) = crate::util::find_file_ci(game_dir, "default.xbe")
-    {
-        id = crate::xbe::title_id_from_file(&xbe).ok();
+    // Game added by hand (no TitleID suffix): read it from the executable,
+    // which is cheap on a local target (only its header is read).
+    if id.is_none() {
+        id = match format {
+            GameFormat::ExtractedXbe => crate::util::find_file_ci(game_dir, "default.xbe")
+                .and_then(|xbe| crate::xbe::title_id_from_file(&xbe).ok()),
+            GameFormat::ExtractedXex => crate::util::find_file_ci(game_dir, "default.xex")
+                .and_then(|xex| crate::xex::title_id_from_file(&xex).ok()),
+            _ => None,
+        };
     }
     let id = id.unwrap_or_default();
     let search_term = format!("{title}\0{id}").to_lowercase();
@@ -241,6 +316,7 @@ fn push_extracted_local(
         is_x360: format == GameFormat::ExtractedXex,
         search_term,
         incomplete: false,
+        content_dir: None,
     });
 }
 

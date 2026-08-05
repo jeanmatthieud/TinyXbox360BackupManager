@@ -157,7 +157,7 @@ fn delete_content_local(
             Ok(())
         }
         ContentKind::Dlc => {
-            let file = game.path.join(dlc_dir_name()).join(file_name);
+            let file = game.content_dir().join(dlc_dir_name()).join(file_name);
             std::fs::remove_file(&file)
                 .with_context(|| format!("removing {}", file.display()))?;
             update_progress(100);
@@ -191,7 +191,8 @@ fn delete_content_ftp(
             Ok(())
         }
         ContentKind::Dlc => {
-            let dlc_dir = format!("{remote}/{}", dlc_dir_name());
+            let content = game.content_dir().to_string_lossy().replace('\\', "/");
+            let dlc_dir = format!("{content}/{}", dlc_dir_name());
             session.remove_file(&dlc_dir, file_name)?;
             update_progress(100);
             Ok(())
@@ -226,7 +227,7 @@ fn inspect_local(game: &Game) -> GameDetails {
         }
     }
 
-    let dlc_dir = game.path.join(dlc_dir_name());
+    let dlc_dir = game.content_dir().join(dlc_dir_name());
     if let Ok(entries) = std::fs::read_dir(&dlc_dir) {
         for entry in entries.flatten() {
             let path = entry.path();
@@ -253,6 +254,7 @@ fn inspect_local(game: &Game) -> GameDetails {
 fn inspect_ftp(session: &mut FtpSession, game: &Game) -> GameDetails {
     let mut details = GameDetails::default();
     let remote = game.path.to_string_lossy().replace('\\', "/");
+    let content = game.content_dir().to_string_lossy().replace('\\', "/");
 
     if let Some(content_type) = god_content_type(game) {
         let type_dir = format!("{remote}/{content_type}");
@@ -281,7 +283,7 @@ fn inspect_ftp(session: &mut FtpSession, game: &Game) -> GameDetails {
         }
     }
 
-    let dlc_dir = format!("{remote}/{}", dlc_dir_name());
+    let dlc_dir = format!("{content}/{}", dlc_dir_name());
     for entry in session.list_dir(&dlc_dir) {
         if entry.is_dir {
             continue;

@@ -1438,8 +1438,13 @@ fn scan_ftp(ftp: &FtpConfig, cancel: &AtomicBool) -> Result<(Vec<Game>, DriveInf
     }
     // Release the borrow on `session` before quitting it.
     let FtpScanner {
-        games, games_bytes, ..
+        mut games,
+        games_bytes,
+        ..
     } = scanner;
+    // Leaves `games_bytes` correct: the merged entry's size moves to the game
+    // it belongs to instead of being counted twice.
+    crate::game::merge_extracted_content(&mut games);
 
     session.quit();
 
@@ -1576,6 +1581,7 @@ fn push_god_games_ftp(
             is_x360: *is_x360,
             search_term,
             incomplete: false,
+            content_dir: None,
         });
     }
 
@@ -1617,6 +1623,7 @@ fn push_god_games_ftp(
         is_x360: true,
         search_term,
         incomplete: true,
+        content_dir: None,
     });
     true
 }
@@ -1647,6 +1654,7 @@ fn push_extracted_ftp(
         is_x360: format == GameFormat::ExtractedXex,
         search_term,
         incomplete: false,
+        content_dir: None,
     });
 }
 

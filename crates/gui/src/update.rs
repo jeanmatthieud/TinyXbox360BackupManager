@@ -778,6 +778,9 @@ impl State {
                         game.id = id.to_string();
                         game.search_term = format!("{}\0{id}", game.title).to_lowercase();
                     }
+                    // The ID was unknown at scan time, so any orphaned DLC/title
+                    // update entry sharing it couldn't be folded in yet.
+                    txbm_core::game::merge_extracted_content(&mut self.games);
                     message_queue.push_back((Message::RefreshDisplayedGames, SharedString::new()));
                 }
             }
@@ -1420,9 +1423,9 @@ impl State {
                     return;
                 }
 
-                let incomplete = ui_state.get_current_game().incomplete;
+                let game = ui_state.get_current_game();
                 ui_state.set_current_game_components(ModelRc::from(Rc::new(VecModel::from(
-                    game_details::components(&details, incomplete),
+                    game_details::components(&details, &game),
                 ))));
             }
             Message::FetchTitleUpdates => {

@@ -25,13 +25,17 @@ component ContentRow inherits Rectangle {
     in property <length> col-status;
     callback delete-requested();
 
-    property <bool> deletable: comp.status != ComponentStatus.Missing;
+    // Rows without a stored file name (the synthetic "Missing" and "Game"
+    // rows) have nothing to delete on their own.
+    property <bool> deletable: comp.id != "";
 
     pure function kind-icon(k: string) -> Icon {
         if k == "DLC" {
             IconSet.Gift
         } else if k == "TU" {
             IconSet.RefreshCw
+        } else if k == "Game" {
+            IconSet.Gamepad
         } else {
             IconSet.Disc
         }
@@ -369,8 +373,10 @@ export component GameInfoModal inherits Modal {
                     height: 4px;
                 }
 
+                // Safety net only: every format now yields at least one row,
+                // so an empty table means the listing itself failed.
                 if !UiState.fetching-game-details && UiState.current-game-components.length == 0: Text {
-                    text: "No additional content";
+                    text: "No content found";
                     color: MyPalette.foreground.transparentize(0.4);
                     horizontal-alignment: left;
                 }
