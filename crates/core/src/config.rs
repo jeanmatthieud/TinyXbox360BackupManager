@@ -57,7 +57,6 @@ pub struct ConfigContents {
     pub mount_point: PathBuf,
     pub remove_sources_games: bool,
     pub xbox360_format: Xbox360Format,
-    pub god_layout: GodLayout,
     pub sort_by: SortBy,
     pub view_as: ViewAs,
     pub theme_preference: ThemePreference,
@@ -87,7 +86,6 @@ impl Default for ConfigContents {
             mount_point: PathBuf::new(),
             remove_sources_games: false,
             xbox360_format: Xbox360Format::God,
-            god_layout: GodLayout::TitleId,
             sort_by: SortBy::NameDescending,
             view_as: ViewAs::Grid,
             theme_preference: ThemePreference::System,
@@ -312,20 +310,20 @@ impl GodLayout {
         } else {
             crate::util::sanitize_name(name)
         };
-        let folder = match self {
+
+        // The TitleID part (bare, or as a fixed prefix/suffix) must always
+        // survive truncation, so its length is reserved first and only the
+        // name is clipped to what's left — same approach as
+        // `game::og_folder_name`.
+        let (prefix, suffix) = match self {
             GodLayout::TitleId => return None,
-            GodLayout::NameSlashTitleId => name.to_string(),
-            GodLayout::NameDashTitleId => format!("{name} - {title_id}"),
-            GodLayout::TitleIdDashName => format!("{title_id} - {name}"),
+            GodLayout::NameSlashTitleId => (String::new(), String::new()),
+            GodLayout::NameDashTitleId => (String::new(), format!(" - {title_id}")),
+            GodLayout::TitleIdDashName => (format!("{title_id} - "), String::new()),
         };
-        Some(
-            folder
-                .chars()
-                .take(crate::game::FATX_MAX_NAME)
-                .collect::<String>()
-                .trim_end()
-                .to_string(),
-        )
+        let max_name = crate::game::FATX_MAX_NAME.saturating_sub(prefix.chars().count() + suffix.chars().count());
+        let name: String = name.chars().take(max_name).collect();
+        Some(format!("{prefix}{}{suffix}", name.trim_end()))
     }
 }
 

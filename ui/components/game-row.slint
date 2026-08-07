@@ -66,7 +66,8 @@ export component GameRow inherits Rectangle {
         x: parent.width - 24px;
         y: 0px;
         icon: IconSet.Trash;
-        tooltip: "Delete game";
+        tooltip: UiState.conversion-queue.length > 0 ? "Unavailable while the conversion queue is running" : "Delete game";
+        disabled: UiState.conversion-queue.length > 0;
         height: 24px;
         width: 24px;
         squared: true;

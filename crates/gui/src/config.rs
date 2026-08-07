@@ -4,13 +4,13 @@
 
 use crate::{
     DisplayedBadAvatarConfig, DisplayedConfig, DisplayedRecentLocation, DisplayedRemovableDrive,
-    TargetKind,
+    GodLayout, TargetKind,
 };
 use crate::util::GIB;
 use slint::{SharedString, ToSharedString};
 use txbm_core::{
     badavatar::UrlField,
-    config::{Config, TargetKind as CoreTargetKind},
+    config::{Config, GodLayout as CoreGodLayout, TargetKind as CoreTargetKind},
     target::Target,
 };
 
@@ -81,6 +81,28 @@ impl From<txbm_core::config::TargetKind> for TargetKind {
     }
 }
 
+impl From<CoreGodLayout> for GodLayout {
+    fn from(layout: CoreGodLayout) -> Self {
+        match layout {
+            CoreGodLayout::TitleId => GodLayout::TitleId,
+            CoreGodLayout::NameSlashTitleId => GodLayout::NameSlashTitleId,
+            CoreGodLayout::NameDashTitleId => GodLayout::NameDashTitleId,
+            CoreGodLayout::TitleIdDashName => GodLayout::TitleIdDashName,
+        }
+    }
+}
+
+impl From<GodLayout> for CoreGodLayout {
+    fn from(layout: GodLayout) -> Self {
+        match layout {
+            GodLayout::TitleId => CoreGodLayout::TitleId,
+            GodLayout::NameSlashTitleId => CoreGodLayout::NameSlashTitleId,
+            GodLayout::NameDashTitleId => CoreGodLayout::NameDashTitleId,
+            GodLayout::TitleIdDashName => CoreGodLayout::TitleIdDashName,
+        }
+    }
+}
+
 impl From<&Config> for DisplayedConfig {
     fn from(config: &Config) -> Self {
         let target = Target::from_config(&config.contents)
@@ -98,7 +120,6 @@ impl From<&Config> for DisplayedConfig {
                 .to_shared_string(),
             remove_sources_games: config.contents.remove_sources_games.to_shared_string(),
             xbox360_format: config.contents.xbox360_format.to_shared_string(),
-            god_layout: config.contents.god_layout.to_shared_string(),
             sort_by: config.contents.sort_by.to_shared_string(),
             view_as: config.contents.view_as.to_shared_string(),
             theme_preference: config.contents.theme_preference.to_shared_string(),

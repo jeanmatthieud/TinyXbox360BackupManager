@@ -179,13 +179,21 @@ fn delete_content_ftp(
             let content_type =
                 god_content_type(game).context("deleting a disc from a non-GOD game")?;
             let type_dir = format!("{remote}/{content_type}");
-            // Payload removal is best-effort (a corrupted disc may have a
-            // header but no `.data` folder); the header removal is what makes
-            // the disc disappear from the listing.
-            let data_dir = format!("{type_dir}/{file_name}.data");
-            let _ = session.remove_dir_recursive(&data_dir, &mut |done, total| {
-                update_progress((done * 100 / total.max(1)) as u32);
-            });
+            // A corrupted disc may have a header but no `.data` folder, so
+            // its absence is fine — but a genuine removal failure (network,
+            // permission) must not be swallowed, or the header gets deleted
+            // while gigabytes of GOD fragments are silently left behind.
+            let data_name = format!("{file_name}.data");
+            let data_exists = session
+                .list_dir(&type_dir)
+                .iter()
+                .any(|e| e.is_dir && e.name == data_name);
+            if data_exists {
+                let data_dir = format!("{type_dir}/{data_name}");
+                session.remove_dir_recursive(&data_dir, &mut |done, total| {
+                    update_progress((done * 100 / total.max(1)) as u32);
+                })?;
+            }
             session.remove_file(&type_dir, file_name)?;
             update_progress(100);
             Ok(())

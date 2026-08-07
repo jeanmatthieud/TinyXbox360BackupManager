@@ -42,10 +42,10 @@ impl Target {
     /// Lists title updates installed for `game` (its `000B0000` folder).
     pub fn installed_title_updates(&self, game: &Game) -> Result<Vec<InstalledTitleUpdate>> {
         match self {
-            Target::Local(_) => Ok(installed_local(&game.path)),
+            Target::Local(_) => Ok(installed_local(game.content_dir())),
             Target::Ftp(ftp) => {
                 let mut session = FtpSession::connect(ftp)?;
-                let result = installed_ftp(&mut session, &game.path);
+                let result = installed_ftp(&mut session, game.content_dir());
                 session.quit();
                 result
             }
@@ -78,7 +78,7 @@ impl Target {
                          download it from within Aurora first"
                     );
                 };
-                let dest_dir = game.path.join(TITLE_UPDATE_DIR);
+                let dest_dir = game.content_dir().join(TITLE_UPDATE_DIR);
                 std::fs::create_dir_all(&dest_dir)
                     .with_context(|| format!("creating {}", dest_dir.display()))?;
                 std::fs::write(dest_dir.join(truncate_fatx(&file_name)), bytes)
@@ -96,7 +96,7 @@ impl Target {
                     };
                     let remote_dir = format!(
                         "{}/{TITLE_UPDATE_DIR}",
-                        game.path.to_string_lossy().replace('\\', "/")
+                        game.content_dir().to_string_lossy().replace('\\', "/")
                     );
                     session.put_bytes(&remote_dir, &truncate_fatx(&file_name), &bytes)
                 })();
@@ -110,7 +110,7 @@ impl Target {
     pub fn deactivate_title_update(&self, game: &Game, file_name: &str) -> Result<()> {
         match self {
             Target::Local(_) => {
-                let path = game.path.join(TITLE_UPDATE_DIR).join(file_name);
+                let path = game.content_dir().join(TITLE_UPDATE_DIR).join(file_name);
                 std::fs::remove_file(&path)
                     .with_context(|| format!("removing {}", path.display()))
             }
@@ -118,7 +118,7 @@ impl Target {
                 let mut session = FtpSession::connect(ftp)?;
                 let remote_dir = format!(
                     "{}/{TITLE_UPDATE_DIR}",
-                    game.path.to_string_lossy().replace('\\', "/")
+                    game.content_dir().to_string_lossy().replace('\\', "/")
                 );
                 let result = session.remove_file(&remote_dir, file_name);
                 session.quit();

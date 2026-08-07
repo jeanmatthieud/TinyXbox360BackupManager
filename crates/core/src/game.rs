@@ -105,6 +105,10 @@ pub fn merge_extracted_content(games: &mut Vec<Game>) {
         false
     });
 
+    // TitleIDs are unique per game; two non-incomplete entries sharing one
+    // would mean the same title was installed twice under different
+    // folders, a manual-setup anomaly this scan doesn't try to detect or
+    // fix. `.find()` picks whichever comes first in scan order.
     for (id, content_dir, size) in merged {
         let Some(game) = games.iter_mut().find(|g| g.id == id && !g.incomplete) else {
             continue;

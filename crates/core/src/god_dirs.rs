@@ -17,6 +17,7 @@
 use crate::config::GodLayout;
 use crate::ftp::FtpSession;
 use crate::game::is_title_id;
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 /// Display name used to build a parent folder, when the caller has none: the
@@ -91,51 +92,66 @@ fn contains_title_dir(dir: &Path, title_id: &str) -> bool {
     })
 }
 
+/// Snapshot of every `<TitleID>` folder already present under a console's GOD
+/// directory (flat or nested under a named parent), keyed by TitleID.
+///
+/// Built with one `LIST` per already-existing named parent, same as the
+/// per-title lookup it replaces — but built **once per upload batch** and
+/// reused for every title in it, instead of walking the console again for
+/// each one. A batch adding N new games to a library of M named parents costs
+/// `M` extra `LIST`s total instead of up to `N * M`.
+pub struct GodDirIndex {
+    god_dir: String,
+    /// TitleID (uppercase) -> the directory holding its folder.
+    by_title: HashMap<String, String>,
+}
+
+impl GodDirIndex {
+    /// Builds the index by listing `god_dir` and every named (non-TitleID)
+    /// parent directly under it.
+    pub fn build_ftp(session: &mut FtpSession, god_dir: &str) -> Self {
+        let god_dir = god_dir.trim_end_matches('/').to_string();
+        let mut by_title = HashMap::new();
+        let children = session.list_dir(&god_dir);
+        for entry in &children {
+            if !entry.is_dir {
+                continue;
+            }
+            if is_title_id(&entry.name) {
+                by_title.insert(entry.name.to_uppercase(), god_dir.clone());
+                continue;
+            }
+            let path = format!("{god_dir}/{}", entry.name);
+            for sub in session.list_dir(&path) {
+                if sub.is_dir && is_title_id(&sub.name) {
+                    by_title.insert(sub.name.to_uppercase(), path.clone());
+                }
+            }
+        }
+        Self { god_dir, by_title }
+    }
+
+    fn parent_of(&self, title_id: &str) -> Option<&str> {
+        self.by_title.get(&title_id.to_uppercase()).map(String::as_str)
+    }
+}
+
 /// Remote counterpart of [`local_title_parent`]. `god_dir` and the result are
-/// absolute FTP paths (`/Hdd1/Content/0000000000000000`).
+/// absolute FTP paths (`/Hdd1/Content/0000000000000000`). `index` must be
+/// built from the same `god_dir`.
 pub fn ftp_title_parent(
-    session: &mut FtpSession,
-    god_dir: &str,
+    index: &GodDirIndex,
     title_id: &str,
     name: Option<&str>,
     layout: GodLayout,
 ) -> String {
-    let god_dir = god_dir.trim_end_matches('/');
-    if let Some(parent) = find_ftp_title_parent(session, god_dir, title_id) {
-        return parent;
+    if let Some(parent) = index.parent_of(title_id) {
+        return parent.to_string();
     }
     match layout.parent_folder(title_id, &display_name(title_id, name)) {
-        Some(folder) => format!("{god_dir}/{folder}"),
-        None => god_dir.to_string(),
+        Some(folder) => format!("{}/{folder}", index.god_dir),
+        None => index.god_dir.clone(),
     }
-}
-
-/// Remote directory holding the `<TitleID>` folder of an already-installed
-/// game. A flat library costs a single listing (every child is a TitleID);
-/// only named parents are descended into.
-fn find_ftp_title_parent(
-    session: &mut FtpSession,
-    god_dir: &str,
-    title_id: &str,
-) -> Option<String> {
-    let children = session.list_dir(god_dir);
-    if children
-        .iter()
-        .any(|e| e.is_dir && e.name.eq_ignore_ascii_case(title_id))
-    {
-        return Some(god_dir.to_string());
-    }
-    for entry in children.iter().filter(|e| e.is_dir && !is_title_id(&e.name)) {
-        let path = format!("{god_dir}/{}", entry.name);
-        if session
-            .list_dir(&path)
-            .iter()
-            .any(|e| e.is_dir && e.name.eq_ignore_ascii_case(title_id))
-        {
-            return Some(path);
-        }
-    }
-    None
 }
 
 #[cfg(test)]

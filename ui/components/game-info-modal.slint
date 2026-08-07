@@ -151,6 +151,8 @@ component ContentRow inherits Rectangle {
         visible: (ta.has-hover || del.has-hover) && deletable;
         icon: IconSet.Trash;
         kind: IconButtonKind.DestructiveText;
+        disabled: UiState.conversion-queue.length > 0;
+        tooltip: UiState.conversion-queue.length > 0 ? "Unavailable while the conversion queue is running" : "";
         clicked => {
             root.delete-requested();
         }
@@ -411,6 +413,8 @@ export component GameInfoModal inherits Modal {
                 IconButton {
                     label: "Delete game";
                     kind: IconButtonKind.DestructiveText;
+                    disabled: UiState.conversion-queue.length > 0;
+                    tooltip: UiState.conversion-queue.length > 0 ? "Unavailable while the conversion queue is running" : "";
                     clicked => {
                         // Open the delete-confirmation modal for this game and
                         // close the info modal so they don't stack.

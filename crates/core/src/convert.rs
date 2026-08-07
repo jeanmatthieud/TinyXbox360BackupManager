@@ -145,7 +145,7 @@ pub fn perform(
                 xbe_dir: PathBuf::from(&storage.xbe_dir),
                 xex_dir: PathBuf::from(&storage.xex_dir),
                 work_dir: root.clone(),
-                god_layout: config.contents.god_layout,
+                god_layout: storage.god_layout,
             };
             convert_into(&in_path, &dest, x360_format, cancel, &|p| {
                 update_progress(p, None)
@@ -217,6 +217,12 @@ pub fn perform(
                         if !staging_sub.is_dir() {
                             continue;
                         }
+                        // Built once per storage sub-tree and reused for every
+                        // staged title below, instead of re-listing the whole
+                        // GOD directory (and every named parent in it) once
+                        // per title — see `GodDirIndex`.
+                        let god_index = is_god
+                            .then(|| crate::god_dirs::GodDirIndex::build_ftp(&mut session, remote));
                         for entry in std::fs::read_dir(staging_sub)?.flatten() {
                             if is_cancelled(cancel) {
                                 bail!(CONVERSION_CANCELLED);
@@ -227,13 +233,12 @@ pub fn perform(
                             // on the console — whatever layout put it there —
                             // so re-adding a game overwrites it instead of
                             // dropping a flat duplicate beside it.
-                            let remote_path = if *is_god {
+                            let remote_path = if let Some(god_index) = &god_index {
                                 let parent = crate::god_dirs::ftp_title_parent(
-                                    &mut session,
-                                    remote,
+                                    god_index,
                                     &name,
                                     staged_title_name(&entry.path()).as_deref(),
-                                    config.contents.god_layout,
+                                    storage.god_layout,
                                 );
                                 format!("{parent}/{name}")
                             } else {
@@ -253,14 +258,12 @@ pub fn perform(
                     Ok(())
                 })();
 
-                if upload.is_err() && is_cancelled(cancel) {
-                    // An aborted transfer leaves the session out of sync mid
-                    // command: drop it without the QUIT handshake rather than
-                    // wait on a reply that won't match.
-                    drop(session);
-                } else {
-                    session.quit();
-                }
+                // Whether an aborted transfer needs the plain socket shutdown
+                // instead of a `QUIT` handshake is decided by `poisoned`
+                // (set in `upload_dir_inner`), not by this call: `quit()` is
+                // just a documented close point, its body identical to
+                // dropping `session` outright.
+                session.quit();
                 upload
             })();
 

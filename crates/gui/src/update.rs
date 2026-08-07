@@ -295,12 +295,6 @@ impl State {
 
                 message_queue.push_back((Message::SyncConfig, SharedString::new()));
             }
-            Message::SetGodLayout => {
-                let value = payload.parse().unwrap();
-                self.config.contents.god_layout = value;
-
-                message_queue.push_back((Message::SyncConfig, SharedString::new()));
-            }
             Message::SetThemePreference => {
                 let value = payload.parse().unwrap();
                 self.config.contents.theme_preference = value;
@@ -602,6 +596,11 @@ impl State {
                             // connecting: skip the modal and scan straight away.
                             ui.set_configuring_storage(false);
                             message_queue.push_back((Message::RefreshAll, SharedString::new()));
+                            // Otherwise the Toolbox "Library storage" card (folders
+                            // + GOD layout) keeps showing whatever a previous
+                            // connection in this session left behind.
+                            message_queue
+                                .push_back((Message::FetchAuroraPaths, SharedString::new()));
                         } else {
                             let mut candidates: Vec<SharedString> = analysis
                                 .candidates
@@ -622,6 +621,7 @@ impl State {
                             ui.set_storage_xex_dir(
                                 analysis.suggested.xex_dir.as_str().into(),
                             );
+                            ui.set_storage_god_layout(analysis.suggested.god_layout.into());
                             // The modal stays open, now showing the form.
                         }
                     }
@@ -648,6 +648,7 @@ impl State {
                     god_dir: target.resolve_path(ui.get_storage_god_dir().as_str()),
                     xbe_dir: target.resolve_path(ui.get_storage_xbe_dir().as_str()),
                     xex_dir: target.resolve_path(ui.get_storage_xex_dir().as_str()),
+                    god_layout: ui.get_storage_god_layout().into(),
                 };
                 // Reuse the spinner while the folders are created and the
                 // manifest is written.
@@ -1139,7 +1140,6 @@ impl State {
             }
             Message::FetchAuroraPaths => {
                 let app = weak.upgrade().unwrap();
-                let god_layout = self.config.contents.god_layout;
                 match Target::from_config(&self.config.contents) {
                     None => return,
                     // Local drive: read the layout (and any Aurora install on
@@ -1149,7 +1149,7 @@ impl State {
                     // worker thread like the FTP branch below.
                     Some(Target::Local(mount)) => {
                         app.global::<UiState<'_>>().set_fetching_aurora_paths(true);
-                        let status = txbm_core::target::local_storage_status(&mount, god_layout);
+                        let status = txbm_core::target::local_storage_status(&mount);
                         set_storage_status(&app, status);
                     }
                     // Console over FTP: read over the network on a thread.
@@ -1166,7 +1166,6 @@ impl State {
                                 let status = txbm_core::target::ftp_storage_status(
                                     &mut session,
                                     &hdd,
-                                    god_layout,
                                 );
                                 session.quit();
                                 status
@@ -1762,6 +1761,7 @@ fn set_storage_status(app: &AppWindow, status: txbm_core::target::StorageStatus)
     ui.set_app_storage_paths(ModelRc::from(Rc::new(VecModel::from(paths))));
     ui.set_storage_has_uncovered(status.has_uncovered);
     ui.set_storage_aurora_compared(status.aurora_compared);
+    ui.set_storage_god_layout(status.god_layout.into());
 }
 
 impl State {

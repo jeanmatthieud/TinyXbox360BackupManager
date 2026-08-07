@@ -101,7 +101,7 @@ fn copy_cancellable(
         if crate::convert::is_cancelled(cancel) {
             bail!(crate::convert::CONVERSION_CANCELLED);
         }
-        let want = COPY_CHUNK.min((size - copied) as usize);
+        let want = (COPY_CHUNK as u64).min(size - copied) as usize;
         let read = reader.read(&mut buf[..want])?;
         if read == 0 {
             break;

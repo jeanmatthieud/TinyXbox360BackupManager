@@ -13,6 +13,7 @@ import {
     DisplayedRemovableDrive,
     DisplayedStoragePath,
     DisplayedTitleUpdate,
+    GodLayout,
     Notification,
     Page,
     PendingQueueAction,
@@ -60,6 +61,9 @@ export global UiState {
     // Extracted Original Xbox (XBE) and Xbox 360 (XEX) destinations.
     in-out property <string> storage-xbe-dir;
     in-out property <string> storage-xex-dir;
+    // How <TitleID> folders are arranged inside the GOD storage dir. Per-target,
+    // stored in the `.txbm.json` manifest alongside the three directories above.
+    in-out property <GodLayout> storage-god-layout;
     // FTP modal: true while the local network is being scanned for a console.
     in-out property <bool> ftp-scanning: false;
     // FTP modal: IP of the console found by the scan (empty if none/not yet).

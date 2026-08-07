@@ -47,24 +47,6 @@ export component SettingsPage inherits VerticalLayout {
             }
 
             SettingCard {
-                icon: IconSet.FolderTree;
-                label: "GOD storage layout";
-                items: [
-                    { value: "TitleId", label: "TitleID (standard, recommended)" },
-                    { value: "NameSlashTitleId", label: "Name / TitleID (experimental)" },
-                    { value: "NameDashTitleId", label: "Name - TitleID / TitleID (experimental)" },
-                    { value: "TitleIdDashName", label: "TitleID - Name / TitleID (experimental)" }
-                ];
-                active-item: UiState.config.god-layout;
-                set-property: Message.SetGodLayout;
-                disabled: UiState.conversion-queue.length > 0;
-                disabled-tooltip: "Unavailable while the conversion queue is running";
-                note: "Experimental layouts nest the TitleID folder under a readable name: Aurora "
-                    + "accepts it, the console's own dashboard may not. Only new games follow this "
-                    + "setting — an installed game is always updated where it already sits.";
-            }
-
-            SettingCard {
                 icon: IconSet.SunMoon;
                 label: "Theme";
                 items: [

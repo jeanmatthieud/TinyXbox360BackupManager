@@ -16,6 +16,17 @@ export enum TargetKind {
     Ftp,
 }
 
+// How <TitleID> folders are arranged inside the GOD storage directory.
+// Mirrors `GodLayout` in the Rust core (crates/core/src/config.rs); the
+// variants must stay in the same order as the drop-down in
+// components/storage-config-modal.slint.
+export enum GodLayout {
+    TitleId,
+    NameSlashTitleId,
+    NameDashTitleId,
+    TitleIdDashName,
+}
+
 // Action the user asked for while the conversion queue was still busy: it is
 // held back until the queue has been cancelled and fully drained.
 export enum PendingQueueAction {
@@ -32,7 +43,6 @@ export struct DisplayedConfig {
     mount-point: string,
     remove-sources-games: string,
     xbox360-format: string,
-    god-layout: string,
     sort-by: string,
     view-as: string,
     theme-preference: string,

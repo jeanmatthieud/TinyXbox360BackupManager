@@ -12,10 +12,17 @@ import { IconButton } from "../icon-button.slint";
 import { MyPalette } from "../../styling.slint";
 import { UiState } from "../../ui-state.slint";
 import { Message, Dispatcher } from "../../messages.slint";
-import { TargetKind } from "../../types.slint";
+import { GodLayout, TargetKind } from "../../types.slint";
 
 // App storage folders (and, on a console, their Aurora scan coverage).
 export component LibraryStorageCard inherits ToolboxCard {
+    function god-layout-label(v: GodLayout) -> string {
+        return v == GodLayout.NameSlashTitleId ? "Name / TitleID" :
+            v == GodLayout.NameDashTitleId ? "Name - TitleID / TitleID" :
+            v == GodLayout.TitleIdDashName ? "TitleID - Name / TitleID" :
+            "TitleID";
+    }
+
     CardHeader {
         icon: IconSet.FolderCog;
         title: "Library storage";
@@ -88,6 +95,33 @@ export component LibraryStorageCard inherits ToolboxCard {
                     text: "Not scanned by Aurora yet.";
                     font-size: 11px;
                     color: #e0a12f;
+                }
+            }
+        }
+
+        HorizontalLayout {
+            spacing: 8px;
+            cross-axis-alignment: CrossAxisAlignment.start;
+
+            IconDisplay {
+                icon: IconSet.FolderTree;
+                stroke: MyPalette.foreground;
+                size: 15px;
+            }
+
+            VerticalLayout {
+                spacing: 2px;
+                horizontal-stretch: 1;
+
+                Text {
+                    text: "GOD Storage Layout";
+                }
+
+                Text {
+                    text: god-layout-label(UiState.storage-god-layout);
+                    font-size: 12px;
+                    wrap: char-wrap;
+                    color: MyPalette.foreground.transparentize(0.4);
                 }
             }
         }

@@ -183,6 +183,12 @@ pub struct FtpSession {
     /// connections out of sync. Such a session cannot be reused, and must not
     /// be closed with a regular `QUIT` (see `Drop`).
     poisoned: bool,
+    /// Memoized result of `target::find_aurora_data_dir` for this session.
+    /// The Aurora install can't move mid-session, and locating it costs
+    /// several LIST/RETR round trips per volume, so every caller within a
+    /// session (manifest lookup, Aurora scan paths, title-update cache) shares
+    /// one discovery instead of repeating it.
+    pub(crate) aurora_data_dir_cache: Option<Option<String>>,
 }
 
 impl Drop for FtpSession {
@@ -248,6 +254,7 @@ impl FtpSession {
         Ok(Self {
             stream,
             poisoned: false,
+            aurora_data_dir_cache: None,
         })
     }
 
@@ -367,9 +374,17 @@ impl FtpSession {
         let mut buf = vec![0u8; max_bytes];
         let mut filled = 0;
         while filled < max_bytes {
-            let n = stream
-                .read(&mut buf[filled..])
-                .with_context(|| format!("reading {remote_path}"))?;
+            let n = match stream.read(&mut buf[filled..]) {
+                Ok(n) => n,
+                Err(e) => {
+                    // A genuine read error (as opposed to the expected
+                    // truncated-transfer reply) leaves the data connection
+                    // out of sync mid-RETR: the session can't be trusted
+                    // for another command.
+                    self.poisoned = true;
+                    return Err(e).with_context(|| format!("reading {remote_path}"));
+                }
+            };
             if n == 0 {
                 break;
             }
