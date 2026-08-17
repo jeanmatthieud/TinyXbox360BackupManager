@@ -1043,7 +1043,7 @@ fn local_aurora_dir(mount: &Path) -> Option<PathBuf> {
         }
     }
 
-    for candidate in [vec!["Aurora"], vec!["Dashboard", "Aurora"]] {
+    for candidate in [vec!["Aurora"], vec!["Dashboard", "Aurora"], vec!["Apps", "Aurora"]] {
         let mut dir = mount.to_path_buf();
         let mut ok = true;
         for part in candidate {
