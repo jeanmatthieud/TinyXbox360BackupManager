@@ -173,7 +173,11 @@ export component StorageConfigModal inherits Modal {
     // the last field sit behind the footer. A fixed width breaks the cycle.
     min-w: 680px;
     max-w: 680px;
-    min-h: 460px;
+    // No min height: the modal must shrink to its content. While the target is
+    // being analyzed the body is a single line, and a floor here would leave a
+    // large empty gap between the footer and the bottom of the card (the body
+    // layout is `alignment: start`, so the slack all ends up below the footer).
+    min-h: 0px;
     // Grow with the window instead of stopping at an arbitrary cap: leave
     // some margin around the modal, but let it use the room that's there.
     max-h: min(760px, root.height - 100px);
