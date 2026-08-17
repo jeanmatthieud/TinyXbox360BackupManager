@@ -596,6 +596,11 @@ impl State {
                             // connecting: skip the modal and scan straight away.
                             ui.set_configuring_storage(false);
                             message_queue.push_back((Message::RefreshAll, SharedString::new()));
+                            // Otherwise the Toolbox "Library storage" card (folders
+                            // + GOD layout) keeps showing whatever a previous
+                            // connection in this session left behind.
+                            message_queue
+                                .push_back((Message::FetchAuroraPaths, SharedString::new()));
                         } else {
                             let mut candidates: Vec<SharedString> = analysis
                                 .candidates
@@ -616,6 +621,7 @@ impl State {
                             ui.set_storage_xex_dir(
                                 analysis.suggested.xex_dir.as_str().into(),
                             );
+                            ui.set_storage_god_layout(analysis.suggested.god_layout.into());
                             // The modal stays open, now showing the form.
                         }
                     }
@@ -642,6 +648,7 @@ impl State {
                     god_dir: target.resolve_path(ui.get_storage_god_dir().as_str()),
                     xbe_dir: target.resolve_path(ui.get_storage_xbe_dir().as_str()),
                     xex_dir: target.resolve_path(ui.get_storage_xex_dir().as_str()),
+                    god_layout: ui.get_storage_god_layout().into(),
                 };
                 // Reuse the spinner while the folders are created and the
                 // manifest is written.
@@ -772,6 +779,9 @@ impl State {
                         game.id = id.to_string();
                         game.search_term = format!("{}\0{id}", game.title).to_lowercase();
                     }
+                    // The ID was unknown at scan time, so any orphaned DLC/title
+                    // update entry sharing it couldn't be folded in yet.
+                    txbm_core::game::merge_extracted_content(&mut self.games);
                     message_queue.push_back((Message::RefreshDisplayedGames, SharedString::new()));
                 }
             }
@@ -1153,8 +1163,10 @@ impl State {
                             // One connection feeds both Toolbox cards.
                             let res = FtpSession::connect(&ftp).map(|mut session| {
                                 let hdd = txbm_core::target::ftp_hdd_root(&mut session);
-                                let status =
-                                    txbm_core::target::ftp_storage_status(&mut session, &hdd);
+                                let status = txbm_core::target::ftp_storage_status(
+                                    &mut session,
+                                    &hdd,
+                                );
                                 session.quit();
                                 status
                             });
@@ -1410,9 +1422,9 @@ impl State {
                     return;
                 }
 
-                let incomplete = ui_state.get_current_game().incomplete;
+                let game = ui_state.get_current_game();
                 ui_state.set_current_game_components(ModelRc::from(Rc::new(VecModel::from(
-                    game_details::components(&details, incomplete),
+                    game_details::components(&details, &game),
                 ))));
             }
             Message::FetchTitleUpdates => {
@@ -1749,6 +1761,7 @@ fn set_storage_status(app: &AppWindow, status: txbm_core::target::StorageStatus)
     ui.set_app_storage_paths(ModelRc::from(Rc::new(VecModel::from(paths))));
     ui.set_storage_has_uncovered(status.has_uncovered);
     ui.set_storage_aurora_compared(status.aurora_compared);
+    ui.set_storage_god_layout(status.god_layout.into());
 }
 
 impl State {

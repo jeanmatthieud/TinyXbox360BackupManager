@@ -29,6 +29,8 @@ export component SettingsPage inherits VerticalLayout {
                 items: [{ value: "false", label: "No (recommended)" }, { value: "true", label: "Yes" }];
                 active-item: UiState.config.remove-sources-games;
                 set-property: Message.SetRemoveSourcesGames;
+                disabled: UiState.conversion-queue.length > 0;
+                disabled-tooltip: "Unavailable while the conversion queue is running";
             }
 
             SettingCard {
@@ -40,6 +42,8 @@ export component SettingsPage inherits VerticalLayout {
                 ];
                 active-item: UiState.config.xbox360-format;
                 set-property: Message.SetXbox360Format;
+                disabled: UiState.conversion-queue.length > 0;
+                disabled-tooltip: "Unavailable while the conversion queue is running";
             }
 
             SettingCard {

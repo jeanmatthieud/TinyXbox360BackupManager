@@ -8,7 +8,64 @@ import { IconSet } from "@lucide";
 import { MyPalette } from "../styling.slint";
 import { UiState } from "../ui-state.slint";
 import { Message, Dispatcher } from "../messages.slint";
+import { GodLayout } from "../types.slint";
 import { MyLineEdit } from "my-line-edit.slint";
+
+// Radio-style choice of how <TitleID> folders are arranged inside GOD
+// Storage. Unlike the other fields here, this isn't a location to type or
+// browse to, so it doesn't reuse `LocationField`. Sets `UiState.storage-god-layout`
+// directly (no `Message` dispatch): like the other fields, it only takes
+// effect when the modal's own "Confirm" is pressed.
+component GodLayoutField inherits VerticalLayout {
+    spacing: 6px;
+
+    Text {
+        text: "GOD Storage Layout";
+        font-weight: 700;
+    }
+
+    Text {
+        text: "How <TitleID> folders are arranged inside GOD Storage. Aurora accepts a nested "
+            + "layout, the console's own dashboard may not. Only new games follow this — an "
+            + "installed game is always updated where it already sits.";
+        color: MyPalette.foreground.transparentize(0.35);
+        font-size: 12px;
+        wrap: word-wrap;
+    }
+
+    // Layout behind each row of the drop-down, same order as `model` below.
+    property <[GodLayout]> layouts: [
+        GodLayout.TitleId,
+        GodLayout.NameSlashTitleId,
+        GodLayout.NameDashTitleId,
+        GodLayout.TitleIdDashName,
+    ];
+
+    // A ComboBox shows whatever `current-index` points at — assigning
+    // `current-value` does NOT move the selection — so the layout in use has
+    // to be mapped back to its row. Anything else lands on the standard
+    // layout, matching `GodLayout`'s own `#[default]` variant.
+    function row-for(l: GodLayout) -> int {
+        return l == GodLayout.NameSlashTitleId ? 1 :
+            l == GodLayout.NameDashTitleId ? 2 :
+            l == GodLayout.TitleIdDashName ? 3 :
+            0;
+    }
+
+    ComboBox {
+        height: 34px;
+        model: [
+            "TitleID (standard, recommended)",
+            "Name / TitleID (experimental)",
+            "Name - TitleID / TitleID (experimental)",
+            "TitleID - Name / TitleID (experimental)",
+        ];
+        current-index: row-for(UiState.storage-god-layout);
+        selected => {
+            UiState.storage-god-layout = layouts[self.current-index];
+        }
+    }
+}
 
 // One labeled location chooser: a drop-down of detected folders plus an
 // "Other…" entry that reveals a free-text / browsable field.
@@ -21,8 +78,11 @@ component LocationField inherits VerticalLayout {
     // Sentinel value of the last drop-down entry (kept in sync with the one
     // appended to storage-candidates in update.rs).
     property <string> OTHER: "Other…";
-    // True while the user is entering a path not in the detected list.
-    property <bool> other-mode: false;
+    // Index of that sentinel, i.e. the last row of the drop-down.
+    property <int> other-index: UiState.storage-candidates.length - 1;
+    // True while the user is entering a path not in the detected list. Derived
+    // from the drop-down rather than stored, so the two can't drift apart.
+    property <bool> other-mode: combo.current-index == other-index;
 
     spacing: 6px;
 
@@ -38,16 +98,42 @@ component LocationField inherits VerticalLayout {
         wrap: word-wrap;
     }
 
-    ComboBox {
+    // Plain container, not a layout, so the seeding loop below can sit next to
+    // the drop-down without taking a row (and a `spacing`) of its own.
+    Rectangle {
         height: 34px;
-        model: UiState.storage-candidates;
-        current-value: other-mode ? OTHER : value;
-        selected(v) => {
-            if v == OTHER {
-                other-mode = true;
-            } else {
-                other-mode = false;
-                value = v;
+
+        combo := ComboBox {
+            width: 100%;
+            height: 100%;
+            model: UiState.storage-candidates;
+            // A ComboBox only ever shows what `current-index` points at —
+            // assigning `current-value` does NOT move the selection.
+            selected(v) => {
+                // "Other…" keeps the previous path so the revealed field
+                // starts from something editable rather than an empty box.
+                if v != OTHER {
+                    value = v;
+                }
+            }
+        }
+
+        // Points the drop-down at `value`. Slint can't look a value up in a
+        // model, so walk the rows and let the matching one select itself.
+        // `build_candidates` in the core always pushes the suggested paths, so
+        // exactly one row matches. Deliberately `init` rather than a reactive
+        // binding: `value` also changes while the user types a custom path,
+        // and re-deriving the selection from it would yank the free-text field
+        // away mid-typing as soon as the text matched a detected folder.
+        // Re-runs whenever the candidate list changes — exactly when the
+        // selection needs seeding again.
+        for candidate[i] in UiState.storage-candidates: Rectangle {
+            width: 0;
+            height: 0;
+            init => {
+                if candidate == root.value {
+                    combo.current-index = i;
+                }
             }
         }
     }
@@ -79,12 +165,25 @@ component LocationField inherits VerticalLayout {
 }
 
 export component StorageConfigModal inherits Modal {
-    min-w: 620px;
-    max-w: 760px;
-    max-h: 600px;
+    // Fixed width (not a min/max range): letting Card width be computed from
+    // body.preferred-width made the wrapped description Texts' preferred
+    // HEIGHT unstable (their line count depends on the width they're finally
+    // given, and that in turn was depending on their own unwrapped preferred
+    // width) — a chicken-and-egg that under-counted content height and let
+    // the last field sit behind the footer. A fixed width breaks the cycle.
+    min-w: 680px;
+    max-w: 680px;
+    // No min height: the modal must shrink to its content. While the target is
+    // being analyzed the body is a single line, and a floor here would leave a
+    // large empty gap between the footer and the bottom of the card (the body
+    // layout is `alignment: start`, so the slack all ends up below the footer).
+    min-h: 0px;
+    // Grow with the window instead of stopping at an arbitrary cap: leave
+    // some margin around the modal, but let it use the room that's there.
+    max-h: min(760px, root.height - 100px);
 
     // ── Header ───────────────────────────────────────────────────────
-    VerticalLayout {
+    header := VerticalLayout {
         padding: 20px;
         padding-bottom: 0px;
 
@@ -94,13 +193,16 @@ export component StorageConfigModal inherits Modal {
         }
     }
 
-    // ── Body (scrolls if needed) ─────────────────────────────────────
+    // ── Body (scrolls if needed; shrinks to fit when the content is
+    // shorter than the available room, so fields don't get spread out) ──
     ScrollView {
-        height: min(body.preferred-height, 400px);
+        height: min(body.preferred-height, root.max-h - header.preferred-height - footer.preferred-height);
 
         body := VerticalLayout {
+            alignment: start;
             padding: 20px;
             padding-top: 12px;
+            padding-bottom: 12px;
             spacing: 16px;
 
             // Analyzing / applying.
@@ -153,12 +255,18 @@ export component StorageConfigModal inherits Modal {
                     value <=> UiState.storage-xbe-dir;
                     pick-message: Message.PickStorageXbeDir;
                 }
+
+                GodLayoutField { }
+
+                Rectangle {
+                    height: 12px;
+                }
             }
         }
     }
 
     // ── Footer ───────────────────────────────────────────────────────
-    VerticalLayout {
+    footer := VerticalLayout {
         height: self.min-height;
 
         HorizontalLine { }

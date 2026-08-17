@@ -1,0 +1,60 @@
+// SPDX-FileCopyrightText: 2026 Manuel Quarneti <mq1@ik.me> (TinyWiiBackupManager)
+// SPDX-FileContributor: Modified by Jean-Matthieu Dechriste (TinyXbox360BackupManager)
+// SPDX-License-Identifier: GPL-3.0-only
+
+import { GameTableColumns, GameTableHeaderCell } from "game-table-columns.slint";
+import { MyPalette } from "../styling.slint";
+
+// Column headers of the games table. Each cell sorts on its column; the
+// geometry comes from `GameTableColumns` so it lines up with `GameRow`.
+export component GameTableHeader inherits Rectangle {
+    height: 28px;
+    background: MyPalette.alternate-background;
+    clip: true;
+
+    HorizontalLayout {
+        padding-left: GameTableColumns.row-padding;
+        spacing: GameTableColumns.spacing;
+
+        // Spacer matching the row's leading format icon.
+        Rectangle {
+            width: GameTableColumns.icon-width;
+        }
+
+        GameTableHeaderCell {
+            horizontal-stretch: 1;
+            label: "Title";
+            sort-key: "Name";
+        }
+
+        GameTableHeaderCell {
+            width: GameTableColumns.title-id-width;
+            label: "TitleID";
+            sort-key: "TitleId";
+        }
+
+        GameTableHeaderCell {
+            width: GameTableColumns.format-width;
+            label: "Format";
+            sort-key: "Format";
+        }
+
+        GameTableHeaderCell {
+            width: GameTableColumns.system-width;
+            label: "System";
+            sort-key: "System";
+        }
+
+        GameTableHeaderCell {
+            width: GameTableColumns.size-width;
+            label: "Size";
+            sort-key: "Size";
+            align-right: true;
+        }
+
+        // Spacer matching the row's info/delete buttons.
+        Rectangle {
+            width: GameTableColumns.actions-width;
+        }
+    }
+}

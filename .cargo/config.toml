@@ -1,3 +1,9 @@
+# Raise the main thread stack from the Windows default of 1 MiB to 8 MiB.
+# Slint generates deeply nested component trees and the app overflows the stack
+# at startup without this. Release builds get the same flag from the
+# CARGO_TARGET_*_RUSTFLAGS env vars in .github/workflows/release.yml, which
+# override (rather than extend) the values below.
+
 [target.x86_64-pc-windows-msvc]
 rustflags = ["-C", "link-arg=/STACK:8000000"]
 
@@ -5,4 +11,10 @@ rustflags = ["-C", "link-arg=/STACK:8000000"]
 rustflags = ["-C", "link-arg=/STACK:8000000"]
 
 [target.i686-pc-windows-msvc]
+rustflags = ["-C", "link-arg=/STACK:8000000"]
+
+[target.x86_64-win7-windows-msvc]
+rustflags = ["-C", "link-arg=/STACK:8000000"]
+
+[target.i686-win7-windows-msvc]
 rustflags = ["-C", "link-arg=/STACK:8000000"]
