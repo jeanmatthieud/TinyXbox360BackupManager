@@ -1,3 +1,55 @@
+## [0.11.0](https://github.com/jeanmatthieud/TinyXbox360BackupManager/compare/v0.10.0...v0.11.0) (2026-08-17)
+
+### Features
+
+* Add disabled state and tooltip support to ToolboxCard and BadAvatarCard ([6e4c729](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/6e4c72985b50a4ed3caa2f85e63a7ad16cc84e03))
+* Add support for additional directory structure in local Aurora path resolution ([c36a6b5](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/c36a6b5796ca6030752be6dddeab14cbcfdfc36e))
+* Add support for configurable GOD storage layouts ([d866cc3](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/d866cc3159df926eb988c14300403f98d0ebb336))
+* Enhance conversion process with progress tracking and UI updates ([2875b5a](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/2875b5a04d382f82d3d813ebd2b401674e3f0b04))
+* Enhance game deletion and storage configuration ([9c7c282](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/9c7c282c6b60601b0e57468844a53fe3d3fbf70d))
+* Implement game overwrite warnings and enhance conversion queue management ([559902a](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/559902a91465c05403ea70531c19b7c820f338f9))
+* Implement sorting functionality for game table and enhance UI components ([ce64613](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/ce64613dcc9108f94448dc15b40ffac6d48d4709))
+* Refactor game content management and enhance game details display ([f6a09ab](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/f6a09abc36b57427ebcdb15955953f32455d2e10))
+
+### Bug Fixes
+
+* Allow storage config modal to shrink to content by removing minimum height constraint ([64f58e2](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/64f58e2bc9dcd964a9355fee70c07f77b8bc5358))
+* Update stack size configuration for Windows targets in build scripts ([3bbc58b](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/3bbc58b41917fa39a436d2f62f5ff1ab02333465))
+
+
+---
+
+
+<a href="https://github.com/sponsors/jeanmatthieud">
+  <img src="https://img.shields.io/badge/GitHub%20Sponsors-Support-ea4aaa?logo=github-sponsors&logoColor=white" alt="GitHub Sponsors">
+</a>
+<a href="https://ko-fi.com/W6I723OON9">
+  <img src="https://img.shields.io/badge/Ko--fi-Support%20Me-ff5e5b?logo=ko-fi&logoColor=white" alt="Ko-fi">
+</a>
+
+
+Between my freelance work and my two little daughters, free time is a rare commodity! I build this tool on my own time, with a lot of late-night coffee.
+
+If TinyXbox360BackupManager saved you time or made you smile, **a donation** (much cheaper than a new game) **helps me keep maintaining and improving it**.
+
+Thanks! 🎮
+
+<hr />
+
+> [!TIP]
+> **:window: Windows installation:**\
+> Most users should download `TinyXbox360BackupManager-vX.X.X-windows-x64.exe`
+
+> [!TIP]
+> **:penguin: Linux installation:**\
+> Most users should download `TinyXbox360BackupManager-vX.X.X-linux-x86_64.AppImage`
+> `chmod +x /path/to/AppImage` after downloading may be required
+
+> [!IMPORTANT]
+> **:apple: macOS installation:**\
+> The app is not notarized, you must allow it manually after installing by running this command in Terminal:\
+> `xattr -rd com.apple.quarantine /Applications/TinyXbox360BackupManager.app`
+
 ## [0.10.0](https://github.com/jeanmatthieud/TinyXbox360BackupManager/compare/v0.9.0...v0.10.0) (2026-08-01)
 
 ### Features
