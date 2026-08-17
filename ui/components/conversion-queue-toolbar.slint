@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 import { IconButton, IconButtonKind } from "icon-button.slint";
+import { AddGamesButtons } from "add-games-buttons.slint";
 import { IconSet } from "@lucide";
 import { PageTitle } from "page-header.slint";
 import { UiState } from "../ui-state.slint";
@@ -17,16 +18,25 @@ export component ConversionQueueToolbar inherits HorizontalLayout {
     VerticalLayout {
         alignment: center;
 
-        // Disabled while a cancellation is already under way (the banner on the
-        // page carries the "terminate now" escape hatch).
-        if UiState.conversion-queue.length > 0: IconButton {
-            icon: IconSet.X;
-            label: UiState.cancelling-queue ? "Cancelling..." : "Cancel all conversions";
-            kind: IconButtonKind.Primary;
-            disabled: UiState.cancelling-queue;
-            clicked => {
-                UiState.confirming-cancel-all = true;
+        HorizontalLayout {
+            spacing: 10px;
+            cross-axis-alignment: CrossAxisAlignment.center;
+
+            // Disabled while a cancellation is already under way (the banner on
+            // the page carries the "terminate now" escape hatch).
+            if UiState.conversion-queue.length > 0: IconButton {
+                icon: IconSet.X;
+                label: UiState.cancelling-queue ? "Cancelling..." : "Cancel all conversions";
+                kind: IconButtonKind.Primary;
+                disabled: UiState.cancelling-queue;
+                clicked => {
+                    UiState.confirming-cancel-all = true;
+                }
             }
+
+            // Same actions as the games page: a target is required to queue
+            // anything.
+            if !UiState.config.target.is-empty: AddGamesButtons { }
         }
     }
 }
