@@ -6,7 +6,6 @@
 pub mod archive;
 pub mod badavatar;
 pub mod config;
-pub mod conversion_queue;
 pub mod convert;
 pub mod covers;
 pub mod data_dir;
@@ -19,6 +18,7 @@ pub mod game_details;
 pub mod god;
 pub mod god_dirs;
 pub mod iso_info;
+pub mod job_queue;
 pub mod mobcat;
 pub mod scan;
 pub mod stfs;

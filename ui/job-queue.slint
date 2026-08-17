@@ -7,30 +7,30 @@ import { MyPalette } from "styling.slint";
 import { UiState } from "ui-state.slint";
 import { Card } from "components/card.slint";
 import { IconButton, IconButtonKind } from "components/icon-button.slint";
-import { ConversionRow } from "components/conversion-row.slint";
-import { ConversionProgressCard } from "components/conversion-progress-card.slint";
+import { JobRow } from "components/job-row.slint";
+import { JobProgressCard } from "components/job-progress-card.slint";
 import {
-    ConversionQueueToolbar,
-} from "components/conversion-queue-toolbar.slint";
+    JobQueueToolbar,
+} from "components/job-queue-toolbar.slint";
 import { HorizontalLine } from "components/horizontal-line.slint";
 import { EmptyState } from "components/empty-state.slint";
 import { Message, Dispatcher } from "messages.slint";
 import { PendingQueueAction } from "types.slint";
 
-export component ConversionQueuePage inherits VerticalLayout {
-    // Index of the first *pending* item: the one being converted (index 0) is
-    // shown in its own progress card instead of being listed.
-    property <int> first-pending: UiState.converting ? 1 : 0;
+export component JobQueuePage inherits VerticalLayout {
+    // Index of the first *pending* item: the running one (index 0) is shown in
+    // its own progress card instead of being listed.
+    property <int> first-pending: UiState.job-running ? 1 : 0;
 
     HorizontalLayout {
         padding: 10px;
 
-        ConversionQueueToolbar { }
+        JobQueueToolbar { }
     }
 
-    // Banner shown between the cancellation request and the moment the
-    // conversion that was running actually stops, so the queue lingering at
-    // index 0 doesn't look stuck.
+    // Banner shown between the cancellation request and the moment the job
+    // that was running actually stops, so the queue lingering at index 0
+    // doesn't look stuck.
     if UiState.cancelling-queue: HorizontalLayout {
         padding: 10px;
         padding-top: 0px;
@@ -54,17 +54,17 @@ export component ConversionQueuePage inherits VerticalLayout {
                 Text {
                     horizontal-stretch: 1;
                     text: UiState.pending-queue-action == PendingQueueAction.Quit
-                        ? "Cancelling the conversions in progress, the app will close once done..."
+                        ? "Cancelling the job in progress, the app will close once done..."
                         : (UiState.pending-queue-action == PendingQueueAction.Disconnect
-                            ? "Cancelling the conversions in progress, the target will be disconnected once done..."
-                            : "Cancelling the conversions in progress...");
+                            ? "Cancelling the job in progress, the target will be disconnected once done..."
+                            : "Cancelling the job in progress...");
                     color: MyPalette.destructive;
                     vertical-alignment: center;
                     wrap: word-wrap;
                 }
 
                 // Skip the wait: carry out the pending disconnect/quit without
-                // letting the running conversion bail out cleanly.
+                // letting the running job bail out cleanly.
                 if UiState.pending-queue-action != PendingQueueAction.None: IconButton {
                     horizontal-stretch: 0;
                     icon: UiState.pending-queue-action == PendingQueueAction.Quit ? IconSet.Power : IconSet.Unplug;
@@ -72,7 +72,7 @@ export component ConversionQueuePage inherits VerticalLayout {
                         ? "Terminate and quit"
                         : "Terminate and disconnect";
                     kind: IconButtonKind.Destructive;
-                    tooltip: "Don't wait for the conversion in progress to stop";
+                    tooltip: "Don't wait for the job in progress to stop";
                     clicked => Dispatcher.dispatch(Message.ForceQueueAction, "");
                 }
             }
@@ -80,13 +80,13 @@ export component ConversionQueuePage inherits VerticalLayout {
     }
 
     // Nothing queued: explain the page instead of showing an empty card.
-    if UiState.conversion-queue.length == 0: EmptyState {
+    if UiState.job-queue.length == 0: EmptyState {
         icon: IconSet.ListChecks;
-        title: "The conversion queue is empty";
-        description: "Games you add are converted here one at a time. Nothing is pending right now.";
+        title: "The queue is empty";
+        description: "Games you add or delete are handled here one at a time. Nothing is pending right now.";
     }
 
-    if UiState.conversion-queue.length > 0: ScrollView {
+    if UiState.job-queue.length > 0: ScrollView {
         width: parent.width;
         viewport-height: v.preferred-height;
         // Without this the viewport would take the content's preferred width —
@@ -100,26 +100,27 @@ export component ConversionQueuePage inherits VerticalLayout {
             padding-top: 0px;
             spacing: 10px;
 
-            // Live progress of the conversion running right now.
-            if UiState.converting: ConversionProgressCard { }
+            // Live progress of the job running right now.
+            if UiState.job-running: JobProgressCard { }
 
-            if UiState.conversion-queue.length > first-pending: Card {
+            if UiState.job-queue.length > first-pending: Card {
                 clip: true;
                 height: v2.preferred-height;
 
                 v2 := VerticalLayout {
-                    for conv[i] in UiState.conversion-queue: VerticalLayout {
-                        // The running conversion lives in the card above, so
-                        // every listed row is pending: freely removable and
+                    for job[i] in UiState.job-queue: VerticalLayout {
+                        // The running job lives in the card above, so every
+                        // listed row is pending: freely removable and
                         // reorderable.
                         if i >= first-pending: VerticalLayout {
-                            ConversionRow {
-                                label: conv;
+                            JobRow {
+                                label: job.label;
+                                kind: job.kind;
                                 can-move-up: i > first-pending;
-                                can-move-down: i < UiState.conversion-queue.length - 1;
-                                cancel() => Dispatcher.dispatch(Message.CancelConversion, i);
-                                move-up() => Dispatcher.dispatch(Message.MoveConversionUp, i);
-                                move-down() => Dispatcher.dispatch(Message.MoveConversionDown, i);
+                                can-move-down: i < UiState.job-queue.length - 1;
+                                cancel() => Dispatcher.dispatch(Message.CancelJob, i);
+                                move-up() => Dispatcher.dispatch(Message.MoveJobUp, i);
+                                move-down() => Dispatcher.dispatch(Message.MoveJobDown, i);
                             }
 
                             HorizontalLine { }

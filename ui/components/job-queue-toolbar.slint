@@ -7,12 +7,12 @@ import { IconSet } from "@lucide";
 import { PageTitle } from "page-header.slint";
 import { UiState } from "../ui-state.slint";
 
-export component ConversionQueueToolbar inherits HorizontalLayout {
+export component JobQueueToolbar inherits HorizontalLayout {
     alignment: space-between;
     height: 38px;
 
     PageTitle {
-        title: "Conversion queue";
+        title: "Queue";
     }
 
     VerticalLayout {
@@ -24,9 +24,9 @@ export component ConversionQueueToolbar inherits HorizontalLayout {
 
             // Disabled while a cancellation is already under way (the banner on
             // the page carries the "terminate now" escape hatch).
-            if UiState.conversion-queue.length > 0: IconButton {
+            if UiState.job-queue.length > 0: IconButton {
                 icon: IconSet.X;
-                label: UiState.cancelling-queue ? "Cancelling..." : "Cancel all conversions";
+                label: UiState.cancelling-queue ? "Cancelling..." : "Cancel all jobs";
                 kind: IconButtonKind.Primary;
                 disabled: UiState.cancelling-queue;
                 clicked => {

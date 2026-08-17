@@ -2,17 +2,15 @@
 // SPDX-FileContributor: Modified by Jean-Matthieu Dechriste (TinyXbox360BackupManager)
 // SPDX-License-Identifier: GPL-3.0-only
 
-use crate::{DisplayedGame, DisplayedGameToAdd, DisplayedTitleUpdate, Notification};
-use slint::{SharedString, VecModel};
+use crate::{DisplayedGame, DisplayedGameToAdd, DisplayedJob, DisplayedTitleUpdate, Notification};
+use slint::VecModel;
 use std::{
     collections::VecDeque,
     path::PathBuf,
     rc::Rc,
     sync::{Arc, atomic::AtomicBool},
 };
-use txbm_core::{
-    config::Config, conversion_queue::QueuedConversion, drive_info::DriveInfo, game::Game,
-};
+use txbm_core::{config::Config, drive_info::DriveInfo, game::Game, job_queue::QueuedJob};
 
 pub struct State {
     pub config: Config,
@@ -20,28 +18,37 @@ pub struct State {
     pub drive_info: DriveInfo,
     pub displayed_games: Rc<VecModel<DisplayedGame>>,
     pub displayed_title_updates: Rc<VecModel<DisplayedTitleUpdate>>,
-    pub conversion_queue: VecDeque<QueuedConversion>,
-    pub displayed_conversion_queue: Rc<VecModel<SharedString>>,
+    /// Everything that writes to the target — additions and deletions alike —
+    /// goes through this single queue, so only one such operation ever runs at
+    /// a time. The job at index 0 is the one currently running.
+    pub job_queue: VecDeque<QueuedJob>,
+    pub displayed_job_queue: Rc<VecModel<DisplayedJob>>,
     pub games_to_add: VecDeque<PathBuf>,
     pub displayed_games_to_add: Rc<VecModel<DisplayedGameToAdd>>,
     pub notifications: Rc<VecModel<Notification>>,
-    pub is_converting: bool,
-    /// Conversions that succeeded since the queue was last empty. Drives the
+    pub is_job_running: bool,
+    /// Additions that succeeded since the queue was last empty. Drives the
     /// confetti burst when it drains, and is reset by a cancellation so an
-    /// aborted batch doesn't get a celebration.
-    pub conversions_done: usize,
-    /// Conversions that failed since the queue was last empty. A non-zero
-    /// count withholds the confetti burst: it's only for a batch that went
-    /// through cleanly, not a partially-failed one.
-    pub conversions_failed: usize,
+    /// aborted batch doesn't get a celebration. Deletions never count: there
+    /// is nothing to celebrate about removing a game.
+    pub adds_done: usize,
+    /// Jobs that failed since the queue was last empty. A non-zero count
+    /// withholds the confetti burst: it's only for a batch that went through
+    /// cleanly, not a partially-failed one.
+    pub jobs_failed: usize,
     /// Set when the user cancels the queue, cleared only once it has drained.
-    /// Zeroing the counters isn't enough on its own: the running conversion can
-    /// still finish successfully before it reaches its next cancellation
-    /// checkpoint, which would put `conversions_done` back to 1 and celebrate a
-    /// batch the user just aborted.
+    /// Zeroing the counters isn't enough on its own: the running job can still
+    /// finish successfully before it reaches its next cancellation checkpoint,
+    /// which would put `adds_done` back to 1 and celebrate a batch the user
+    /// just aborted.
     pub batch_cancelled: bool,
     pub is_downloading_covers: bool,
     pub is_scanning: bool,
+    /// Set when a rescan was asked for while a job was writing to a console
+    /// over FTP: it is replayed once the queue drains. The console's FTP
+    /// server tolerates no other connection alongside a write (see
+    /// `crates/core/src/ftp.rs`), so the scan cannot just run anyway.
+    pub rescan_deferred: bool,
     pub is_creating_badavatar: bool,
     /// Destination picked for the BadAvatar key, awaiting confirmation in the
     /// modal before the creation thread actually starts.
@@ -50,8 +57,8 @@ pub struct State {
     pub scan_cancel: Arc<AtomicBool>,
     /// Flag shared with the network-discovery thread (FTP modal) to cancel it.
     pub ftp_scan_cancel: Arc<AtomicBool>,
-    /// Flag shared with the running conversion thread to cancel it.
-    pub conversion_cancel: Arc<AtomicBool>,
+    /// Flag shared with the running job thread to cancel it.
+    pub job_cancel: Arc<AtomicBool>,
     /// Flag shared with the BadAvatar creation thread to cancel it.
     pub badavatar_cancel: Arc<AtomicBool>,
     pub games_filter: String,
@@ -75,22 +82,23 @@ impl State {
             drive_info: DriveInfo::default(),
             displayed_games: Rc::new(VecModel::from(Vec::new())),
             displayed_title_updates: Rc::new(VecModel::from(Vec::new())),
-            conversion_queue: VecDeque::new(),
-            displayed_conversion_queue: Rc::new(VecModel::from(Vec::new())),
+            job_queue: VecDeque::new(),
+            displayed_job_queue: Rc::new(VecModel::from(Vec::new())),
             games_to_add: VecDeque::new(),
             displayed_games_to_add: Rc::new(VecModel::from(Vec::new())),
             notifications: Rc::new(VecModel::from(Vec::new())),
-            is_converting: false,
-            conversions_done: 0,
-            conversions_failed: 0,
+            is_job_running: false,
+            adds_done: 0,
+            jobs_failed: 0,
             batch_cancelled: false,
             is_downloading_covers: false,
             is_scanning: false,
+            rescan_deferred: false,
             is_creating_badavatar: false,
             badavatar_pending_dest: None,
             scan_cancel: Arc::new(AtomicBool::new(false)),
             ftp_scan_cancel: Arc::new(AtomicBool::new(false)),
-            conversion_cancel: Arc::new(AtomicBool::new(false)),
+            job_cancel: Arc::new(AtomicBool::new(false)),
             badavatar_cancel: Arc::new(AtomicBool::new(false)),
             games_filter: String::new(),
             editing_storage: false,

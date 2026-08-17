@@ -11,6 +11,7 @@ use crate::target::{Target, remove_dir_all_with_progress};
 use crate::util::dir_size;
 use anyhow::{Context, Result};
 use std::path::PathBuf;
+use std::sync::atomic::AtomicBool;
 
 fn god_content_type(game: &Game) -> Option<&'static str> {
     match (game.format, game.is_x360) {
@@ -109,18 +110,26 @@ impl Target {
     /// its on-disk `file_name`. `update_progress` receives a percentage
     /// (0-100). Over FTP this is a WRITE, so it must not run concurrently with
     /// any other connection.
+    ///
+    /// Raising `cancel` stops a disc payload removal at its next file with
+    /// [`crate::target::DELETION_CANCELLED`]; the header is then left in place
+    /// beside the half-removed payload.
     pub fn delete_content(
         &self,
         game: &Game,
         kind: ContentKind,
         file_name: &str,
+        cancel: &AtomicBool,
         update_progress: &dyn Fn(u32),
     ) -> Result<()> {
         match self {
-            Target::Local(_) => delete_content_local(game, kind, file_name, update_progress),
+            Target::Local(_) => {
+                delete_content_local(game, kind, file_name, cancel, update_progress)
+            }
             Target::Ftp(ftp) => {
                 let mut session = FtpSession::connect(ftp)?;
-                let result = delete_content_ftp(&mut session, game, kind, file_name, update_progress);
+                let result =
+                    delete_content_ftp(&mut session, game, kind, file_name, cancel, update_progress);
                 session.quit();
                 result
             }
@@ -132,6 +141,7 @@ fn delete_content_local(
     game: &Game,
     kind: ContentKind,
     file_name: &str,
+    cancel: &AtomicBool,
     update_progress: &dyn Fn(u32),
 ) -> Result<()> {
     match kind {
@@ -146,7 +156,7 @@ fn delete_content_local(
             if data_dir.is_dir() {
                 let total = crate::util::file_count(&data_dir).max(1);
                 let mut done: u64 = 0;
-                remove_dir_all_with_progress(&data_dir, &mut done, total, update_progress)?;
+                remove_dir_all_with_progress(&data_dir, &mut done, total, cancel, update_progress)?;
             }
             let header = type_dir.join(file_name);
             if header.is_file() {
@@ -171,6 +181,7 @@ fn delete_content_ftp(
     game: &Game,
     kind: ContentKind,
     file_name: &str,
+    cancel: &AtomicBool,
     update_progress: &dyn Fn(u32),
 ) -> Result<()> {
     let remote = game.path.to_string_lossy().replace('\\', "/");
@@ -190,7 +201,7 @@ fn delete_content_ftp(
                 .any(|e| e.is_dir && e.name == data_name);
             if data_exists {
                 let data_dir = format!("{type_dir}/{data_name}");
-                session.remove_dir_recursive(&data_dir, &mut |done, total| {
+                session.remove_dir_recursive(&data_dir, cancel, &mut |done, total| {
                     update_progress((done * 100 / total.max(1)) as u32);
                 })?;
             }

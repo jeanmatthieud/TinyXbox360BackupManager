@@ -7,7 +7,7 @@ import { Navbar } from "components/navbar.slint";
 import { GameGridPage } from "game-grid-page.slint";
 import { SettingsPage } from "settings-page.slint";
 import { AboutPage } from "about-page.slint";
-import { Page, DisplayedGame, PendingQueueAction } from "types.slint";
+import { Page, DisplayedGame, JobKind, PendingQueueAction } from "types.slint";
 import { Message, Dispatcher } from "messages.slint";
 import { MyPalette } from "styling.slint";
 import { VerticalLine } from "components/vertical-line.slint";
@@ -22,7 +22,7 @@ import { ConfirmationModal } from "components/confirmation-modal.slint";
 import { Tooltip } from "tooltip.slint";
 import { ToolboxPage } from "toolbox-page.slint";
 import { DeviceStatusPage } from "device-status-page.slint";
-import { ConversionQueuePage } from "conversion-queue.slint";
+import { JobQueuePage } from "job-queue.slint";
 import { SelectTargetModal } from "components/select-target-modal.slint";
 import { BadAvatarTargetModal } from "components/badavatar-target-modal.slint";
 import { FtpTargetModal } from "components/ftp-target-modal.slint";
@@ -80,7 +80,7 @@ export component AppWindow inherits Window {
                 if UiState.current-page == Page.Games && UiState.config.view-as == "Table": GameTablePage { }
                 if UiState.current-page == Page.Toolbox: ToolboxPage { }
                 if UiState.current-page == Page.DeviceStatus: DeviceStatusPage { }
-                if UiState.current-page == Page.ConversionQueue: ConversionQueuePage { }
+                if UiState.current-page == Page.Jobs: JobQueuePage { }
                 if UiState.current-page == Page.Settings: SettingsPage { }
                 if UiState.current-page == Page.About: AboutPage { }
             }
@@ -125,7 +125,10 @@ export component AppWindow inherits Window {
     // (current-game stays set), so that modal remains open underneath.
     if UiState.content-to-delete.id != "": ConfirmationModal {
         Text {
-            text: "Delete \{UiState.content-to-delete.description} (\{UiState.content-to-delete.kind})?\nThis content will be removed from the game. This action cannot be undone.";
+            text: "Delete \{UiState.content-to-delete.description} (\{UiState.content-to-delete.kind})?\nThis content will be removed from the game. This action cannot be undone."
+                + (UiState.job-queue.length > 0
+                    ? "\nThe queue is busy: the deletion starts once the jobs before it are done."
+                    : "");
             wrap: word-wrap;
         }
         destructive: true;
@@ -133,7 +136,7 @@ export component AppWindow inherits Window {
             UiState.content-to-delete = { };
         }
         confirmed => {
-            Dispatcher.dispatch(Message.DeleteContent, "\{UiState.current-game.path}\n\{UiState.content-to-delete.kind}\n\{UiState.content-to-delete.id}");
+            Dispatcher.dispatch(Message.DeleteContent, "\{UiState.current-game.path}\n\{UiState.content-to-delete.kind}\n\{UiState.content-to-delete.id}\n\{UiState.content-to-delete.description}");
             UiState.content-to-delete = { };
         }
     }
@@ -147,7 +150,11 @@ export component AppWindow inherits Window {
 
     if !UiState.game-to-delete.path.is-empty: ConfirmationModal {
         Text {
-            text: "Are you sure you want to delete \{UiState.game-to-delete.title}?\nThis action cannot be undone.";
+            text: "Are you sure you want to delete \{UiState.game-to-delete.title}?\nThis action cannot be undone."
+                + (UiState.job-queue.length > 0
+                    ? "\nThe queue is busy: the deletion starts once the jobs before it are done."
+                    : "");
+            wrap: word-wrap;
         }
         destructive: true;
         cancelled => {
@@ -203,9 +210,9 @@ export component AppWindow inherits Window {
 
     if UiState.confirming-cancel-all: ConfirmationModal {
         Text {
-            text: UiState.converting
-                ? "Cancel all conversions?\nThe conversion in progress will be stopped and its partial output cleaned up where possible; anything already written to the target is left in place."
-                : "Cancel all pending conversions?";
+            text: UiState.job-running
+                ? "Cancel every queued job?\nThe one in progress will be stopped: a conversion has its partial output cleaned up where possible, a deletion leaves the game partially removed. Anything already written to the target stays in place."
+                : "Cancel all pending jobs?";
             wrap: word-wrap;
         }
         destructive: true;
@@ -214,14 +221,16 @@ export component AppWindow inherits Window {
             UiState.confirming-cancel-all = false;
         }
         confirmed => {
-            Dispatcher.dispatch(Message.CancelAllConversions, "");
+            Dispatcher.dispatch(Message.CancelAllJobs, "");
             UiState.confirming-cancel-all = false;
         }
     }
 
     if UiState.confirming-cancel-current: ConfirmationModal {
         Text {
-            text: "Cancel the conversion of \{UiState.conversion-label}?\nIts partial output is cleaned up where possible, but anything already written to the target is left in place. The other queued games are kept and the next one starts right away.";
+            text: UiState.job-kind == JobKind.Add
+                ? "Cancel the conversion of \{UiState.job-label}?\nIts partial output is cleaned up where possible, but anything already written to the target is left in place. The other queued jobs are kept and the next one starts right away."
+                : "Cancel the deletion of \{UiState.job-label}?\nWhat has already been removed is not restored: it is left partially deleted on the target, and deleting it again finishes the job. The other queued jobs are kept and the next one starts right away.";
             wrap: word-wrap;
         }
         destructive: true;
@@ -230,7 +239,7 @@ export component AppWindow inherits Window {
             UiState.confirming-cancel-current = false;
         }
         confirmed => {
-            Dispatcher.dispatch(Message.CancelConversion, "0");
+            Dispatcher.dispatch(Message.CancelJob, "0");
             UiState.confirming-cancel-current = false;
         }
     }
@@ -240,10 +249,10 @@ export component AppWindow inherits Window {
     if UiState.pending-queue-action != PendingQueueAction.None && !UiState.draining-queue: ConfirmationModal {
         Text {
             text: (UiState.pending-queue-action == PendingQueueAction.Quit
-                ? "Transfers are still queued.\nCancel the queue and quit?"
-                : "Transfers are still queued.\nCancel the queue and disconnect?")
-                + (UiState.converting
-                    ? "\nThe conversion in progress will be stopped. Files already written to the target are left in place."
+                ? "Jobs are still queued.\nCancel the queue and quit?"
+                : "Jobs are still queued.\nCancel the queue and disconnect?")
+                + (UiState.job-running
+                    ? "\nThe job in progress will be stopped. Files already written to (or removed from) the target are left as they are."
                     : "");
             wrap: word-wrap;
         }
@@ -253,7 +262,7 @@ export component AppWindow inherits Window {
         confirmed => Dispatcher.dispatch(Message.ConfirmCancelQueueAction, "");
     }
 
-    // Whole conversion batch done. Sits below the notifications so the
+    // Whole batch done. Sits below the notifications so the
     // "queue empty" toast stays readable, and above everything else. Purely
     // decorative: no TouchArea, so clicks go straight through it.
     if UiState.celebrating: ConfettiBurst {

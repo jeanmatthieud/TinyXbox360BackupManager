@@ -1,25 +1,27 @@
 // SPDX-FileCopyrightText: 2026 Jean-Matthieu Dechriste (TinyXbox360BackupManager)
 // SPDX-License-Identifier: GPL-3.0-only
 
-import { IconSet } from "@lucide";
+import { IconDisplay, IconSet } from "@lucide";
 import { MyPalette } from "../styling.slint";
 import { UiState } from "../ui-state.slint";
+import { JobKind } from "../types.slint";
 import { Card } from "card.slint";
 import { IconButton } from "icon-button.slint";
+import { JobIcon } from "job-row.slint";
 import { ProgressBar } from "progress-bar.slint";
 
-// The conversion currently running (index 0 of the queue), shown as a card of
-// its own: it is not listed among the pending items, which are reorderable.
-export component ConversionProgressCard inherits Card {
+// The job currently running (index 0 of the queue), shown as a card of its
+// own: it is not listed among the pending items, which are reorderable.
+export component JobProgressCard inherits Card {
     // Secondary line: the step the percentage refers to, plus the measured
     // speed when there is one (only the FTP upload measures a speed).
     pure function details() -> string {
-        if !UiState.conversion-phase.is-empty && !UiState.conversion-speed.is-empty {
-            UiState.conversion-phase + "  ·  " + UiState.conversion-speed
-        } else if !UiState.conversion-phase.is-empty {
-            UiState.conversion-phase
+        if !UiState.job-phase.is-empty && !UiState.job-speed.is-empty {
+            UiState.job-phase + "  ·  " + UiState.job-speed
+        } else if !UiState.job-phase.is-empty {
+            UiState.job-phase
         } else {
-            UiState.conversion-speed
+            UiState.job-speed
         }
     }
 
@@ -33,22 +35,31 @@ export component ConversionProgressCard inherits Card {
             spacing: 8px;
             cross-axis-alignment: CrossAxisAlignment.center;
 
+            IconDisplay {
+                horizontal-stretch: 0;
+                icon: JobIcon.icon(UiState.job-kind);
+                stroke: JobIcon.color(UiState.job-kind);
+                size: 14px;
+            }
+
             Text {
                 horizontal-stretch: 1;
-                text: "↑  " + UiState.conversion-label;
+                text: UiState.job-label;
                 font-weight: 600;
                 overflow: elide;
                 vertical-alignment: center;
             }
 
-            // Stops this conversion only: the pending items stay queued and the
-            // next one starts right after.
+            // Stops this job only: the pending items stay queued and the next
+            // one starts right after.
             IconButton {
                 horizontal-stretch: 0;
                 icon: IconSet.X;
                 tooltip: UiState.cancelling-current
                     ? "Cancellation already requested"
-                    : "Cancel this conversion";
+                    : (UiState.job-kind == JobKind.Add
+                        ? "Cancel this conversion"
+                        : "Cancel this deletion");
                 disabled: UiState.cancelling-current || UiState.cancelling-queue;
                 height: 24px;
                 width: 24px;
@@ -68,7 +79,7 @@ export component ConversionProgressCard inherits Card {
                 alignment: center;
 
                 ProgressBar {
-                    progress: UiState.conversion-progress;
+                    progress: UiState.job-progress;
                     fill: UiState.cancelling-current || UiState.cancelling-queue
                         ? MyPalette.destructive
                         : MyPalette.accent-background;
@@ -78,7 +89,7 @@ export component ConversionProgressCard inherits Card {
             Text {
                 horizontal-stretch: 0;
                 min-width: 40px;
-                text: Math.round(UiState.conversion-progress * 100) + " %";
+                text: Math.round(UiState.job-progress * 100) + " %";
                 horizontal-alignment: right;
                 vertical-alignment: center;
             }
@@ -89,7 +100,9 @@ export component ConversionProgressCard inherits Card {
             // the cleanup pushed by the core (deleting thousands of extracted
             // files) is exactly what has to stay visible here.
             text: UiState.cancelling-current && details().is-empty
-                ? "Cancelling this conversion..."
+                ? (UiState.job-kind == JobKind.Add
+                    ? "Cancelling this conversion..."
+                    : "Cancelling this deletion...")
                 : details();
             color: UiState.cancelling-current
                 ? MyPalette.destructive

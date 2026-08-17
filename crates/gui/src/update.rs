@@ -4,8 +4,8 @@
 
 use crate::{
     AppWindow, Dispatcher, DisplayedConfig, DisplayedDriveInfo, DisplayedGame, DisplayedGameToAdd,
-    DisplayedStoragePath, DisplayedTitleUpdate, Message, Notification, Page, PendingQueueAction,
-    UiState, convert::perform_conversion, covers, dialogs, game_details, state::State,
+    DisplayedJob, DisplayedStoragePath, DisplayedTitleUpdate, JobKind, Message, Notification, Page,
+    PendingQueueAction, UiState, covers, dialogs, game_details, jobs::perform_job, state::State,
     title_updates, util,
 };
 use slint::{ComponentHandle, Model, ModelRc, SharedString, ToSharedString, VecModel, Weak};
@@ -17,9 +17,9 @@ use std::{
     sync::{Arc, Mutex, atomic::AtomicBool},
 };
 use txbm_core::{
-    badavatar::UrlField, config::TargetKind, conversion_queue::QueuedConversion,
-    data_dir::DATA_DIR, drive_info::DriveInfo, ftp::FtpSession, game::Game,
-    game_details::ContentKind, target::{StorageConfig, Target, TargetAnalysis},
+    badavatar::UrlField, config::TargetKind, data_dir::DATA_DIR, drive_info::DriveInfo,
+    ftp::FtpSession, game::Game, game_details::ContentKind, job_queue::QueuedJob,
+    target::{StorageConfig, Target, TargetAnalysis},
 };
 
 const NEW_DRIVE_TEXT: &str = "New drive detected\nOnce the games are on the console, remember to add the content paths in Aurora\n(Settings > Content Paths)";
@@ -75,9 +75,9 @@ impl State {
         let mut kept: Vec<PathBuf> = Vec::new();
         picked.retain(|game| {
             let queued = self
-                .conversion_queue
+                .job_queue
                 .iter()
-                .any(|conv| conv.path() == game.path)
+                .any(|job| job.path() == game.path)
                 || kept.contains(&game.path);
 
             if queued {
@@ -145,34 +145,64 @@ impl State {
             .set_games_to_add_conflicts(conflicts);
     }
 
-    /// Cancels the whole conversion queue: the running item (index 0) is only
+    /// Cancels the whole job queue: the running item (index 0) is only
     /// signalled to stop — it bails at its next cancellation checkpoint, cleans
-    /// up its partial output, and is removed by `ConversionFinished` — while
-    /// the pending ones are dropped right away.
-    fn cancel_all_conversions(&mut self, weak: &Weak<AppWindow>) {
+    /// up its partial output, and is removed by `JobFinished` — while the
+    /// pending ones are dropped right away.
+    fn cancel_all_jobs(&mut self, weak: &Weak<AppWindow>) {
         // An aborted batch doesn't get confetti, however many items it had
         // already converted — including the running one, which may well finish
         // cleanly before it notices the cancel flag.
-        self.conversions_done = 0;
-        self.conversions_failed = 0;
+        self.adds_done = 0;
+        self.jobs_failed = 0;
         self.batch_cancelled = true;
 
-        if self.is_converting {
-            self.conversion_cancel
+        if self.is_job_running {
+            self.job_cancel
                 .store(true, std::sync::atomic::Ordering::Relaxed);
         }
 
-        let pending_start = if self.is_converting { 1 } else { 0 };
-        while self.conversion_queue.len() > pending_start {
-            let _ = self.conversion_queue.remove(pending_start);
-            let _ = self.displayed_conversion_queue.remove(pending_start);
+        let pending_start = if self.is_job_running { 1 } else { 0 };
+        while self.job_queue.len() > pending_start {
+            let _ = self.job_queue.remove(pending_start);
+            let _ = self.displayed_job_queue.remove(pending_start);
         }
 
-        // Only meaningful while the running conversion is still bailing out;
-        // with nothing left the queue is already gone.
+        // Only meaningful while the running job is still bailing out; with
+        // nothing left the queue is already gone.
         let app = weak.upgrade().unwrap();
         app.global::<UiState<'_>>()
-            .set_cancelling_queue(!self.conversion_queue.is_empty());
+            .set_cancelling_queue(!self.job_queue.is_empty());
+    }
+
+    /// Appends `job` to the queue and starts the runner when it is idle.
+    /// A job already queued (the very same work, running one included) is
+    /// reported instead of being queued twice.
+    fn enqueue_job(
+        &mut self,
+        job: QueuedJob,
+        message_queue: &mut VecDeque<(Message, SharedString)>,
+        weak: &Weak<AppWindow>,
+    ) {
+        if self.job_queue.iter().any(|queued| queued.is_same_as(&job)) {
+            self.notifications
+                .push(Notification::info("Already in the queue"));
+            return;
+        }
+
+        self.displayed_job_queue.push(DisplayedJob::from(&job));
+        self.job_queue.push_back(job);
+
+        // Queueing new work supersedes an in-flight "cancel all", so the fresh
+        // batch is eligible for the celebration again.
+        let app = weak.upgrade().unwrap();
+        app.global::<UiState<'_>>().set_cancelling_queue(false);
+        self.batch_cancelled = false;
+
+        if !self.is_job_running {
+            self.is_job_running = true;
+            message_queue.push_back((Message::TriggerJob, SharedString::new()));
+        }
     }
 
     /// Carries out the disconnect/quit the user asked for while the queue was
@@ -405,6 +435,16 @@ impl State {
                 if self.is_scanning {
                     return;
                 }
+
+                // A console over FTP takes no second connection while a job is
+                // writing to it: hold the scan back until the queue drains.
+                // A local drive has no such constraint, so it keeps refreshing
+                // after every job of a batch.
+                if self.is_job_running && matches!(target, Target::Ftp(_)) {
+                    self.rescan_deferred = true;
+                    return;
+                }
+
                 self.is_scanning = true;
                 self.scan_cancel.store(false, std::sync::atomic::Ordering::Relaxed);
 
@@ -535,7 +575,7 @@ impl State {
                 };
 
                 // Nothing queued: go ahead straight away.
-                if self.conversion_queue.is_empty() {
+                if self.job_queue.is_empty() {
                     match action {
                         PendingQueueAction::Quit => {
                             let _ = slint::quit_event_loop();
@@ -556,12 +596,12 @@ impl State {
                 // The banner there reports the pending action and offers the
                 // "Terminate" shortcut for those who don't want to wait.
                 if ui.get_draining_queue() {
-                    ui.set_current_page(Page::ConversionQueue);
+                    ui.set_current_page(Page::Jobs);
                 }
             }
             Message::ForceQueueAction => {
                 // "Terminate": go through with the disconnect/quit without
-                // waiting for the conversion being cancelled to bail out.
+                // waiting for the job being cancelled to bail out.
                 self.run_pending_queue_action(message_queue, weak);
             }
             Message::AbortQueueAction => {
@@ -575,14 +615,14 @@ impl State {
                 // Show the queue draining, then replay the action once empty.
                 let app = weak.upgrade().unwrap();
                 let ui = app.global::<UiState<'_>>();
-                ui.set_current_page(Page::ConversionQueue);
+                ui.set_current_page(Page::Jobs);
                 ui.set_draining_queue(true);
 
-                self.cancel_all_conversions(weak);
+                self.cancel_all_jobs(weak);
 
-                // The running conversion (if any) stays at index 0 until it
-                // bails: the action is then replayed from TriggerConversion.
-                if self.conversion_queue.is_empty() {
+                // The running job (if any) stays at index 0 until it bails:
+                // the action is then replayed from TriggerJob.
+                if self.job_queue.is_empty() {
                     self.run_pending_queue_action(message_queue, weak);
                 }
             }
@@ -922,56 +962,50 @@ impl State {
             Message::ConfirmGamesToAdd => {
                 while let Some(path) = self.games_to_add.pop_front() {
                     let _ = self.displayed_games_to_add.remove(0);
-
-                    let conv = QueuedConversion::Standard(path);
-                    let displayed_conv = conv.to_shared_string();
-                    self.conversion_queue.push_back(conv);
-                    self.displayed_conversion_queue.push(displayed_conv);
+                    self.enqueue_job(QueuedJob::Add(path), message_queue, weak);
                 }
 
-                // Queueing new work supersedes an in-flight "cancel all", so
-                // the fresh batch is eligible for the celebration again.
                 let app = weak.upgrade().unwrap();
                 app.global::<UiState<'_>>().set_games_to_add_conflicts(0);
-                app.global::<UiState<'_>>().set_cancelling_queue(false);
-                self.batch_cancelled = false;
-
-                if !self.is_converting {
-                    self.is_converting = true;
-                    message_queue.push_back((Message::TriggerConversion, SharedString::new()));
-                }
             }
-            Message::TriggerConversion => {
-                // Keep the item being converted at index 0 of both queues so
-                // it stays visible (and the navbar icon stays shown) until the
-                // conversion actually finishes. It is removed on
-                // `ConversionFinished`.
-                let Some(conv) = self.conversion_queue.front().cloned() else {
-                    self.is_converting = false;
+            Message::TriggerJob => {
+                // Keep the running job at index 0 of both queues so it stays
+                // visible (and the navbar icon stays shown) until it actually
+                // finishes. It is removed on `JobFinished`.
+                let Some(job) = self.job_queue.front().cloned() else {
+                    self.is_job_running = false;
                     let app = weak.upgrade().unwrap();
                     let ui = app.global::<UiState<'_>>();
-                    ui.set_converting(false);
+                    ui.set_job_running(false);
                     ui.set_cancelling_queue(false);
                     ui.set_cancelling_current(false);
                     ui.set_confirming_cancel_current(false);
-                    ui.set_conversion_label(SharedString::new());
-                    ui.set_conversion_progress(0.0);
-                    ui.set_conversion_speed(SharedString::new());
-                    ui.set_conversion_phase(SharedString::new());
+                    ui.set_job_label(SharedString::new());
+                    ui.set_job_progress(0.0);
+                    ui.set_job_speed(SharedString::new());
+                    ui.set_job_phase(SharedString::new());
 
                     // The whole batch went through: celebrate. Skipped when a
                     // disconnect/quit is waiting on the queue — the window is
                     // about to go away.
-                    if self.conversions_done > 0
-                        && self.conversions_failed == 0
+                    if self.adds_done > 0
+                        && self.jobs_failed == 0
                         && !self.batch_cancelled
                         && ui.get_pending_queue_action() == PendingQueueAction::None
                     {
                         ui.set_celebrating(true);
                     }
-                    self.conversions_done = 0;
-                    self.conversions_failed = 0;
+                    self.adds_done = 0;
+                    self.jobs_failed = 0;
                     self.batch_cancelled = false;
+
+                    // A rescan held back while the queue was writing to the
+                    // console can run now — unless the user is only waiting for
+                    // the queue to drain to disconnect or quit.
+                    let deferred = std::mem::take(&mut self.rescan_deferred);
+                    if deferred && ui.get_pending_queue_action() == PendingQueueAction::None {
+                        message_queue.push_back((Message::RefreshAll, SharedString::new()));
+                    }
 
                     // The queue is now drained: carry out the disconnect/quit
                     // the user was waiting on, if any.
@@ -981,50 +1015,53 @@ impl State {
 
                 let app = weak.upgrade().unwrap();
                 let ui = app.global::<UiState<'_>>();
-                ui.set_converting(true);
+                ui.set_job_running(true);
 
                 // Fresh progress card for this item: the previous one's
-                // percentage/speed must not linger while this conversion starts.
-                let QueuedConversion::Standard(in_path) = &conv;
-                ui.set_conversion_label(
-                    in_path
-                        .file_name()
-                        .unwrap_or_default()
-                        .to_string_lossy()
-                        .to_shared_string(),
-                );
-                ui.set_conversion_progress(0.0);
-                ui.set_conversion_speed(SharedString::new());
-                ui.set_conversion_phase(SharedString::new());
+                // percentage/speed must not linger while this job starts.
+                ui.set_job_label(job.label().to_shared_string());
+                ui.set_job_kind(JobKind::from(job.kind()));
+                ui.set_job_progress(0.0);
+                ui.set_job_speed(SharedString::new());
+                ui.set_job_phase(SharedString::new());
                 ui.set_cancelling_current(false);
                 // The previous item may have finished on its own while its
-                // "cancel this conversion?" modal was still up: closing it here
-                // makes sure a late confirmation can't hit the next game.
+                // "cancel this job?" modal was still up: closing it here makes
+                // sure a late confirmation can't hit the next one.
                 ui.set_confirming_cancel_current(false);
 
-                self.conversion_cancel
+                self.job_cancel
                     .store(false, std::sync::atomic::Ordering::Relaxed);
 
                 let weak = weak.clone();
                 let config = self.config.clone();
-                let cancel = self.conversion_cancel.clone();
+                let cancel = self.job_cancel.clone();
 
                 let _ = std::thread::spawn(move || {
-                    perform_conversion(conv, &config, cancel, &weak);
+                    perform_job(job, &config, cancel, &weak);
                 });
             }
-            Message::ConversionFinished => {
+            Message::JobFinished => {
+                // Only a successful *addition* is worth celebrating: a batch of
+                // deletions drains without confetti.
+                let was_add = self
+                    .job_queue
+                    .front()
+                    .is_some_and(|job| job.kind() == txbm_core::job_queue::JobKind::Add);
+
                 if payload == "ok" {
-                    self.conversions_done += 1;
+                    if was_add {
+                        self.adds_done += 1;
+                    }
                 } else {
-                    self.conversions_failed += 1;
+                    self.jobs_failed += 1;
                 }
 
-                // Drop the conversion that just finished (in progress or failed)
-                // and move on to the next one.
-                let _ = self.conversion_queue.pop_front();
-                let _ = self.displayed_conversion_queue.remove(0);
-                message_queue.push_back((Message::TriggerConversion, SharedString::new()));
+                // Drop the job that just finished (done or failed) and move on
+                // to the next one.
+                let _ = self.job_queue.pop_front();
+                let _ = self.displayed_job_queue.remove(0);
+                message_queue.push_back((Message::TriggerJob, SharedString::new()));
             }
             Message::ClearGamesToAdd => {
                 self.games_to_add.clear();
@@ -1236,59 +1273,20 @@ impl State {
                 }
             }
             Message::DeleteGame => {
+                // Deletions go through the queue like additions: they write to
+                // the target, so only one may ever be in flight.
                 let path = Path::new(&payload);
                 let Some(game) = self.games.iter().find(|g| g.path == path).cloned() else {
                     return;
                 };
-                let Some(target) = Target::from_config(&self.config.contents) else {
-                    return;
-                };
 
-                // Deleting over FTP can take a while: show progress in the
-                // status bar until the background thread finishes.
-                message_queue.push_back((
-                    Message::SetStatus,
-                    slint::format!("✕  Deleting  {}…", game.title),
-                ));
-
-                let weak = weak.clone();
-                std::thread::spawn(move || {
-                    let weak2 = weak.clone();
-                    let game_title = game.title.clone();
-                    let update_progress = move |percentage| {
-                        let status = slint::format!("✕  Deleting  {game_title}  {percentage}%");
-                        let _ = weak2.upgrade_in_event_loop(move |app| {
-                            app.global::<UiState<'_>>().set_status(status);
-                        });
-                    };
-
-                    let res = target.delete_game(&game, &update_progress);
-
-                    let _ = weak.upgrade_in_event_loop(move |app| {
-                        let dispatcher = app.global::<Dispatcher<'_>>();
-
-                        dispatcher.invoke_dispatch(Message::SetStatus, SharedString::new());
-
-                        match res {
-                            Ok(()) => {
-                                let text = slint::format!("{} deleted", game.title);
-                                dispatcher.invoke_dispatch(Message::NotifyInfo, text);
-                            }
-                            Err(e) => {
-                                let text = slint::format!("Failed to delete game: {e:#}");
-                                dispatcher.invoke_dispatch(Message::NotifyError, text);
-                            }
-                        }
-
-                        dispatcher.invoke_dispatch(Message::RefreshAll, SharedString::new());
-                    });
-                });
+                self.enqueue_job(QueuedJob::Delete(Box::new(game)), message_queue, weak);
             }
             Message::DeleteContent => {
-                // Payload: "<game path>\n<kind>\n<file name>".
-                let mut parts = payload.splitn(3, '\n');
-                let (Some(path), Some(kind_str), Some(file_name)) =
-                    (parts.next(), parts.next(), parts.next())
+                // Payload: "<game path>\n<kind>\n<file name>\n<description>".
+                let mut parts = payload.splitn(4, '\n');
+                let (Some(path), Some(kind_str), Some(file_name), Some(description)) =
+                    (parts.next(), parts.next(), parts.next(), parts.next())
                 else {
                     return;
                 };
@@ -1296,65 +1294,33 @@ impl State {
                 let Some(game) = self.games.iter().find(|g| g.path == path).cloned() else {
                     return;
                 };
-                let Some(target) = Target::from_config(&self.config.contents) else {
-                    return;
-                };
                 let kind = match kind_str {
                     "Disc" => ContentKind::Disc,
                     "DLC" => ContentKind::Dlc,
                     _ => return,
                 };
-                let file_name = file_name.to_string();
-                let game_path = game.path.clone();
 
-                message_queue
-                    .push_back((Message::SetStatus, SharedString::from("✕  Deleting content…")));
-
-                let weak = weak.clone();
-                std::thread::spawn(move || {
-                    let weak2 = weak.clone();
-                    let update_progress = move |percentage| {
-                        let status = slint::format!("✕  Deleting content  {percentage}%");
-                        let _ = weak2.upgrade_in_event_loop(move |app| {
-                            app.global::<UiState<'_>>().set_status(status);
-                        });
-                    };
-
-                    let res = target.delete_content(&game, kind, &file_name, &update_progress);
-
-                    let _ = weak.upgrade_in_event_loop(move |app| {
-                        let dispatcher = app.global::<Dispatcher<'_>>();
-                        dispatcher.invoke_dispatch(Message::SetStatus, SharedString::new());
-
-                        match res {
-                            Ok(()) => dispatcher
-                                .invoke_dispatch(Message::NotifyInfo, "Content deleted".into()),
-                            Err(e) => dispatcher.invoke_dispatch(
-                                Message::NotifyError,
-                                slint::format!("Failed to delete content: {e:#}"),
-                            ),
-                        }
-
-                        // Refresh the table if the info modal is still open on
-                        // the same game.
-                        let ui_state = app.global::<UiState<'_>>();
-                        let current = ui_state.get_current_game();
-                        if Path::new(current.path.as_str()) == game_path {
-                            dispatcher.invoke_dispatch(Message::FetchGameDetails, current.path);
-                        }
-                    });
-                });
+                self.enqueue_job(
+                    QueuedJob::DeleteContent {
+                        game: Box::new(game),
+                        kind,
+                        file_name: file_name.to_string(),
+                        description: description.to_string(),
+                    },
+                    message_queue,
+                    weak,
+                );
             }
-            Message::CancelConversion => {
+            Message::CancelJob => {
                 let i = payload.parse().unwrap();
 
-                // Index 0 is the conversion currently running: it can't be
-                // dropped from the queue on the spot, only signalled to stop. It
-                // bails at its next checkpoint and `ConversionFinished` removes
-                // it, so the queue carries on with the next item — unlike
-                // "cancel all", the pending ones are left alone.
-                if self.is_converting && i == 0 {
-                    self.conversion_cancel
+                // Index 0 is the job currently running: it can't be dropped
+                // from the queue on the spot, only signalled to stop. It bails
+                // at its next checkpoint and `JobFinished` removes it, so the
+                // queue carries on with the next item — unlike "cancel all",
+                // the pending ones are left alone.
+                if self.is_job_running && i == 0 {
+                    self.job_cancel
                         .store(true, std::sync::atomic::Ordering::Relaxed);
 
                     // A batch the user cancelled part of isn't worth confetti,
@@ -1367,35 +1333,35 @@ impl State {
                     return;
                 }
 
-                let _ = self.conversion_queue.remove(i);
-                let _ = self.displayed_conversion_queue.remove(i);
+                let _ = self.job_queue.remove(i);
+                let _ = self.displayed_job_queue.remove(i);
             }
-            Message::MoveConversionUp | Message::MoveConversionDown => {
+            Message::MoveJobUp | Message::MoveJobDown => {
                 let i: usize = payload.parse().unwrap();
-                let up = message == Message::MoveConversionUp;
+                let up = message == Message::MoveJobUp;
                 let j = if up { i.wrapping_sub(1) } else { i + 1 };
 
-                // The running conversion (index 0) is pinned: nothing may be
-                // moved into its slot, and it can't be moved itself.
-                let first_pending = if self.is_converting { 1 } else { 0 };
+                // The running job (index 0) is pinned: nothing may be moved
+                // into its slot, and it can't be moved itself.
+                let first_pending = if self.is_job_running { 1 } else { 0 };
                 if i < first_pending
                     || j < first_pending
-                    || i >= self.conversion_queue.len()
-                    || j >= self.conversion_queue.len()
+                    || i >= self.job_queue.len()
+                    || j >= self.job_queue.len()
                 {
                     return;
                 }
 
-                self.conversion_queue.swap(i, j);
+                self.job_queue.swap(i, j);
 
                 // VecModel has no swap: take the lower one out and put it back
                 // at the higher index, which shifts the other one up by one.
                 let (lo, hi) = if up { (j, i) } else { (i, j) };
-                let row = self.displayed_conversion_queue.remove(lo);
-                self.displayed_conversion_queue.insert(hi, row);
+                let row = self.displayed_job_queue.remove(lo);
+                self.displayed_job_queue.insert(hi, row);
             }
-            Message::CancelAllConversions => {
-                self.cancel_all_conversions(weak);
+            Message::CancelAllJobs => {
+                self.cancel_all_jobs(weak);
             }
             Message::SetLatestVersion => {
                 let app = weak.upgrade().unwrap();
