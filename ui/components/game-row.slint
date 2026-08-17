@@ -9,70 +9,112 @@ import { DisplayedGame } from "../types.slint";
 import { MyPalette } from "../styling.slint";
 import { UiState } from "../ui-state.slint";
 import { Message, Dispatcher } from "../messages.slint";
+import { GameTableColumns } from "game-table-columns.slint";
 
 export component GameRow inherits Rectangle {
     in property <DisplayedGame> game;
 
     height: 24px;
 
-    IconDisplay {
-        x: 5px;
-        y: 5px;
-        icon: game.is-arcade ? IconSet.Gamepad2 : game.is-x360 ? IconSet.Disc3 : IconSet.Box;
-        size: 14px;
-        stroke: MyPalette.foreground;
-    }
+    HorizontalLayout {
+        padding-left: GameTableColumns.row-padding;
+        spacing: GameTableColumns.spacing;
 
-    Text {
-        x: 5px + 14px + 5px;
-        y: 5px;
-        text: game.id.is-empty ? "\{game.title} [\{game.format}]" : "\{game.title} [\{game.id}]";
-        overflow: elide;
-    }
+        VerticalLayout {
+            alignment: center;
+            width: GameTableColumns.icon-width;
 
-    Text {
-        x: parent.width - 50px - self.preferred-width - 5px;
-        y: 5px;
-        text: "\{game.size-gib.to-fixed(2)} GiB";
-    }
-
-    VerticalLine {
-        x: parent.width - 50px;
-        y: 0px;
-        height: 24px;
-    }
-
-    IconButton {
-        x: parent.width - 49px;
-        y: 0px;
-        tooltip: "Game info";
-        icon: IconSet.Info;
-        height: 24px;
-        width: 24px;
-        squared: true;
-        clicked => {
-            UiState.current-game = game;
-            Dispatcher.dispatch(Message.FetchGameDetails, game.path);
+            IconDisplay {
+                icon: game.is-arcade ? IconSet.Gamepad2 : game.is-x360 ? IconSet.Disc3 : IconSet.Box;
+                size: 14px;
+                stroke: MyPalette.foreground;
+            }
         }
-    }
 
-    VerticalLine {
-        x: parent.width - 25px;
-        y: 0px;
-        height: 24px;
-    }
+        Text {
+            horizontal-stretch: 1;
+            // The title column is the one that gives way when the window
+            // shrinks, so it must not claim its full text width as a minimum.
+            min-width: 0px;
+            text: game.title;
+            overflow: elide;
+            vertical-alignment: center;
+        }
 
-    IconButton {
-        x: parent.width - 24px;
-        y: 0px;
-        icon: IconSet.Trash;
-        tooltip: UiState.conversion-queue.length > 0 ? "Unavailable while the conversion queue is running" : "Delete game";
-        disabled: UiState.conversion-queue.length > 0;
-        height: 24px;
-        width: 24px;
-        squared: true;
-        clicked => {
-            UiState.game-to-delete = game;
+        Text {
+            width: GameTableColumns.title-id-width;
+            // Extracted games added by hand may have no readable TitleID.
+            text: game.id.is-empty ? "—" : game.id;
+            color: MyPalette.foreground.transparentize(0.3);
+            overflow: elide;
+            vertical-alignment: center;
+        }
+
+        Text {
+            width: GameTableColumns.format-width;
+            text: game.format;
+            color: MyPalette.foreground.transparentize(0.3);
+            overflow: elide;
+            vertical-alignment: center;
+        }
+
+        Text {
+            width: GameTableColumns.system-width;
+            text: game.is-x360 ? "Xbox 360" : "Xbox OG";
+            color: MyPalette.foreground.transparentize(0.3);
+            overflow: elide;
+            vertical-alignment: center;
+        }
+
+        Text {
+            width: GameTableColumns.size-width;
+            text: "\{game.size-gib.to-fixed(2)} GiB";
+            horizontal-alignment: right;
+            vertical-alignment: center;
+        }
+
+        Rectangle {
+            width: GameTableColumns.actions-width;
+
+            VerticalLine {
+                x: 0px;
+                y: 0px;
+                height: parent.height;
+            }
+
+            IconButton {
+                x: 1px;
+                y: 0px;
+                tooltip: "Game info";
+                icon: IconSet.Info;
+                height: 24px;
+                width: 24px;
+                squared: true;
+                clicked => {
+                    UiState.current-game = game;
+                    Dispatcher.dispatch(Message.FetchGameDetails, game.path);
+                }
+            }
+
+            VerticalLine {
+                x: 25px;
+                y: 0px;
+                height: parent.height;
+            }
+
+            IconButton {
+                x: 26px;
+                y: 0px;
+                icon: IconSet.Trash;
+                tooltip: UiState.conversion-queue.length > 0 ? "Unavailable while the conversion queue is running" : "Delete game";
+                disabled: UiState.conversion-queue.length > 0;
+                height: 24px;
+                width: 24px;
+                squared: true;
+                clicked => {
+                    UiState.game-to-delete = game;
+                }
+            }
         }
     }
 }

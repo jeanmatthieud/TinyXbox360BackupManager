@@ -1,0 +1,86 @@
+// SPDX-FileCopyrightText: 2026 Manuel Quarneti <mq1@ik.me> (TinyWiiBackupManager)
+// SPDX-FileContributor: Modified by Jean-Matthieu Dechriste (TinyXbox360BackupManager)
+// SPDX-License-Identifier: GPL-3.0-only
+
+import { IconSet, IconDisplay } from "@lucide";
+import { MyPalette } from "../styling.slint";
+import { TooltipArea } from "tooltip-area.slint";
+import { UiState } from "../ui-state.slint";
+import { Message, Dispatcher } from "../messages.slint";
+
+// Single source of truth for the table's column geometry: the header and every
+// row lay their cells out from these, so the two always line up.
+export global GameTableColumns {
+    out property <length> row-padding: 5px;
+    out property <length> spacing: 8px;
+    // Leading format/system icon of a row.
+    out property <length> icon-width: 14px;
+    out property <length> title-id-width: 80px;
+    out property <length> format-width: 66px;
+    out property <length> system-width: 68px;
+    out property <length> size-width: 72px;
+    // Info + delete buttons, separators included.
+    out property <length> actions-width: 50px;
+}
+
+// One clickable column header. Clicking it sorts on that column, ascending
+// first; clicking the already-ascending column flips to descending.
+//
+// `sort-key` is the `SortBy` variant prefix on the Rust side ("Name", "Size",
+// …) — the two directions are just that prefix plus "Ascending"/"Descending".
+export component GameTableHeaderCell inherits TooltipArea {
+    in property <string> label;
+    in property <string> sort-key;
+    in property <bool> align-right: false;
+
+    property <string> ascending: "\{sort-key}Ascending";
+    property <string> descending: "\{sort-key}Descending";
+    property <bool> is-active: UiState.config.sort-by == ascending || UiState.config.sort-by == descending;
+
+    tooltip: "Sort by \{label}";
+    background: self.has-hover ? MyPalette.alternate-background : transparent;
+
+    clicked => {
+        Dispatcher.dispatch(Message.SetSortBy, UiState.config.sort-by == ascending ? descending : ascending);
+    }
+
+    HorizontalLayout {
+        spacing: 2px;
+        alignment: align-right ? LayoutAlignment.end : LayoutAlignment.start;
+
+        // The chevron sits on the side the column's text is *not* flushed
+        // against, so header and row text stay on the same edge.
+        if align-right: VerticalLayout {
+            alignment: center;
+            width: 12px;
+
+            if is-active: IconDisplay {
+                icon: UiState.config.sort-by == ascending ? IconSet.ChevronUp : IconSet.ChevronDown;
+                size: 12px;
+                stroke: MyPalette.foreground;
+            }
+        }
+
+        Text {
+            text: label;
+            font-weight: is-active ? 700 : 500;
+            color: is-active ? MyPalette.foreground : MyPalette.foreground.transparentize(0.35);
+            overflow: elide;
+            vertical-alignment: center;
+            // Without this the label's own width would become the column's
+            // minimum and stop the title column from shrinking.
+            min-width: 0px;
+        }
+
+        if !align-right: VerticalLayout {
+            alignment: center;
+            width: 12px;
+
+            if is-active: IconDisplay {
+                icon: UiState.config.sort-by == ascending ? IconSet.ChevronUp : IconSet.ChevronDown;
+                size: 12px;
+                stroke: MyPalette.foreground;
+            }
+        }
+    }
+}

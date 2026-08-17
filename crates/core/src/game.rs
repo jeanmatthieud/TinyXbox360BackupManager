@@ -324,11 +324,36 @@ fn push_extracted_local(
     });
 }
 
+/// Console a game runs on, used as a sort key and mirrored by the table's
+/// "System" column ("Xbox 360" sorts before "Xbox OG").
+fn system_key(game: &Game) -> u8 {
+    if game.is_x360 { 0 } else { 1 }
+}
+
 pub fn get_compare_fn(sort_by: SortBy) -> impl FnMut(&Game, &Game) -> Ordering {
-    move |a, b| match sort_by {
-        SortBy::NameDescending => a.title.to_lowercase().cmp(&b.title.to_lowercase()),
-        SortBy::NameAscending => b.title.to_lowercase().cmp(&a.title.to_lowercase()),
-        SortBy::SizeDescending => a.size.cmp(&b.size),
-        SortBy::SizeAscending => b.size.cmp(&a.size),
+    // Rows are compared on the sorted column, then always alphabetically on
+    // the title, so games sharing a format/system/size stay in a stable and
+    // readable order whichever direction the column is sorted in.
+    move |a, b| {
+        let by_title = || a.title.to_lowercase().cmp(&b.title.to_lowercase());
+        let primary = match sort_by {
+            SortBy::NameAscending | SortBy::NameDescending => by_title(),
+            SortBy::TitleIdAscending | SortBy::TitleIdDescending => a.id.cmp(&b.id),
+            SortBy::FormatAscending | SortBy::FormatDescending => a.format.label().cmp(b.format.label()),
+            SortBy::SystemAscending | SortBy::SystemDescending => system_key(a).cmp(&system_key(b)),
+            // Compared on the raw byte count, not on the rounded GiB shown.
+            SortBy::SizeAscending | SortBy::SizeDescending => a.size.cmp(&b.size),
+        };
+
+        let descending = matches!(
+            sort_by,
+            SortBy::NameDescending
+                | SortBy::TitleIdDescending
+                | SortBy::FormatDescending
+                | SortBy::SystemDescending
+                | SortBy::SizeDescending
+        );
+        let primary = if descending { primary.reverse() } else { primary };
+        primary.then_with(by_title)
     }
 }

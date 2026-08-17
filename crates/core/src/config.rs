@@ -86,7 +86,7 @@ impl Default for ConfigContents {
             mount_point: PathBuf::new(),
             remove_sources_games: false,
             xbox360_format: Xbox360Format::God,
-            sort_by: SortBy::NameDescending,
+            sort_by: SortBy::NameAscending,
             view_as: ViewAs::Grid,
             theme_preference: ThemePreference::System,
             auto_reconnect: AutoReconnect::Never,
@@ -331,10 +331,16 @@ impl GodLayout {
 #[serde(rename_all = "snake_case")]
 pub enum SortBy {
     #[default]
-    NameDescending,
     NameAscending,
-    SizeDescending,
+    NameDescending,
+    TitleIdAscending,
+    TitleIdDescending,
+    FormatAscending,
+    FormatDescending,
+    SystemAscending,
+    SystemDescending,
     SizeAscending,
+    SizeDescending,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default, Display, FromStr)]
