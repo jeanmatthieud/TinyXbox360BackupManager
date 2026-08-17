@@ -4,13 +4,13 @@
 
 use crate::{
     DisplayedBadAvatarConfig, DisplayedConfig, DisplayedRecentLocation, DisplayedRemovableDrive,
-    TargetKind,
+    GodLayout, TargetKind,
 };
 use crate::util::GIB;
 use slint::{SharedString, ToSharedString};
 use txbm_core::{
     badavatar::UrlField,
-    config::{Config, TargetKind as CoreTargetKind},
+    config::{Config, GodLayout as CoreGodLayout, TargetKind as CoreTargetKind},
     target::Target,
 };
 
@@ -77,6 +77,28 @@ impl From<txbm_core::config::TargetKind> for TargetKind {
         match kind {
             txbm_core::config::TargetKind::Local => TargetKind::Local,
             txbm_core::config::TargetKind::Ftp => TargetKind::Ftp,
+        }
+    }
+}
+
+impl From<CoreGodLayout> for GodLayout {
+    fn from(layout: CoreGodLayout) -> Self {
+        match layout {
+            CoreGodLayout::TitleId => GodLayout::TitleId,
+            CoreGodLayout::NameSlashTitleId => GodLayout::NameSlashTitleId,
+            CoreGodLayout::NameDashTitleId => GodLayout::NameDashTitleId,
+            CoreGodLayout::TitleIdDashName => GodLayout::TitleIdDashName,
+        }
+    }
+}
+
+impl From<GodLayout> for CoreGodLayout {
+    fn from(layout: GodLayout) -> Self {
+        match layout {
+            GodLayout::TitleId => CoreGodLayout::TitleId,
+            GodLayout::NameSlashTitleId => CoreGodLayout::NameSlashTitleId,
+            GodLayout::NameDashTitleId => CoreGodLayout::NameDashTitleId,
+            GodLayout::TitleIdDashName => CoreGodLayout::TitleIdDashName,
         }
     }
 }

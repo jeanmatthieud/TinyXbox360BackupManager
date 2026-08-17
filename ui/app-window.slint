@@ -164,9 +164,27 @@ export component AppWindow inherits Window {
             text: "Are you sure you want to add \{UiState.games-to-add.length} conversions to the queue?";
         }
 
-        for path in UiState.games-to-add: Text {
-            text: "• \{path}";
-            overflow: elide;
+        // An entry whose TitleID is already installed on the target is called
+        // out here rather than failing later: the conversion overwrites it.
+        if UiState.games-to-add-conflicts > 0: Text {
+            text: UiState.games-to-add-conflicts == 1
+                ? "1 of them is already installed on the target and will be overwritten."
+                : "\{UiState.games-to-add-conflicts} of them are already installed on the target and will be overwritten.";
+            color: MyPalette.warning;
+            wrap: word-wrap;
+        }
+
+        for entry in UiState.games-to-add: VerticalLayout {
+            Text {
+                text: "• \{entry.name}";
+                overflow: elide;
+            }
+
+            if entry.already-installed: Text {
+                text: "    ↻ overwrites \"\{entry.installed-title}\"";
+                color: MyPalette.warning;
+                overflow: elide;
+            }
         }
 
         cancelled => Dispatcher.dispatch(Message.ClearGamesToAdd, "");
@@ -186,8 +204,9 @@ export component AppWindow inherits Window {
     if UiState.confirming-cancel-all: ConfirmationModal {
         Text {
             text: UiState.converting
-                ? "Cancel all conversions?\nThe conversion in progress will be stopped and its partial files removed."
+                ? "Cancel all conversions?\nThe conversion in progress will be stopped and its partial output cleaned up where possible; anything already written to the target is left in place."
                 : "Cancel all pending conversions?";
+            wrap: word-wrap;
         }
         destructive: true;
         btn-icon: IconSet.X;
@@ -197,6 +216,22 @@ export component AppWindow inherits Window {
         confirmed => {
             Dispatcher.dispatch(Message.CancelAllConversions, "");
             UiState.confirming-cancel-all = false;
+        }
+    }
+
+    if UiState.confirming-cancel-current: ConfirmationModal {
+        Text {
+            text: "Cancel the conversion of \{UiState.conversion-label}?\nIts partial output is cleaned up where possible, but anything already written to the target is left in place. The other queued games are kept and the next one starts right away.";
+            wrap: word-wrap;
+        }
+        destructive: true;
+        btn-icon: IconSet.X;
+        cancelled => {
+            UiState.confirming-cancel-current = false;
+        }
+        confirmed => {
+            Dispatcher.dispatch(Message.CancelConversion, "0");
+            UiState.confirming-cancel-current = false;
         }
     }
 

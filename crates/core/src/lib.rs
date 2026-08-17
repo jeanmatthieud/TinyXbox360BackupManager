@@ -17,6 +17,7 @@ pub mod ftp;
 pub mod game;
 pub mod game_details;
 pub mod god;
+pub mod god_dirs;
 pub mod iso_info;
 pub mod mobcat;
 pub mod scan;
@@ -27,6 +28,7 @@ pub mod unity;
 pub mod updates;
 pub mod util;
 pub mod xbe;
+pub mod xex;
 
 /// Standard folder of GOD / official content on the console.
 pub const DEFAULT_GOD_DIR: &str = "Content/0000000000000000";

@@ -55,6 +55,7 @@ fn main() -> anyhow::Result<()> {
             &cancel,
             &|p, _| println!("  {p}%"),
             &|s| println!("  {s}"),
+            &|s| println!("  [{s}]"),
         )?;
 
         // The test ISO is an installation disc: verify that its content

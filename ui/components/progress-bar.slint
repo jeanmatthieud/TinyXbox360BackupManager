@@ -1,0 +1,26 @@
+// SPDX-FileCopyrightText: 2026 Jean-Matthieu Dechriste (TinyXbox360BackupManager)
+// SPDX-License-Identifier: GPL-3.0-only
+
+import { MyPalette } from "../styling.slint";
+
+// Determinate progress bar. std-widgets' ProgressIndicator is not used here so
+// the fill can follow MyPalette (and the destructive colour while cancelling).
+export component ProgressBar inherits Rectangle {
+    // 0.0 - 1.0, values outside the range are clamped.
+    in property <float> progress: 0;
+    in property <brush> fill: MyPalette.accent-background;
+
+    height: 8px;
+    border-radius: self.height / 2;
+    background: MyPalette.alternate-background;
+    clip: true;
+
+    Rectangle {
+        x: 0;
+        width: parent.width * Math.clamp(root.progress, 0, 1);
+        background: root.fill;
+        border-radius: parent.border-radius;
+
+        animate width { duration: 200ms; easing: ease-out; }
+    }
+}

@@ -28,6 +28,7 @@ fn main() -> anyhow::Result<()> {
         &cancel,
         &|p, _| println!("  {p}%"),
         &|s| println!("  {s}"),
+        &|s| println!("  [{s}]"),
     )?;
 
     let games = txbm_core::game::scan_drive(&root);

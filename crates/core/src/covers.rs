@@ -110,16 +110,18 @@ pub fn download_cover(covers_dir: &Path, title_id: &str, is_x360: bool) -> Resul
     Ok(true)
 }
 
-/// Persistent map `"host|remote path"` → TitleID, so an Original Xbox
-/// game added by hand over FTP only costs one `default.xbe` download
-/// ever, instead of one per scan.
-pub struct XbeIdCache {
+/// Persistent map `"host|remote path"` → TitleID, so an extracted game added
+/// by hand over FTP only costs one executable read ever, instead of one per
+/// scan. Covers both `default.xbe` and `default.xex`.
+pub struct TitleIdCache {
     path: PathBuf,
     map: HashMap<String, String>,
 }
 
-impl XbeIdCache {
+impl TitleIdCache {
     pub fn load() -> Self {
+        // Named after the XBE-only era of this cache; kept as-is so existing
+        // installs don't re-download what they already resolved.
         let path = DATA_DIR.join("xbe-ids.json");
         let map = std::fs::read_to_string(&path)
             .ok()

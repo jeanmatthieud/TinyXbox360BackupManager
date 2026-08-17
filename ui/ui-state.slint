@@ -8,10 +8,12 @@ import {
     DisplayedDriveInfo,
     DisplayedGame,
     DisplayedGameComponent,
+    DisplayedGameToAdd,
     DisplayedRecentLocation,
     DisplayedRemovableDrive,
     DisplayedStoragePath,
     DisplayedTitleUpdate,
+    GodLayout,
     Notification,
     Page,
     PendingQueueAction,
@@ -59,6 +61,9 @@ export global UiState {
     // Extracted Original Xbox (XBE) and Xbox 360 (XEX) destinations.
     in-out property <string> storage-xbe-dir;
     in-out property <string> storage-xex-dir;
+    // How <TitleID> folders are arranged inside the GOD storage dir. Per-target,
+    // stored in the `.txbm.json` manifest alongside the three directories above.
+    in-out property <GodLayout> storage-god-layout;
     // FTP modal: true while the local network is being scanned for a console.
     in-out property <bool> ftp-scanning: false;
     // FTP modal: IP of the console found by the scan (empty if none/not yet).
@@ -82,7 +87,10 @@ export global UiState {
     in-out property <bool> has-games: false;
     in-out property <[Notification]> notifications;
     in-out property <[string]> conversion-queue;
-    in-out property <[string]> games-to-add;
+    in-out property <[DisplayedGameToAdd]> games-to-add;
+    // How many `games-to-add` entries would overwrite an installed game.
+    // Counted on the Rust side: Slint models can't be folded over.
+    in-out property <int> games-to-add-conflicts: 0;
     in-out property <string> status;
     in-out property <string> latest-version;
     // True while downloading missing covers.
@@ -92,12 +100,32 @@ export global UiState {
     // True while a conversion is running (the item at index 0 of
     // conversion-queue is the one currently being converted).
     in-out property <bool> converting: false;
+    // Live progress of the conversion at index 0, shown as a card on the queue
+    // page. Kept as structured data (rather than parsed back out of `status`)
+    // so the progress bar and the status line can diverge in wording.
+    // Name of the file being converted.
+    in-out property <string> conversion-label;
+    // 0.0 - 1.0.
+    in-out property <float> conversion-progress: 0;
+    // Running average upload speed, pre-formatted (e.g. "24.3 MB/s"). Empty
+    // outside the FTP upload phase, where no speed is measured.
+    in-out property <string> conversion-speed;
+    // Short label for the step the percentage currently refers to (GOD
+    // conversion, extraction, upload), or for a phase with no measurable
+    // progress at all (post-cancellation cleanup). Empty in between.
+    in-out property <string> conversion-phase;
+    // True between "cancel this conversion" on the running item and the moment
+    // it actually bails out. Unlike cancelling-queue, the pending items stay.
+    in-out property <bool> cancelling-current: false;
     // True for the duration of the confetti burst played when the queue drains
     // after at least one successful conversion. Set by the update loop, cleared
     // by the animation itself once it has finished.
     in-out property <bool> celebrating: false;
     // True while the "cancel all conversions" confirmation modal is shown.
     in-out property <bool> confirming-cancel-all: false;
+    // True while the "cancel the conversion in progress" confirmation modal is
+    // shown (the pending items are left alone by that one).
+    in-out property <bool> confirming-cancel-current: false;
     // True between "cancel all conversions" and the moment the conversion that
     // was running actually bails out (the queue is empty again).
     in-out property <bool> cancelling-queue: false;

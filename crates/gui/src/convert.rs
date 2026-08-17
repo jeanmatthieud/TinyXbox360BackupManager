@@ -22,7 +22,7 @@ pub fn perform_conversion(
                 .to_string();
 
             let weak2 = weak.clone();
-            let update_progress = move |percentage, speed: Option<f64>| {
+            let update_progress = move |percentage: u32, speed: Option<f64>| {
                 let status = match speed {
                     Some(mbps) => {
                         slint::format!("↑  Adding  {filename}  {percentage}%  ({mbps:.1} MB/s)")
@@ -30,8 +30,20 @@ pub fn perform_conversion(
                     None => slint::format!("↑  Adding  {filename}  {percentage}%"),
                 };
 
+                // The same progress feeds the status bar (visible from every
+                // page) and, as structured values, the card on the queue page.
+                // A missing speed (first callback of each uploaded file, before
+                // any time has elapsed) keeps the previous one rather than
+                // blanking the card once per file.
+                let speed = speed.map(|mbps| slint::format!("{mbps:.1} MB/s"));
+
                 let _ = weak2.upgrade_in_event_loop(move |app| {
-                    app.global::<UiState<'_>>().set_status(status);
+                    let ui = app.global::<UiState<'_>>();
+                    ui.set_status(status);
+                    ui.set_conversion_progress(percentage as f32 / 100.0);
+                    if let Some(speed) = speed {
+                        ui.set_conversion_speed(speed);
+                    }
                 });
             };
 
@@ -42,11 +54,36 @@ pub fn perform_conversion(
             let set_status = move |text: &str| {
                 let text = SharedString::from(text);
                 let _ = weak3.upgrade_in_event_loop(move |app| {
-                    app.global::<UiState<'_>>().set_status(text);
+                    let ui = app.global::<UiState<'_>>();
+                    ui.set_status(text.clone());
+                    // These phases have no progress of their own, so they take
+                    // over the card's phase line too until it is cleared. The
+                    // speed measured by the previous phase no longer applies.
+                    ui.set_conversion_phase(text);
+                    ui.set_conversion_speed(SharedString::new());
                 });
             };
 
-            txbm_core::convert::perform(in_path, config, &cancel, &update_progress, &set_status)
+            // Step the percentage currently refers to, shown on the queue page.
+            let weak4 = weak.clone();
+            let set_phase = move |text: &str| {
+                let text = SharedString::from(text);
+                let _ = weak4.upgrade_in_event_loop(move |app| {
+                    let ui = app.global::<UiState<'_>>();
+                    ui.set_conversion_phase(text);
+                    // Each step measures (or doesn't measure) its own speed.
+                    ui.set_conversion_speed(SharedString::new());
+                });
+            };
+
+            txbm_core::convert::perform(
+                in_path,
+                config,
+                &cancel,
+                &update_progress,
+                &set_status,
+                &set_phase,
+            )
         }
     };
 

@@ -19,6 +19,10 @@ export component ConfirmationModal inherits Modal {
     ScrollView {
         width: min(v.preferred-width, root.max-w - 40px);
         height: min(v.preferred-height, 300px);
+        // Only vertical scrolling here: a Text keeps the full unwrapped text as
+        // preferred width, so leaving viewport-width unbound would let a long
+        // message scroll sideways instead of wrapping.
+        viewport-width: self.visible-width;
 
         v := VerticalLayout {
             alignment: start;

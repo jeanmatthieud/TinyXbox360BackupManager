@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 use crate::{
-    AppWindow, Dispatcher, DisplayedConfig, DisplayedDriveInfo, DisplayedGame,
+    AppWindow, Dispatcher, DisplayedConfig, DisplayedDriveInfo, DisplayedGame, DisplayedGameToAdd,
     DisplayedStoragePath, DisplayedTitleUpdate, Message, Notification, Page, PendingQueueAction,
     UiState, convert::perform_conversion, covers, dialogs, game_details, state::State,
     title_updates, util,
@@ -52,6 +52,57 @@ static TITLE_UPDATES_RESULT: Mutex<
 > = Mutex::new(None);
 
 impl State {
+    /// Fills the "add these conversions to the queue?" confirmation from the
+    /// picked files, flagging each one that would overwrite an installed game.
+    ///
+    /// The check is done here, before the queue is confirmed, rather than left
+    /// to the conversion: the user gets to see it while they can still back
+    /// out. It costs no I/O — the TitleID comes from the inspection the pick
+    /// already did, and the installed games are the ones the last scan found.
+    ///
+    /// It is therefore only as good as the TitleID the pick could read: ISOs
+    /// and Arcade packages are covered, archives never are (see
+    /// [`util::PickedGame::installs_title_id`]). An input with no TitleID is
+    /// queued silently — the conversion overwrites just the same, it simply
+    /// isn't announced.
+    fn set_games_to_add(&mut self, picked: Vec<util::PickedGame>, weak: &Weak<AppWindow>) {
+        let displayed = picked
+            .iter()
+            .map(|game| {
+                let name = match game.path.file_name() {
+                    Some(filename) => filename.to_string_lossy().to_shared_string(),
+                    None => "?".to_shared_string(),
+                };
+
+                // An `incomplete` entry only holds DLC/title updates for that
+                // TitleID: installing the game itself completes it instead of
+                // overwriting anything, so it stays unflagged even though a
+                // card for that game is visible in the library.
+                let installed = game.installs_title_id.as_deref().and_then(|tid| {
+                    self.games
+                        .iter()
+                        .find(|g| !g.incomplete && g.id.eq_ignore_ascii_case(tid))
+                });
+
+                DisplayedGameToAdd {
+                    name,
+                    already_installed: installed.is_some(),
+                    installed_title: installed
+                        .map(|g| g.title.to_shared_string())
+                        .unwrap_or_default(),
+                }
+            })
+            .collect::<Vec<_>>();
+
+        let conflicts = displayed.iter().filter(|g| g.already_installed).count() as i32;
+        self.games_to_add = picked.into_iter().map(|g| g.path).collect();
+        self.displayed_games_to_add.set_vec(displayed);
+
+        let app = weak.upgrade().unwrap();
+        app.global::<UiState<'_>>()
+            .set_games_to_add_conflicts(conflicts);
+    }
+
     /// Cancels the whole conversion queue: the running item (index 0) is only
     /// signalled to stop — it bails at its next cancellation checkpoint, cleans
     /// up its partial output, and is removed by `ConversionFinished` — while
@@ -545,6 +596,11 @@ impl State {
                             // connecting: skip the modal and scan straight away.
                             ui.set_configuring_storage(false);
                             message_queue.push_back((Message::RefreshAll, SharedString::new()));
+                            // Otherwise the Toolbox "Library storage" card (folders
+                            // + GOD layout) keeps showing whatever a previous
+                            // connection in this session left behind.
+                            message_queue
+                                .push_back((Message::FetchAuroraPaths, SharedString::new()));
                         } else {
                             let mut candidates: Vec<SharedString> = analysis
                                 .candidates
@@ -565,6 +621,7 @@ impl State {
                             ui.set_storage_xex_dir(
                                 analysis.suggested.xex_dir.as_str().into(),
                             );
+                            ui.set_storage_god_layout(analysis.suggested.god_layout.into());
                             // The modal stays open, now showing the form.
                         }
                     }
@@ -591,6 +648,7 @@ impl State {
                     god_dir: target.resolve_path(ui.get_storage_god_dir().as_str()),
                     xbe_dir: target.resolve_path(ui.get_storage_xbe_dir().as_str()),
                     xex_dir: target.resolve_path(ui.get_storage_xex_dir().as_str()),
+                    god_layout: ui.get_storage_god_layout().into(),
                 };
                 // Reuse the spinner while the folders are created and the
                 // manifest is written.
@@ -721,6 +779,9 @@ impl State {
                         game.id = id.to_string();
                         game.search_term = format!("{}\0{id}", game.title).to_lowercase();
                     }
+                    // The ID was unknown at scan time, so any orphaned DLC/title
+                    // update entry sharing it couldn't be folded in yet.
+                    txbm_core::game::merge_extracted_content(&mut self.games);
                     message_queue.push_back((Message::RefreshDisplayedGames, SharedString::new()));
                 }
             }
@@ -809,21 +870,12 @@ impl State {
                     dialogs::pick_games(&window_handle)
                 };
 
-                self.games_to_add = paths
+                let picked = paths
                     .into_iter()
                     .filter_map(util::should_add_game)
                     .collect();
 
-                let displayed_games_to_add = self
-                    .games_to_add
-                    .iter()
-                    .map(|p| match p.file_name() {
-                        Some(filename) => filename.to_string_lossy().to_shared_string(),
-                        None => "?".to_shared_string(),
-                    })
-                    .collect::<Vec<_>>();
-
-                self.displayed_games_to_add.set_vec(displayed_games_to_add);
+                self.set_games_to_add(picked, weak);
             }
             Message::ConfirmGamesToAdd => {
                 while let Some(path) = self.games_to_add.pop_front() {
@@ -838,6 +890,7 @@ impl State {
                 // Queueing new work supersedes an in-flight "cancel all", so
                 // the fresh batch is eligible for the celebration again.
                 let app = weak.upgrade().unwrap();
+                app.global::<UiState<'_>>().set_games_to_add_conflicts(0);
                 app.global::<UiState<'_>>().set_cancelling_queue(false);
                 self.batch_cancelled = false;
 
@@ -857,6 +910,12 @@ impl State {
                     let ui = app.global::<UiState<'_>>();
                     ui.set_converting(false);
                     ui.set_cancelling_queue(false);
+                    ui.set_cancelling_current(false);
+                    ui.set_confirming_cancel_current(false);
+                    ui.set_conversion_label(SharedString::new());
+                    ui.set_conversion_progress(0.0);
+                    ui.set_conversion_speed(SharedString::new());
+                    ui.set_conversion_phase(SharedString::new());
 
                     // The whole batch went through: celebrate. Skipped when a
                     // disconnect/quit is waiting on the queue — the window is
@@ -879,7 +938,27 @@ impl State {
                 };
 
                 let app = weak.upgrade().unwrap();
-                app.global::<UiState<'_>>().set_converting(true);
+                let ui = app.global::<UiState<'_>>();
+                ui.set_converting(true);
+
+                // Fresh progress card for this item: the previous one's
+                // percentage/speed must not linger while this conversion starts.
+                let QueuedConversion::Standard(in_path) = &conv;
+                ui.set_conversion_label(
+                    in_path
+                        .file_name()
+                        .unwrap_or_default()
+                        .to_string_lossy()
+                        .to_shared_string(),
+                );
+                ui.set_conversion_progress(0.0);
+                ui.set_conversion_speed(SharedString::new());
+                ui.set_conversion_phase(SharedString::new());
+                ui.set_cancelling_current(false);
+                // The previous item may have finished on its own while its
+                // "cancel this conversion?" modal was still up: closing it here
+                // makes sure a late confirmation can't hit the next game.
+                ui.set_confirming_cancel_current(false);
 
                 self.conversion_cancel
                     .store(false, std::sync::atomic::Ordering::Relaxed);
@@ -908,6 +987,8 @@ impl State {
             Message::ClearGamesToAdd => {
                 self.games_to_add.clear();
                 self.displayed_games_to_add.clear();
+                let app = weak.upgrade().unwrap();
+                app.global::<UiState<'_>>().set_games_to_add_conflicts(0);
             }
             Message::TestFtp => {
                 let ftp_config = self.config.contents.ftp_config();
@@ -1082,8 +1163,10 @@ impl State {
                             // One connection feeds both Toolbox cards.
                             let res = FtpSession::connect(&ftp).map(|mut session| {
                                 let hdd = txbm_core::target::ftp_hdd_root(&mut session);
-                                let status =
-                                    txbm_core::target::ftp_storage_status(&mut session, &hdd);
+                                let status = txbm_core::target::ftp_storage_status(
+                                    &mut session,
+                                    &hdd,
+                                );
                                 session.quit();
                                 status
                             });
@@ -1222,13 +1305,52 @@ impl State {
             }
             Message::CancelConversion => {
                 let i = payload.parse().unwrap();
-                // Index 0 is the conversion currently running, which can't be
-                // interrupted mid-flight; ignore a cancel request on it.
+
+                // Index 0 is the conversion currently running: it can't be
+                // dropped from the queue on the spot, only signalled to stop. It
+                // bails at its next checkpoint and `ConversionFinished` removes
+                // it, so the queue carries on with the next item — unlike
+                // "cancel all", the pending ones are left alone.
                 if self.is_converting && i == 0 {
+                    self.conversion_cancel
+                        .store(true, std::sync::atomic::Ordering::Relaxed);
+
+                    // A batch the user cancelled part of isn't worth confetti,
+                    // even if this item happens to finish cleanly before it
+                    // notices the flag.
+                    self.batch_cancelled = true;
+
+                    let app = weak.upgrade().unwrap();
+                    app.global::<UiState<'_>>().set_cancelling_current(true);
                     return;
                 }
+
                 let _ = self.conversion_queue.remove(i);
                 let _ = self.displayed_conversion_queue.remove(i);
+            }
+            Message::MoveConversionUp | Message::MoveConversionDown => {
+                let i: usize = payload.parse().unwrap();
+                let up = message == Message::MoveConversionUp;
+                let j = if up { i.wrapping_sub(1) } else { i + 1 };
+
+                // The running conversion (index 0) is pinned: nothing may be
+                // moved into its slot, and it can't be moved itself.
+                let first_pending = if self.is_converting { 1 } else { 0 };
+                if i < first_pending
+                    || j < first_pending
+                    || i >= self.conversion_queue.len()
+                    || j >= self.conversion_queue.len()
+                {
+                    return;
+                }
+
+                self.conversion_queue.swap(i, j);
+
+                // VecModel has no swap: take the lower one out and put it back
+                // at the higher index, which shifts the other one up by one.
+                let (lo, hi) = if up { (j, i) } else { (i, j) };
+                let row = self.displayed_conversion_queue.remove(lo);
+                self.displayed_conversion_queue.insert(hi, row);
             }
             Message::CancelAllConversions => {
                 self.cancel_all_conversions(weak);
@@ -1252,14 +1374,8 @@ impl State {
                 if app.global::<UiState<'_>>().get_current_page() == Page::Games {
                     let path = PathBuf::from(&payload);
 
-                    if let Some(path) = util::should_add_game(path)
-                        && let Some(filename) = path.file_name()
-                    {
-                        let displayed_games_to_add =
-                            vec![filename.to_string_lossy().to_shared_string()];
-
-                        self.games_to_add = VecDeque::from([path]);
-                        self.displayed_games_to_add.set_vec(displayed_games_to_add);
+                    if let Some(picked) = util::should_add_game(path) {
+                        self.set_games_to_add(vec![picked], weak);
                     }
                 }
             }
@@ -1306,9 +1422,9 @@ impl State {
                     return;
                 }
 
-                let incomplete = ui_state.get_current_game().incomplete;
+                let game = ui_state.get_current_game();
                 ui_state.set_current_game_components(ModelRc::from(Rc::new(VecModel::from(
-                    game_details::components(&details, incomplete),
+                    game_details::components(&details, &game),
                 ))));
             }
             Message::FetchTitleUpdates => {
@@ -1645,6 +1761,7 @@ fn set_storage_status(app: &AppWindow, status: txbm_core::target::StorageStatus)
     ui.set_app_storage_paths(ModelRc::from(Rc::new(VecModel::from(paths))));
     ui.set_storage_has_uncovered(status.has_uncovered);
     ui.set_storage_aurora_compared(status.aurora_compared);
+    ui.set_storage_god_layout(status.god_layout.into());
 }
 
 impl State {

@@ -9,6 +9,7 @@ import { IconSet, IconDisplay } from "@lucide";
 import { Card } from "components/card.slint";
 import { MyPalette } from "styling.slint";
 import { GameRow } from "components/game-row.slint";
+import { GameTableHeader } from "components/game-table-header.slint";
 import { GamesOtherToolbar } from "components/games-other-toolbar.slint";
 import { UiState } from "ui-state.slint";
 import { DisplayedGame } from "types.slint";
@@ -39,6 +40,10 @@ export component GameTablePage inherits VerticalLayout {
                 height: v2.preferred-height;
 
                 v2 := VerticalLayout {
+                    GameTableHeader { }
+
+                    HorizontalLine { }
+
                     for game[i] in UiState.games: VerticalLayout {
                         GameRow {
                             game: game;

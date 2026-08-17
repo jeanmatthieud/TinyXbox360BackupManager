@@ -8,6 +8,7 @@ import { UiState } from "ui-state.slint";
 import { Card } from "components/card.slint";
 import { IconButton, IconButtonKind } from "components/icon-button.slint";
 import { ConversionRow } from "components/conversion-row.slint";
+import { ConversionProgressCard } from "components/conversion-progress-card.slint";
 import {
     ConversionQueueToolbar,
 } from "components/conversion-queue-toolbar.slint";
@@ -17,6 +18,10 @@ import { Message, Dispatcher } from "messages.slint";
 import { PendingQueueAction } from "types.slint";
 
 export component ConversionQueuePage inherits VerticalLayout {
+    // Index of the first *pending* item: the one being converted (index 0) is
+    // shown in its own progress card instead of being listed.
+    property <int> first-pending: UiState.converting ? 1 : 0;
+
     HorizontalLayout {
         padding: 10px;
 
@@ -84,26 +89,41 @@ export component ConversionQueuePage inherits VerticalLayout {
     if UiState.conversion-queue.length > 0: ScrollView {
         width: parent.width;
         viewport-height: v.preferred-height;
+        // Without this the viewport would take the content's preferred width —
+        // and a Text keeps the full text width as preferred width even with
+        // `overflow: elide`. Long game titles would widen the whole queue
+        // instead of being elided.
+        viewport-width: self.visible-width;
 
         v := VerticalLayout {
             padding: 10px;
             padding-top: 0px;
+            spacing: 10px;
 
-            Card {
+            // Live progress of the conversion running right now.
+            if UiState.converting: ConversionProgressCard { }
+
+            if UiState.conversion-queue.length > first-pending: Card {
                 clip: true;
                 height: v2.preferred-height;
 
                 v2 := VerticalLayout {
                     for conv[i] in UiState.conversion-queue: VerticalLayout {
-                        ConversionRow {
-                            label: conv;
-                            // The item being converted (index 0 while
-                            // converting) can't be cancelled mid-flight.
-                            cancellable: !(i == 0 && UiState.converting);
-                            cancel() => Dispatcher.dispatch(Message.CancelConversion, i);
-                        }
+                        // The running conversion lives in the card above, so
+                        // every listed row is pending: freely removable and
+                        // reorderable.
+                        if i >= first-pending: VerticalLayout {
+                            ConversionRow {
+                                label: conv;
+                                can-move-up: i > first-pending;
+                                can-move-down: i < UiState.conversion-queue.length - 1;
+                                cancel() => Dispatcher.dispatch(Message.CancelConversion, i);
+                                move-up() => Dispatcher.dispatch(Message.MoveConversionUp, i);
+                                move-down() => Dispatcher.dispatch(Message.MoveConversionDown, i);
+                            }
 
-                        HorizontalLine { }
+                            HorizontalLine { }
+                        }
                     }
                 }
             }

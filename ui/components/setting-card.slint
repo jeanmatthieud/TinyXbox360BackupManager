@@ -5,6 +5,7 @@ import { MyPalette } from "../styling.slint";
 import { Icon, IconDisplay, IconSet } from "@lucide";
 import { HorizontalLine } from "horizontal-line.slint";
 import { Card } from "card.slint";
+import { TooltipArea } from "tooltip-area.slint";
 import { UiState } from "../ui-state.slint";
 import { Message, Dispatcher } from "../messages.slint";
 
@@ -14,6 +15,13 @@ export component SettingCard inherits Card {
     in property <[{ value: string, label: string }]> items;
     in property <string> active-item;
     in property <Message> set-property;
+    // Optional caveat shown under the choices (e.g. flagging experimental
+    // options); hidden when empty.
+    in property <string> note;
+    // Locks the choices behind the standard disabled veil, e.g. for a setting
+    // the running conversion queue depends on. `disabled-tooltip` says why.
+    in property <bool> disabled: false;
+    in property <string> disabled-tooltip;
 
     callback changed();
 
@@ -65,5 +73,19 @@ export component SettingCard inherits Card {
                 }
             }
         }
+
+        if note != "": Text {
+            text: note;
+            wrap: word-wrap;
+            font-size: 11px;
+            color: MyPalette.warning;
+        }
+    }
+
+    // Declared last so it covers the whole card and swallows every click.
+    if disabled: TooltipArea {
+        disabled: true;
+        tooltip: disabled-tooltip;
+        veil-border-radius: root.border-radius;
     }
 }

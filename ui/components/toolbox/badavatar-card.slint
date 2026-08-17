@@ -63,6 +63,14 @@ export component BadAvatarCard inherits ToolboxCard {
 
     private property <bool> target-connected: !UiState.config.target.is-empty;
 
+    // Nothing here is usable while the key is being built, while a target is
+    // connected (the key must be prepared standalone)
+    // — so veil the whole card rather than just its action row.
+    disabled: UiState.creating-badavatar || target-connected;
+    disabled-tooltip: target-connected
+        ? "Disconnect from the current target first — the USB key must be prepared on its own."
+        : "";
+
     CardHeader {
         icon: IconSet.Usb;
         title: "BadAvatar USB key";
@@ -141,8 +149,6 @@ export component BadAvatarCard inherits ToolboxCard {
 
     CardActionRow {
         icon: IconSet.Hammer;
-        disabled: UiState.creating-badavatar || target-connected;
-        tooltip: target-connected ? "Disconnect from the current target first — the USB key must be prepared on its own." : "";
         text: !UiState.creating-badavatar ? "Create the BadAvatar USB key" : "Working… see the status bar below.";
         // Opens the in-app removable-drive picker. Hidden escape hatch: a long
         // press falls back to the native folder picker (any arbitrary path).
