@@ -53,7 +53,8 @@ static TITLE_UPDATES_RESULT: Mutex<
 
 impl State {
     /// Fills the "add these conversions to the queue?" confirmation from the
-    /// picked files, flagging each one that would overwrite an installed game.
+    /// picked files, dropping those already queued and flagging each one that
+    /// would overwrite an installed game.
     ///
     /// The check is done here, before the queue is confirmed, rather than left
     /// to the conversion: the user gets to see it while they can still back
@@ -65,7 +66,48 @@ impl State {
     /// [`util::PickedGame::installs_title_id`]). An input with no TitleID is
     /// queued silently — the conversion overwrites just the same, it simply
     /// isn't announced.
-    fn set_games_to_add(&mut self, picked: Vec<util::PickedGame>, weak: &Weak<AppWindow>) {
+    fn set_games_to_add(&mut self, mut picked: Vec<util::PickedGame>, weak: &Weak<AppWindow>) {
+        // Files already waiting in the queue (index 0 — the running one —
+        // included) never make it to the confirmation: queueing the same input
+        // twice would just convert it twice over the same output. Duplicates
+        // inside the picked batch itself are dropped the same way.
+        let mut skipped = Vec::new();
+        let mut kept: Vec<PathBuf> = Vec::new();
+        picked.retain(|game| {
+            let queued = self
+                .conversion_queue
+                .iter()
+                .any(|conv| conv.path() == game.path)
+                || kept.contains(&game.path);
+
+            if queued {
+                skipped.push(
+                    game.path
+                        .file_name()
+                        .unwrap_or(game.path.as_os_str())
+                        .to_string_lossy()
+                        .into_owned(),
+                );
+            } else {
+                kept.push(game.path.clone());
+            }
+            !queued
+        });
+
+        if !skipped.is_empty() {
+            let text = match skipped.as_slice() {
+                [name] => format!("Already in the queue: {name}"),
+                names => format!("{} files are already in the queue", names.len()),
+            };
+            self.notifications.push(Notification::info(text));
+        }
+
+        // Nothing new: leave the pending confirmation (if any) untouched
+        // instead of clearing it with an empty selection.
+        if picked.is_empty() {
+            return;
+        }
+
         let displayed = picked
             .iter()
             .map(|game| {

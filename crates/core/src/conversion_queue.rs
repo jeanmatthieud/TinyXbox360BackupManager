@@ -2,13 +2,26 @@
 // SPDX-FileContributor: Modified by Jean-Matthieu Dechriste (TinyXbox360BackupManager)
 // SPDX-License-Identifier: GPL-3.0-only
 
-use std::{fmt, path::PathBuf};
+use std::{
+    fmt,
+    path::{Path, PathBuf},
+};
 
 #[derive(Debug, Clone)]
 pub enum QueuedConversion {
     /// ISO added to target: GOD conversion or extraction,
     /// depending on the detected image type.
     Standard(PathBuf),
+}
+
+impl QueuedConversion {
+    /// Input file this entry will convert. Used to tell whether a freshly
+    /// picked file is already waiting in the queue.
+    pub fn path(&self) -> &Path {
+        match self {
+            Self::Standard(path) => path,
+        }
+    }
 }
 
 /// Queue rows show the file name only: the full path is too long for the
