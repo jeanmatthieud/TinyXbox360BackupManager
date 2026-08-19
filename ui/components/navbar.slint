@@ -51,13 +51,17 @@ export component Navbar inherits VerticalLayout {
         padding: 10px;
         spacing: 10px;
 
-        if UiState.conversion-queue.length > 0: NavbarButton {
-            active: UiState.current-page == Page.ConversionQueue;
+        // Always reachable (the page explains itself when empty); the icon
+        // only spins while a job is actually running.
+        NavbarButton {
+            active: UiState.current-page == Page.Jobs;
             icon: IconSet.RefreshCw;
-            tooltip: "Conversion queue";
-            rotate: true;
+            tooltip: UiState.job-queue.length > 0
+                ? "Queue (\{UiState.job-queue.length})"
+                : "Queue";
+            rotate: UiState.job-running;
             clicked => {
-                UiState.current-page = Page.ConversionQueue;
+                UiState.current-page = Page.Jobs;
             }
         }
 
