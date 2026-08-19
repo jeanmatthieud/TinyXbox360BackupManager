@@ -7,6 +7,7 @@ use anyhow::Result;
 use slint::{ComponentHandle, SharedString, Weak};
 use std::fs;
 use txbm_core::{
+    config::CoverSource,
     covers::{self, TitleIdCache},
     data_dir::DATA_DIR,
     ftp::FtpSession,
@@ -18,6 +19,7 @@ use txbm_core::{
 pub fn download_covers(
     mut games: Vec<Game>,
     target: Option<Target>,
+    source: CoverSource,
     weak: &Weak<AppWindow>,
 ) -> Result<()> {
     let covers_dir = DATA_DIR.join("covers");
@@ -44,7 +46,8 @@ pub fn download_covers(
             continue;
         }
 
-        let downloaded = covers::download_cover(&covers_dir, &game.id, game.is_x360).unwrap_or(false);
+        let downloaded =
+            covers::download_cover(&covers_dir, &game.id, game.is_x360, source).unwrap_or(false);
         // Build the downscaled thumbnail off the UI thread. Also catches
         // covers cached by a previous run that have no thumbnail yet.
         let thumbnailed = covers::ensure_thumbnail(&covers_dir, &game.id).unwrap_or(false);

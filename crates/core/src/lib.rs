@@ -25,6 +25,7 @@ pub mod stfs;
 pub mod target;
 pub mod title_updates;
 pub mod unity;
+pub mod unity_mirror;
 pub mod updates;
 pub mod util;
 pub mod xbe;

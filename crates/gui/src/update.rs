@@ -380,6 +380,16 @@ impl State {
 
                 message_queue.push_back((Message::SyncConfig, SharedString::new()));
             }
+            Message::SetCoverSource => {
+                let value = payload.parse().unwrap();
+                self.config.contents.cover_source = value;
+
+                // Deliberately nothing else: the cover cache is agnostic of
+                // the source it was filled from, so switching must neither
+                // clear it nor trigger a re-download. The new source only
+                // applies to covers still missing at the next pass.
+                message_queue.push_back((Message::SyncConfig, SharedString::new()));
+            }
             Message::SetAutoReconnect => {
                 let value = payload.parse().unwrap();
                 self.config.contents.auto_reconnect = value;
@@ -830,11 +840,12 @@ impl State {
 
                     let games = self.games.clone();
                     let target = Target::from_config(&self.config.contents);
+                    let source = self.config.contents.cover_source;
 
                     let weak = weak.clone();
 
                     let _ = std::thread::spawn(move || {
-                        let res = covers::download_covers(games, target, &weak);
+                        let res = covers::download_covers(games, target, source, &weak);
 
                         let _ = weak.upgrade_in_event_loop(move |app| {
                             let dispatcher = app.global::<Dispatcher<'_>>();

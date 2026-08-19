@@ -64,6 +64,7 @@ pub struct ConfigContents {
     pub show_x360: bool,
     pub show_arcade: bool,
     pub show_og: bool,
+    pub cover_source: CoverSource,
     pub known_drives: Vec<PathBuf>,
 
     /// Most-recently-used library locations (most recent first, max 5).
@@ -93,6 +94,7 @@ impl Default for ConfigContents {
             show_x360: true,
             show_arcade: true,
             show_og: true,
+            cover_source: CoverSource::default(),
             known_drives: Vec::new(),
             recent_locations: Vec::new(),
             console_ip: String::new(),
@@ -371,4 +373,40 @@ pub enum AutoReconnect {
     FtpOnly,
     /// Reconnect only when the last target was a local (USB) drive.
     UsbOnly,
+}
+
+/// Where Xbox 360 box art is fetched from.
+///
+/// Both sources expose the same covers with the same metadata, so switching
+/// never invalidates the on-disk cache: it only decides which one is asked
+/// first for the covers still missing. The other one is still tried as a
+/// fallback, since neither is complete — XboxUnity is regularly offline, and
+/// the mirror is a frozen snapshot that has nothing newer than its last scrape.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default, Display, FromStr)]
+#[serde(rename_all = "snake_case")]
+pub enum CoverSource {
+    /// The live XboxUnity API (https://www.xboxunity.net).
+    #[default]
+    XboxUnity,
+    /// The XboxUnity-Scraper archive on GitHub, a static mirror of the same
+    /// assets that stays reachable when XboxUnity is down.
+    Mirror,
+}
+
+impl CoverSource {
+    /// The source to try when this one has nothing for a title.
+    pub fn fallback(self) -> Self {
+        match self {
+            CoverSource::XboxUnity => CoverSource::Mirror,
+            CoverSource::Mirror => CoverSource::XboxUnity,
+        }
+    }
+
+    /// Downloads the best cover of an Xbox 360 title from this source only.
+    pub fn download_best_cover(self, title_id: &str) -> anyhow::Result<Vec<u8>> {
+        match self {
+            CoverSource::XboxUnity => crate::unity::download_best_cover(title_id),
+            CoverSource::Mirror => crate::unity_mirror::download_best_cover(title_id),
+        }
+    }
 }

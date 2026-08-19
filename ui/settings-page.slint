@@ -67,6 +67,18 @@ export component SettingsPage inherits VerticalLayout {
             }
 
             SettingCard {
+                icon: IconSet.Image;
+                label: "Xbox 360 cover source";
+                items: [
+                    { value: "XboxUnity", label: "XboxUnity (recommended)" },
+                    { value: "Mirror", label: "XboxUnity-Scraper mirror" }
+                ];
+                active-item: UiState.config.cover-source;
+                set-property: Message.SetCoverSource;
+                note: "Switching applies to missing covers only: already-cached covers are kept. Use \"Redownload all covers\" in the Toolbox to refetch everything.";
+            }
+
+            SettingCard {
                 icon: IconSet.Cable;
                 label: "Reconnect to the last target on startup";
                 items: [
