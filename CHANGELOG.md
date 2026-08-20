@@ -1,3 +1,50 @@
+## [0.12.0](https://github.com/jeanmatthieud/TinyXbox360BackupManager/compare/v0.11.0...v0.12.0) (2026-08-20)
+
+### Features
+
+* Add games buttons on the queue page ([96a7c05](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/96a7c0563ace0748c63850533a4a38fb4654779b))
+* Enhance conversion queue management by skipping duplicates and notifying users ([294a0ba](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/294a0ba86334040131a679fecf5234f59c92e8ca))
+* Implement cover source selection for Xbox 360 covers with fallback options ([ba2fabe](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/ba2fabe2137664ed6296673902917933e018321a))
+* Refactor conversion queue to job queue (to properly manage deletions) ([72f79dc](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/72f79dc7c5317ff294cc0a616bc4334be6268877))
+
+### Bug Fixes
+
+* Update navbar buttons ([ef172cf](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/ef172cfc375a2fa5f971355b1b9e5b15be996483))
+
+
+---
+
+
+<a href="https://github.com/sponsors/jeanmatthieud">
+  <img src="https://img.shields.io/badge/GitHub%20Sponsors-Support-ea4aaa?logo=github-sponsors&logoColor=white" alt="GitHub Sponsors">
+</a>
+<a href="https://ko-fi.com/W6I723OON9">
+  <img src="https://img.shields.io/badge/Ko--fi-Support%20Me-ff5e5b?logo=ko-fi&logoColor=white" alt="Ko-fi">
+</a>
+
+
+Between my freelance work and my two little daughters, free time is a rare commodity! I build this tool on my own time, with a lot of late-night coffee.
+
+If TinyXbox360BackupManager saved you time or made you smile, **a donation** (much cheaper than a new game) **helps me keep maintaining and improving it**.
+
+Thanks! 🎮
+
+<hr />
+
+> [!TIP]
+> **:window: Windows installation:**\
+> Most users should download `TinyXbox360BackupManager-vX.X.X-windows-x64.exe`
+
+> [!TIP]
+> **:penguin: Linux installation:**\
+> Most users should download `TinyXbox360BackupManager-vX.X.X-linux-x86_64.AppImage`
+> `chmod +x /path/to/AppImage` after downloading may be required
+
+> [!IMPORTANT]
+> **:apple: macOS installation:**\
+> The app is not notarized, you must allow it manually after installing by running this command in Terminal:\
+> `xattr -rd com.apple.quarantine /Applications/TinyXbox360BackupManager.app`
+
 ## [0.11.0](https://github.com/jeanmatthieud/TinyXbox360BackupManager/compare/v0.10.0...v0.11.0) (2026-08-17)
 
 ### Features
