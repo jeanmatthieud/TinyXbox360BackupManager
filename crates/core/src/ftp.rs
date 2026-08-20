@@ -9,7 +9,7 @@
 //! - NLST returns complete LIST lines.
 
 use crate::util::dir_size;
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use std::fs::File;
 use std::io::{BufReader, Read};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
@@ -413,15 +413,20 @@ impl FtpSession {
 
     /// Recursively removes a remote directory.
     /// `progress(deleted_files, total_files)` is called after each file.
+    ///
+    /// Raising `cancel` stops at the next entry with
+    /// [`crate::target::DELETION_CANCELLED`], leaving the directory
+    /// half-removed.
     pub fn remove_dir_recursive(
         &mut self,
         remote_dir: &str,
+        cancel: &AtomicBool,
         progress: &mut dyn FnMut(u64, u64),
     ) -> Result<()> {
         let total = self.count_files(remote_dir);
         let mut done: u64 = 0;
         progress(0, total);
-        self.remove_dir_inner(remote_dir, &mut done, total, progress)
+        self.remove_dir_inner(remote_dir, &mut done, total, cancel, progress)
     }
 
     fn remove_dir_inner(
@@ -429,14 +434,20 @@ impl FtpSession {
         remote_dir: &str,
         done: &mut u64,
         total: u64,
+        cancel: &AtomicBool,
         progress: &mut dyn FnMut(u64, u64),
     ) -> Result<()> {
         for entry in self.list_dir(remote_dir) {
+            if cancel.load(Ordering::Relaxed) {
+                bail!(crate::target::DELETION_CANCELLED);
+            }
+
             if entry.is_dir {
                 self.remove_dir_inner(
                     &format!("{remote_dir}/{}", entry.name),
                     done,
                     total,
+                    cancel,
                     progress,
                 )?;
             } else {

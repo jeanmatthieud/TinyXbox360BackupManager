@@ -6,9 +6,28 @@ export enum Page {
     Games,
     Toolbox,
     DeviceStatus,
-    ConversionQueue,
+    Jobs,
     Settings,
     About,
+}
+
+// Family a queued job belongs to. Mirrors `JobKind` in the Rust core
+// (crates/core/src/job_queue.rs), same order.
+export enum JobKind {
+    // Game added to the target: conversion/extraction then transfer.
+    Add,
+    // Installed game removed from the target.
+    Delete,
+    // One stored component (a disc package, a DLC file) removed from a game.
+    DeleteContent,
+}
+
+// One entry of the job queue, as shown on the queue page.
+export struct DisplayedJob {
+    // Game/file this job works on.
+    label: string,
+    // Drives the row icon and the wording of the cancellation modals.
+    kind: JobKind,
 }
 
 export enum TargetKind {
@@ -27,7 +46,7 @@ export enum GodLayout {
     TitleIdDashName,
 }
 
-// Action the user asked for while the conversion queue was still busy: it is
+// Action the user asked for while the job queue was still busy: it is
 // held back until the queue has been cancelled and fully drained.
 export enum PendingQueueAction {
     None,
@@ -47,6 +66,7 @@ export struct DisplayedConfig {
     view-as: string,
     theme-preference: string,
     auto-reconnect: string,
+    cover-source: string,
     show-x360: bool,
     show-arcade: bool,
     show-og: bool,

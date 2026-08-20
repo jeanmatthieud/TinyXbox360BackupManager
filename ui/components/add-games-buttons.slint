@@ -1,0 +1,35 @@
+// SPDX-FileCopyrightText: 2026 Manuel Quarneti <mq1@ik.me> (TinyWiiBackupManager)
+// SPDX-FileContributor: Modified by Jean-Matthieu Dechriste (TinyXbox360BackupManager)
+// SPDX-License-Identifier: GPL-3.0-only
+
+import { IconButton, IconButtonKind } from "icon-button.slint";
+import { IconSet } from "@lucide";
+import { Message, Dispatcher } from "../messages.slint";
+
+// The "add games" actions, shared by every toolbar that offers them (games
+// page, conversion queue) so the buttons stay identical everywhere.
+export component AddGamesButtons inherits HorizontalLayout {
+    spacing: 10px;
+
+    IconButton {
+        icon: IconSet.Plus;
+        tooltip: "Add new games (ISO / XBLA)";
+        rounded: true;
+        kind: IconButtonKind.Primary;
+        font-size: 18px;
+        width: 34px;
+        height: 34px;
+        clicked => Dispatcher.dispatch(Message.PickGames, "false");
+    }
+
+    IconButton {
+        icon: IconSet.FolderPlus;
+        tooltip: "Add new games from a folder (recursively)";
+        rounded: true;
+        kind: IconButtonKind.Primary;
+        font-size: 18px;
+        width: 34px;
+        height: 34px;
+        clicked => Dispatcher.dispatch(Message.PickGames, "true");
+    }
+}

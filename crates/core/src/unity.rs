@@ -101,13 +101,10 @@ pub fn cover_url(cover_id: &str, large: bool) -> String {
     format!("{BASE}/Cover.php?cid={cover_id}&size={size}")
 }
 
-/// Downloads the best cover of a title
-/// (official first, then best rating).
-pub fn download_best_cover(title_id: &str) -> Result<Vec<u8>> {
-    let mut covers = cover_info(title_id)?;
-    if covers.is_empty() {
-        bail!("no cover for title {title_id}");
-    }
+/// Ranks covers best-first: officially-flagged ones, then by descending
+/// rating. Shared with [`crate::unity_mirror`], whose `metadata.json` uses
+/// the very same schema.
+pub fn sort_covers_best_first(covers: &mut [CoverEntry]) {
     covers.sort_by_key(|c| {
         let official = c.official.as_deref() == Some("1");
         let rating: i32 = c
@@ -117,6 +114,16 @@ pub fn download_best_cover(title_id: &str) -> Result<Vec<u8>> {
             .unwrap_or(0);
         (std::cmp::Reverse(official as i32), std::cmp::Reverse(rating))
     });
+}
+
+/// Downloads the best cover of a title
+/// (official first, then best rating).
+pub fn download_best_cover(title_id: &str) -> Result<Vec<u8>> {
+    let mut covers = cover_info(title_id)?;
+    if covers.is_empty() {
+        bail!("no cover for title {title_id}");
+    }
+    sort_covers_best_first(&mut covers);
 
     let bytes = AGENT.get(cover_url(&covers[0].cover_id, true))
         .call()

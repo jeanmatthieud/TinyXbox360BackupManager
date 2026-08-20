@@ -7,13 +7,13 @@
 #![recursion_limit = "256"]
 
 mod config;
-mod convert;
 mod covers;
 mod dialogs;
 mod drive_info;
 mod file_drop;
 mod game_details;
 mod games;
+mod jobs;
 mod notification;
 mod state;
 mod title_updates;
@@ -76,7 +76,7 @@ fn main() -> Result<()> {
     ui_state.set_games(ModelRc::from(state.displayed_games.clone()));
     ui_state.set_title_updates(ModelRc::from(state.displayed_title_updates.clone()));
     ui_state.set_notifications(ModelRc::from(state.notifications.clone()));
-    ui_state.set_conversion_queue(ModelRc::from(state.displayed_conversion_queue.clone()));
+    ui_state.set_job_queue(ModelRc::from(state.displayed_job_queue.clone()));
     ui_state.set_games_to_add(ModelRc::from(state.displayed_games_to_add.clone()));
 
     // Process messages
@@ -93,7 +93,7 @@ fn main() -> Result<()> {
         }
     });
 
-    // Closing the window with a busy conversion queue asks whether it should be
+    // Closing the window with a busy job queue asks whether it should be
     // cancelled first; the quit is then replayed once the queue is drained.
     //
     // Whether the queue is busy is decided by `RequestQuit` alone, on the Rust

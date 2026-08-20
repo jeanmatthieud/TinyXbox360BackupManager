@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
+use crate::config::CoverSource;
 use crate::data_dir::DATA_DIR;
-use crate::{mobcat, unity};
+use crate::mobcat;
 use anyhow::Result;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -85,20 +86,35 @@ fn thumbnail_is_fresh(thumb: &Path, cover: &Path) -> bool {
     }
 }
 
-/// Download the best cover for `title_id` into `covers_dir`:
-/// XboxUnity for Xbox 360 titles, MobCat's database for Original Xbox
-/// (with XboxUnity as fallback — OG titles republished as GOD have
+/// Download the best cover for `title_id` into `covers_dir`: the configured
+/// [`CoverSource`] for Xbox 360 titles, MobCat's database for Original Xbox
+/// (with the cover source as fallback — OG titles republished as GOD have
 /// covers there too). Returns true if a new cover was downloaded.
-pub fn download_cover(covers_dir: &Path, title_id: &str, is_x360: bool) -> Result<bool> {
+///
+/// Neither cover source is complete, so the one that was not picked is still
+/// tried when the preferred one comes up empty. The file that lands in the
+/// cache is the same either way (both serve XboxUnity's original images), so
+/// the cache stays agnostic of the source it came from — changing the setting
+/// never invalidates what is already downloaded.
+pub fn download_cover(
+    covers_dir: &Path,
+    title_id: &str,
+    is_x360: bool,
+    source: CoverSource,
+) -> Result<bool> {
     if cached_cover(covers_dir, title_id).is_some() {
         return Ok(false);
     }
 
+    let from_source = || {
+        source
+            .download_best_cover(title_id)
+            .or_else(|_| source.fallback().download_best_cover(title_id))
+    };
     let bytes = if is_x360 {
-        unity::download_best_cover(title_id)?
+        from_source()?
     } else {
-        mobcat::download_best_cover(title_id)
-            .or_else(|_| unity::download_best_cover(title_id))?
+        mobcat::download_best_cover(title_id).or_else(|_| from_source())?
     };
     let ext = if bytes.starts_with(&[0xFF, 0xD8]) {
         "jpg"

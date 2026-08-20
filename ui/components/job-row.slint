@@ -2,11 +2,27 @@
 // SPDX-FileContributor: Modified by Jean-Matthieu Dechriste (TinyXbox360BackupManager)
 // SPDX-License-Identifier: GPL-3.0-only
 
-import { IconSet } from "@lucide";
+import { Icon, IconDisplay, IconSet } from "@lucide";
+import { MyPalette } from "../styling.slint";
 import { IconButton } from "icon-button.slint";
+import { JobKind } from "../types.slint";
 
-export component ConversionRow inherits Rectangle {
+// Icon standing for what a queued job does. Shared with the progress card so
+// the running job keeps the same marker it had while pending.
+export global JobIcon {
+    public pure function icon(kind: JobKind) -> Icon {
+        kind == JobKind.Add ? IconSet.ArrowUp
+            : (kind == JobKind.Delete ? IconSet.Trash : IconSet.PackageMinus)
+    }
+
+    public pure function color(kind: JobKind) -> brush {
+        kind == JobKind.Add ? MyPalette.foreground : MyPalette.destructive
+    }
+}
+
+export component JobRow inherits Rectangle {
     in property <string> label;
+    in property <JobKind> kind;
     // Reordering: the buttons are always shown so the rows stay aligned, and
     // are disabled at the ends of the list.
     in property <bool> can-move-up: false;
@@ -19,10 +35,17 @@ export component ConversionRow inherits Rectangle {
     height: 28px;
 
     HorizontalLayout {
-        padding-left: 5px;
+        padding-left: 8px;
         padding-right: 2px;
-        spacing: 2px;
+        spacing: 6px;
         cross-axis-alignment: CrossAxisAlignment.center;
+
+        IconDisplay {
+            horizontal-stretch: 0;
+            icon: JobIcon.icon(kind);
+            stroke: JobIcon.color(kind);
+            size: 14px;
+        }
 
         Text {
             horizontal-stretch: 1;

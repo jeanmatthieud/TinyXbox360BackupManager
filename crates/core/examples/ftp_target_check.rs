@@ -74,7 +74,7 @@ fn main() -> anyhow::Result<()> {
         let (games, _) = target.scan(&NO_CANCEL)?;
         if let Some(game) = games.iter().find(|g| !g.id.is_empty()) {
             println!("deleting {}…", game.title);
-            target.delete_game(game, &|p| println!("  delete {p}%"))?;
+            target.delete_game(game, &NO_CANCEL, &|p| println!("  delete {p}%"))?;
             let (games, _) = target.scan(&NO_CANCEL)?;
             println!("after deletion: {} game(s)", games.len());
             for game in &games {

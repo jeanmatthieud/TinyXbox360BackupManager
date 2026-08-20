@@ -29,8 +29,8 @@ export component SettingsPage inherits VerticalLayout {
                 items: [{ value: "false", label: "No (recommended)" }, { value: "true", label: "Yes" }];
                 active-item: UiState.config.remove-sources-games;
                 set-property: Message.SetRemoveSourcesGames;
-                disabled: UiState.conversion-queue.length > 0;
-                disabled-tooltip: "Unavailable while the conversion queue is running";
+                disabled: UiState.job-queue.length > 0;
+                disabled-tooltip: "Unavailable while the queue is running";
             }
 
             SettingCard {
@@ -42,8 +42,8 @@ export component SettingsPage inherits VerticalLayout {
                 ];
                 active-item: UiState.config.xbox360-format;
                 set-property: Message.SetXbox360Format;
-                disabled: UiState.conversion-queue.length > 0;
-                disabled-tooltip: "Unavailable while the conversion queue is running";
+                disabled: UiState.job-queue.length > 0;
+                disabled-tooltip: "Unavailable while the queue is running";
             }
 
             SettingCard {
@@ -64,6 +64,18 @@ export component SettingsPage inherits VerticalLayout {
                         Palette.color-scheme = ColorScheme.dark;
                     }
                 }
+            }
+
+            SettingCard {
+                icon: IconSet.Image;
+                label: "Xbox 360 cover source";
+                items: [
+                    { value: "XboxUnity", label: "XboxUnity (recommended)" },
+                    { value: "Mirror", label: "XboxUnity-Scraper mirror" }
+                ];
+                active-item: UiState.config.cover-source;
+                set-property: Message.SetCoverSource;
+                note: "Switching applies to missing covers only: already-cached covers are kept. Use \"Redownload all covers\" in the Toolbox to refetch everything.";
             }
 
             SettingCard {

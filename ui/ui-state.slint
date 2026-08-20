@@ -9,11 +9,13 @@ import {
     DisplayedGame,
     DisplayedGameComponent,
     DisplayedGameToAdd,
+    DisplayedJob,
     DisplayedRecentLocation,
     DisplayedRemovableDrive,
     DisplayedStoragePath,
     DisplayedTitleUpdate,
     GodLayout,
+    JobKind,
     Notification,
     Page,
     PendingQueueAction,
@@ -86,7 +88,9 @@ export global UiState {
     // can tell an empty library apart from all games being hidden by filters.
     in-out property <bool> has-games: false;
     in-out property <[Notification]> notifications;
-    in-out property <[string]> conversion-queue;
+    // Every operation that writes to the target — additions and deletions
+    // alike — waits its turn here. The entry at index 0 is the running one.
+    in-out property <[DisplayedJob]> job-queue;
     in-out property <[DisplayedGameToAdd]> games-to-add;
     // How many `games-to-add` entries would overwrite an installed game.
     // Counted on the Rust side: Slint models can't be folded over.
@@ -97,37 +101,40 @@ export global UiState {
     in-out property <bool> downloading-covers: false;
     // True during target scan (cancellable).
     in-out property <bool> scanning: false;
-    // True while a conversion is running (the item at index 0 of
-    // conversion-queue is the one currently being converted).
-    in-out property <bool> converting: false;
-    // Live progress of the conversion at index 0, shown as a card on the queue
-    // page. Kept as structured data (rather than parsed back out of `status`)
-    // so the progress bar and the status line can diverge in wording.
-    // Name of the file being converted.
-    in-out property <string> conversion-label;
+    // True while a job is running (the item at index 0 of job-queue is the
+    // one currently running).
+    in-out property <bool> job-running: false;
+    // Live progress of the job at index 0, shown as a card on the queue page.
+    // Kept as structured data (rather than parsed back out of `status`) so the
+    // progress bar and the status line can diverge in wording.
+    // Name of the file/game the job works on.
+    in-out property <string> job-label;
+    // What that job does, for the card's icon and wording.
+    in-out property <JobKind> job-kind: JobKind.Add;
     // 0.0 - 1.0.
-    in-out property <float> conversion-progress: 0;
+    in-out property <float> job-progress: 0;
     // Running average upload speed, pre-formatted (e.g. "24.3 MB/s"). Empty
-    // outside the FTP upload phase, where no speed is measured.
-    in-out property <string> conversion-speed;
+    // outside the FTP upload phase, where no speed is measured (deletions
+    // never measure one).
+    in-out property <string> job-speed;
     // Short label for the step the percentage currently refers to (GOD
     // conversion, extraction, upload), or for a phase with no measurable
     // progress at all (post-cancellation cleanup). Empty in between.
-    in-out property <string> conversion-phase;
-    // True between "cancel this conversion" on the running item and the moment
-    // it actually bails out. Unlike cancelling-queue, the pending items stay.
+    in-out property <string> job-phase;
+    // True between "cancel this job" on the running item and the moment it
+    // actually bails out. Unlike cancelling-queue, the pending items stay.
     in-out property <bool> cancelling-current: false;
     // True for the duration of the confetti burst played when the queue drains
-    // after at least one successful conversion. Set by the update loop, cleared
+    // after at least one successful addition. Set by the update loop, cleared
     // by the animation itself once it has finished.
     in-out property <bool> celebrating: false;
-    // True while the "cancel all conversions" confirmation modal is shown.
+    // True while the "cancel all jobs" confirmation modal is shown.
     in-out property <bool> confirming-cancel-all: false;
-    // True while the "cancel the conversion in progress" confirmation modal is
-    // shown (the pending items are left alone by that one).
+    // True while the "cancel the job in progress" confirmation modal is shown
+    // (the pending items are left alone by that one).
     in-out property <bool> confirming-cancel-current: false;
-    // True between "cancel all conversions" and the moment the conversion that
-    // was running actually bails out (the queue is empty again).
+    // True between "cancel all jobs" and the moment the job that was running
+    // actually bails out (the queue is empty again).
     in-out property <bool> cancelling-queue: false;
     // Action (disconnect / quit) requested while the queue was still busy. It
     // drives the "cancel the queue first?" confirmation modal, and is replayed

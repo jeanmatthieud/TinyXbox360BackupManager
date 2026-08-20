@@ -25,6 +25,12 @@ use std::sync::atomic::{AtomicBool, Ordering};
 /// Error message used when a scan is cancelled by the user.
 pub const SCAN_CANCELLED: &str = "scan cancelled";
 
+/// Error message used when a deletion is cancelled by the user (mirrors
+/// [`SCAN_CANCELLED`] and [`crate::convert::CONVERSION_CANCELLED`]). What was
+/// already removed stays removed: the game is left partially deleted on the
+/// target, and deleting it again finishes the job.
+pub const DELETION_CANCELLED: &str = "deletion cancelled";
+
 /// Name of the per-disk configuration manifest, stored at the root of the disk
 /// (mount root for a local drive; next to the `Aurora` folder over FTP). It
 /// holds separate `usb` and `ftp` sections for the two connection kinds.
@@ -91,7 +97,15 @@ impl Target {
     /// `Content/<TitleID>` folder (DLC/title updates) for a merged extracted
     /// game, when it has one. `update_progress` receives a percentage
     /// (0-100) — reset to 0 again if a second folder needs removing.
-    pub fn delete_game(&self, game: &Game, update_progress: &dyn Fn(u32)) -> Result<()> {
+    ///
+    /// Raising `cancel` stops the removal at its next file, failing with
+    /// [`DELETION_CANCELLED`]; the files already removed are not restored.
+    pub fn delete_game(
+        &self,
+        game: &Game,
+        cancel: &AtomicBool,
+        update_progress: &dyn Fn(u32),
+    ) -> Result<()> {
         let mut paths = vec![game.path.clone()];
         if let Some(content_dir) = &game.content_dir {
             paths.push(content_dir.clone());
@@ -102,7 +116,7 @@ impl Target {
                 for path in &paths {
                     let total = crate::util::file_count(path).max(1);
                     let mut done: u64 = 0;
-                    remove_dir_all_with_progress(path, &mut done, total, update_progress)?;
+                    remove_dir_all_with_progress(path, &mut done, total, cancel, update_progress)?;
 
                     // A nested layout (`<Name>/<TitleID>`, `Games/<Publisher>/<Game>`)
                     // leaves the named parent behind, empty. Drop it — but never a
@@ -123,7 +137,7 @@ impl Target {
                 let result = (|| {
                     for path in &paths {
                         let remote = path.to_string_lossy().replace('\\', "/");
-                        session.remove_dir_recursive(&remote, &mut |done, total| {
+                        session.remove_dir_recursive(&remote, cancel, &mut |done, total| {
                             update_progress((done * 100 / total.max(1)) as u32);
                         })?;
                         // Same parent pruning as locally. Resolving the layout
@@ -154,17 +168,25 @@ fn dir_is_empty(dir: &Path) -> bool {
     std::fs::read_dir(dir).is_ok_and(|mut e| e.next().is_none())
 }
 
-/// Local equivalent of `fs::remove_dir_all` reporting per-file progress.
+/// Local equivalent of `fs::remove_dir_all` reporting per-file progress, and
+/// bailing out with [`DELETION_CANCELLED`] once `cancel` is raised. The
+/// directory is then left half-removed, which is what a cancelled deletion
+/// means here — nothing is put back.
 pub(crate) fn remove_dir_all_with_progress(
     dir: &std::path::Path,
     done: &mut u64,
     total: u64,
+    cancel: &AtomicBool,
     update_progress: &dyn Fn(u32),
 ) -> Result<()> {
     for entry in std::fs::read_dir(dir)?.flatten() {
+        if cancel.load(Ordering::Relaxed) {
+            bail!(DELETION_CANCELLED);
+        }
+
         let path = entry.path();
         if path.is_dir() {
-            remove_dir_all_with_progress(&path, done, total, update_progress)?;
+            remove_dir_all_with_progress(&path, done, total, cancel, update_progress)?;
         } else {
             std::fs::remove_file(&path)
                 .with_context(|| format!("removing {}", path.display()))?;

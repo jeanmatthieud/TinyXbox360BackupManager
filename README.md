@@ -14,7 +14,7 @@
 <br>
 
 > [!CAUTION]
-> TinyXbox360BackupManager is intended strictly for legal homebrew use and is not affiliated with or endorsed by Microsoft.
+> TinyXbox360BackupManager is intended strictly for legal game backup use and is not affiliated with or endorsed by Microsoft.
 > Use of TinyXbox360BackupManager for pirated or unauthorized copies of games is strictly prohibited.
 
 > [!WARNING]
@@ -30,7 +30,7 @@ This app copies them onto your Xbox360 (or a USB drive) in the format the consol
 - :package: **Drop in your game file, it does the rest** — it figures out the type and prepares it automatically.
 - :compass: **It guides you** — it detects your plugged-in USB drives or remote Xbox360, and once connected, looks at what's already there to suggest where to put your games.
 - :framed_picture: **Covers appear on their own** — box art is downloaded for you.
-- :arrows_counterclockwise: **Works both ways** — send games to your Xbox360 over Wi‑Fi (FTP) or to a USB drive plugged into your PC.
+- :arrows_counterclockwise: **Works both ways** — send games to your Xbox360 over Ethernet / Wi‑Fi (FTP) or to a USB drive plugged into your PC.
 - :feather: **Tiny and self-contained** — one small app, nothing else to install.
 
 It also handles **original Xbox** games, just like the Wii plays GameCube games.
