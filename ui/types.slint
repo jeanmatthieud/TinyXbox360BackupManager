@@ -88,6 +88,11 @@ export struct DisplayedBadAvatarConfig {
     aurora-default-url: string,
     system-update-default-url: string,
     include-system-update: bool,
+    // Labels of the known ABadAvatar releases, in the drop-down's own order.
+    abadavatar-versions: [string],
+    // Row of the ABadAvatar URL in `abadavatar-versions`, or -1 when the user
+    // typed a URL of their own (the drop-down is then hidden until reset).
+    abadavatar-version-index: int,
 }
 
 export struct DisplayedRecentLocation {
@@ -215,4 +220,7 @@ export struct Notification {
     id: int,
     text: string,
     kind: NotificationKind,
+    // Never times out on its own: the user has to close it. Errors are sticky
+    // regardless of this flag.
+    sticky: bool,
 }

@@ -28,7 +28,7 @@ use which_fs::FsKind;
 /// code rather than scraping "latest release" pages) — bump them here when a
 /// component publishes a new release.
 pub const DEFAULT_ABADAVATAR_URL: &str =
-    "https://github.com/shutterbug2000/ABadAvatar/releases/download/vPB1.0/ABadAvatar-publicbeta1.0.zip";
+    "https://github.com/bibarub/Xbox360BadUpdate/releases/download/avatar-v1.3-beta/ABadAvatar_v1.3-beta.zip";
 pub const DEFAULT_XEUNSHACKLE_URL: &str =
     "https://github.com/Byrom90/XeUnshackle/releases/download/v1.03/XeUnshackle-BETA-v1_03.zip";
 /// Aurora is officially distributed as a `.rar` (phoenix.xboxunity.net), which
@@ -38,6 +38,23 @@ pub const DEFAULT_XEUNSHACKLE_URL: &str =
 pub const DEFAULT_AURORA_URL: &str = "https://archive.org/download/aurora-0.7b.-2-release-package_202607/Aurora%200.7b.2%20-%20Release%20Package.zip";
 pub const DEFAULT_SYSTEM_UPDATE_URL: &str =
     "https://archive.org/download/xbox-360-system-update-17559-usb/SystemUpdate_17559_USB.zip";
+
+/// Known ABadAvatar releases, offered as a drop-down in the UI: `(label, url)`.
+/// The first entry is the built-in default ([`DEFAULT_ABADAVATAR_URL`]). A URL
+/// that isn't in this list is a custom one the user typed themselves.
+pub const ABADAVATAR_VERSIONS: &[(&str, &str)] = &[
+    ("bibarub/v1.3-beta", DEFAULT_ABADAVATAR_URL),
+    (
+        "shutterbug2000/v1.0-beta",
+        "https://github.com/shutterbug2000/ABadAvatar/releases/download/vPB1.0/ABadAvatar-publicbeta1.0.zip",
+    ),
+];
+
+/// Row of `url` in [`ABADAVATAR_VERSIONS`], or `None` when it matches no known
+/// release — which is what hides the version drop-down in the UI.
+pub fn abadavatar_version_index(url: &str) -> Option<usize> {
+    ABADAVATAR_VERSIONS.iter().position(|(_, u)| *u == url)
+}
 
 /// The four downloadable components, used as the stable key for per-field
 /// URL overrides and reset in the UI.

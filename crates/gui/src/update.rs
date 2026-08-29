@@ -264,6 +264,9 @@ impl State {
             Message::NotifySuccess => {
                 self.notifications.push(Notification::success(payload));
             }
+            Message::NotifySuccessSticky => {
+                self.notifications.push(Notification::success_sticky(payload));
+            }
             Message::NotifyError => {
                 self.notifications.push(Notification::error(payload));
             }
@@ -1596,6 +1599,24 @@ impl State {
                     message_queue.push_back((Message::SyncConfig, SharedString::new()));
                 }
             }
+            Message::SetBadAvatarVersion => {
+                // Payload: the row picked in the ABadAvatar version drop-down.
+                if let Ok(index) = payload.parse::<usize>()
+                    && let Some((_, url)) = txbm_core::badavatar::ABADAVATAR_VERSIONS.get(index)
+                {
+                    // The built-in default is stored as "no override", so the
+                    // per-field reset button stays hidden for it.
+                    if *url == UrlField::Abadavatar.default_url() {
+                        self.config.contents.badavatar.reset_url(UrlField::Abadavatar);
+                    } else {
+                        self.config
+                            .contents
+                            .badavatar
+                            .set_url(UrlField::Abadavatar, url.to_string());
+                    }
+                    message_queue.push_back((Message::SyncConfig, SharedString::new()));
+                }
+            }
             Message::ResetBadAvatarUrl => {
                 if let Some(field) = UrlField::from_key(payload.as_str()) {
                     self.config.contents.badavatar.reset_url(field);
@@ -1701,10 +1722,14 @@ impl State {
 
                         match res {
                             Ok(()) => {
+                                // Sticky toast plus a confetti burst: the build
+                                // takes minutes, so the user is likely looking
+                                // elsewhere when it lands.
                                 dispatcher.invoke_dispatch(
-                                    Message::NotifySuccess,
+                                    Message::NotifySuccessSticky,
                                     "BadAvatar USB key ready 🎉".to_shared_string(),
                                 );
+                                app.global::<UiState<'_>>().set_celebrating(true);
                             }
                             Err(e)
                                 if e.to_string()
