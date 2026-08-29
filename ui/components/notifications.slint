@@ -213,9 +213,9 @@ export component Notifications inherits Rectangle {
         for notification in UiState.notifications: Toast {
             text: notification.text;
             kind: notification.kind;
-            // Errors stay up until the user dismisses them; info/success
-            // toasts still time out on their own.
-            lifetime: notification.kind == NotificationKind.Error ? 0 : 10s;
+            // Errors — and anything explicitly marked sticky — stay up until
+            // the user dismisses them; other toasts still time out on their own.
+            lifetime: notification.kind == NotificationKind.Error || notification.sticky ? 0 : 10s;
             dismissed => Dispatcher.dispatch(Message.CloseNotification, notification.id);
         }
     }

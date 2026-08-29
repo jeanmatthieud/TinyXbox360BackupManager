@@ -17,6 +17,7 @@ impl Notification {
             id: NEXT_ID.fetch_add(1, Ordering::Relaxed),
             text: text.into(),
             kind,
+            sticky: false,
         }
     }
 
@@ -26,6 +27,15 @@ impl Notification {
 
     pub fn success(text: impl Into<SharedString>) -> Self {
         Self::new(text, NotificationKind::Success)
+    }
+
+    /// Success toast that stays up until the user closes it, for the end of a
+    /// long operation they may not have been watching.
+    pub fn success_sticky(text: impl Into<SharedString>) -> Self {
+        Self {
+            sticky: true,
+            ..Self::new(text, NotificationKind::Success)
+        }
     }
 
     pub fn error(text: impl Into<SharedString>) -> Self {

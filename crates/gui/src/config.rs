@@ -7,7 +7,7 @@ use crate::{
     GodLayout, TargetKind,
 };
 use crate::util::GIB;
-use slint::{SharedString, ToSharedString};
+use slint::{ModelRc, SharedString, ToSharedString, VecModel};
 use txbm_core::{
     badavatar::UrlField,
     config::{Config, GodLayout as CoreGodLayout, TargetKind as CoreTargetKind},
@@ -29,6 +29,18 @@ pub fn displayed_badavatar(config: &Config) -> DisplayedBadAvatarConfig {
         aurora_default_url: UrlField::Aurora.default_url().to_shared_string(),
         system_update_default_url: UrlField::SystemUpdate.default_url().to_shared_string(),
         include_system_update: ba.include_system_update,
+        abadavatar_versions: ModelRc::new(VecModel::from(
+            txbm_core::badavatar::ABADAVATAR_VERSIONS
+                .iter()
+                .map(|(label, _)| label.to_shared_string())
+                .collect::<Vec<_>>(),
+        )),
+        // -1 for a URL the user typed themselves: the UI hides the version
+        // drop-down until the field is reset to a known release.
+        abadavatar_version_index: txbm_core::badavatar::abadavatar_version_index(
+            ba.url(UrlField::Abadavatar),
+        )
+        .map_or(-1, |i| i as i32),
     }
 }
 
