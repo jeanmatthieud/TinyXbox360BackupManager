@@ -33,8 +33,12 @@ pub static TMP_DIR: LazyLock<PathBuf> = LazyLock::new(|| DATA_DIR.join("tmp"));
 /// So anything found here at startup is by definition debris. Call this **once,
 /// before any job can start** — a job of this run would be writing in there.
 pub fn sweep_work_dirs() -> u64 {
+    sweep_dirs(&[&STAGING_DIR, &TMP_DIR])
+}
+
+fn sweep_dirs(dirs: &[&PathBuf]) -> u64 {
     let mut reclaimed = 0;
-    for dir in [&*STAGING_DIR, &*TMP_DIR] {
+    for dir in dirs {
         if !dir.is_dir() {
             continue;
         }
@@ -46,4 +50,31 @@ pub fn sweep_work_dirs() -> u64 {
         }
     }
     reclaimed
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sweeping_removes_the_debris_and_counts_what_it_freed() {
+        let root = std::env::temp_dir().join(format!("txbm-sweep-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let staging = root.join("staging");
+        let tmp = root.join("tmp");
+        std::fs::create_dir_all(staging.join("Halo 3/00007000")).unwrap();
+        std::fs::create_dir_all(tmp.join("archive/Fallout")).unwrap();
+        std::fs::write(staging.join("Halo 3/00007000/data"), vec![0u8; 2048]).unwrap();
+        std::fs::write(tmp.join("archive/Fallout/game.iso"), vec![0u8; 1024]).unwrap();
+
+        assert_eq!(sweep_dirs(&[&staging, &tmp]), 3072);
+        assert!(!staging.exists());
+        assert!(!tmp.exists());
+
+        // Nothing left to sweep, and no complaint about the folders being gone:
+        // a first run has no scratch folders at all.
+        assert_eq!(sweep_dirs(&[&staging, &tmp]), 0);
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
 }
