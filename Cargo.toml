@@ -14,6 +14,11 @@ description = "A tiny game backup manager for the Xbox 360 (Aurora)"
 
 [workspace.dependencies]
 anyhow = "1.0"
+# FATX (the Xbox/Xbox 360 filesystem), for reading and writing a console hard
+# drive plugged straight into this computer. Write support lives on a branch of
+# our fork, not on crates.io; the exact commit is pinned by Cargo.lock, so
+# picking up new work there is a deliberate `cargo update -p fatx`.
+fatx = { git = "https://github.com/jeanmatthieud/fatx", branch = "feat-rust-write" }
 
 [profile.release]
 opt-level = 3

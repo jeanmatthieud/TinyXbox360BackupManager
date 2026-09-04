@@ -4,11 +4,11 @@
 //! (local drive or FTP console).
 
 use crate::config::{Config, GodLayout, Xbox360Format};
-use crate::data_dir::DATA_DIR;
-use crate::ftp::FtpSession;
+use crate::data_dir::{STAGING_DIR, TMP_DIR};
+use crate::remote_fs::RemoteFs;
 use crate::iso_info::{self, IsoInfo, IsoKind};
 use crate::stfs::{self, StfsInfo};
-use crate::target::{Target, ftp_hdd_root, ftp_layout, local_layout};
+use crate::target::{Target, remote_hdd_root, remote_layout, local_layout};
 use crate::util::sanitize_name;
 use crate::{DEFAULT_GOD_DIR, DEFAULT_XBE_DIR, DEFAULT_XEX_DIR, archive, extract, god, unity};
 use anyhow::{Context, Result, bail};
@@ -151,14 +151,17 @@ pub fn perform(
                 update_progress(p, None)
             }, status, phase)?;
         }
-        Target::Ftp(ftp) => {
+        // Console-shaped targets (over the network, or a console hard drive on
+        // this computer): convert into a local staging folder first, then copy
+        // the result across. Neither backend can host the conversion itself.
+        _ => {
             let stem = sanitize_name(
                 in_path
                     .file_stem()
                     .and_then(|s| s.to_str())
                     .unwrap_or("game"),
             );
-            let staging = DATA_DIR.join("staging").join(&stem);
+            let staging = STAGING_DIR.join(&stem);
             if staging.exists() {
                 std::fs::remove_dir_all(&staging)?;
             }
@@ -179,9 +182,26 @@ pub fn perform(
                 // Direct upload to the console, to its resolved storage
                 // locations: 50-100%.
                 phase("Uploading to the console");
-                let mut session = FtpSession::connect(ftp)?;
-                let hdd = ftp_hdd_root(&mut session);
-                let storage = ftp_layout(&mut session, &hdd).storage;
+                let mut session = target.open_remote(true)?;
+                let hdd = remote_hdd_root(&mut session);
+                let storage = remote_layout(&mut session, &hdd).storage;
+
+                // A FATX drive knows its free space, so a transfer that cannot
+                // possibly fit is refused before it starts filling the disk —
+                // rather than failing halfway through with a partial game
+                // installed.
+                if let crate::remote_fs::RemoteSession::Fatx(fatx) = &mut session
+                    && let Ok(space) = fatx.space()
+                {
+                    let needed = crate::util::dir_size(&staging);
+                    if needed > space.free_bytes {
+                        bail!(
+                            "not enough space on the console drive: {} needed, {} free",
+                            crate::util::human_size(needed),
+                            crate::util::human_size(space.free_bytes)
+                        );
+                    }
+                }
 
                 // Cancelling a transfer deletes nothing on the console: what has
                 // already been written stays there. Removing the half-uploaded
@@ -222,7 +242,7 @@ pub fn perform(
                         // GOD directory (and every named parent in it) once
                         // per title — see `GodDirIndex`.
                         let god_index = is_god
-                            .then(|| crate::god_dirs::GodDirIndex::build_ftp(&mut session, remote));
+                            .then(|| crate::god_dirs::GodDirIndex::build_remote(&mut session, remote));
                         for entry in std::fs::read_dir(staging_sub)?.flatten() {
                             if is_cancelled(cancel) {
                                 bail!(CONVERSION_CANCELLED);
@@ -234,7 +254,7 @@ pub fn perform(
                             // so re-adding a game overwrites it instead of
                             // dropping a flat duplicate beside it.
                             let remote_path = if let Some(god_index) = &god_index {
-                                let parent = crate::god_dirs::ftp_title_parent(
+                                let parent = crate::god_dirs::remote_title_parent(
                                     god_index,
                                     &name,
                                     staged_title_name(&entry.path()).as_deref(),
@@ -258,16 +278,17 @@ pub fn perform(
                     Ok(())
                 })();
 
-                // Whether an aborted transfer needs the plain socket shutdown
-                // instead of a `QUIT` handshake is decided by `poisoned`
-                // (set in `upload_dir_inner`), not by this call: `quit()` is
-                // just a documented close point, its body identical to
-                // dropping `session` outright.
-                session.quit();
-                upload
+                // Over FTP, whether an aborted transfer needs the plain socket
+                // shutdown instead of a `QUIT` handshake is decided by
+                // `poisoned` (set in `upload_dir_inner`), not by this call. On
+                // FATX this is the final flush, and a failure there means the
+                // copy did not really land — hence `and`, which keeps the
+                // upload's own error when there is one.
+                let closed = session.quit();
+                upload.and(closed)
             })();
 
-            cleanup_dir(&DATA_DIR.join("staging"), CLEANUP_TEMP, status);
+            cleanup_dir(&STAGING_DIR, CLEANUP_TEMP, status);
             result?;
         }
     }
@@ -598,7 +619,7 @@ fn install_archive(
             .and_then(|s| s.to_str())
             .unwrap_or("archive"),
     );
-    let tmp = DATA_DIR.join("tmp").join("archive").join(&stem);
+    let tmp = TMP_DIR.join("archive").join(&stem);
     if tmp.exists() {
         std::fs::remove_dir_all(&tmp)?;
     }

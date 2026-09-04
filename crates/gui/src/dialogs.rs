@@ -26,6 +26,18 @@ pub fn pick_storage_folder(window_handle: &WindowHandle, start_dir: &Path) -> Op
         .pick_folder()
 }
 
+/// Picker for a raw disk image holding an Xbox 360 filesystem, the hidden
+/// alternative to selecting a physical drive. Handy to work on a dump of a
+/// console drive without touching the drive itself.
+pub fn pick_fatx_image(window_handle: &WindowHandle) -> Option<PathBuf> {
+    FileDialog::new()
+        .set_parent(window_handle)
+        .set_title("Select an Xbox 360 disk image")
+        .add_filter("Disk images", &["img", "bin", "raw", "hdd"])
+        .add_filter("All files", &["*"])
+        .pick_file()
+}
+
 pub fn pick_games(window_handle: &WindowHandle) -> Vec<PathBuf> {
     FileDialog::new()
         .set_parent(window_handle)

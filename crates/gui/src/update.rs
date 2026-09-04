@@ -22,6 +22,11 @@ use txbm_core::{
     target::{StorageConfig, Target, TargetAnalysis},
 };
 
+/// Shown once per console drive, the first time it is opened directly. Writing
+/// to FATX from a PC is young, and a mistake here costs the user their whole
+/// game library — so they get told before, not after.
+const NEW_FATX_DRIVE_TEXT: &str = "Xbox 360 hard drive connected\nThis writes to the console's own filesystem directly. Back the drive up before adding or deleting games.";
+
 const NEW_DRIVE_TEXT: &str = "New drive detected\nOnce the games are on the console, remember to add the content paths in Aurora\n(Settings > Content Paths)";
 
 /// Result of the asynchronous scan of the target, deposited by the scan thread
@@ -230,6 +235,28 @@ impl State {
         }
     }
 
+    /// Switches the target to the Xbox 360 hard drive (or disk image) at
+    /// `device`, records it in the recent locations, and queues a config sync
+    /// + target analysis. Shared by the FATX drive picker and the hidden
+    /// disk-image picker.
+    fn select_fatx_device(
+        &mut self,
+        device: PathBuf,
+        message_queue: &mut VecDeque<(Message, SharedString)>,
+    ) {
+        self.config.contents.target_kind = TargetKind::Fatx;
+        self.config.contents.fatx = txbm_core::fatx::FatxConfig::new(device.clone());
+
+        if self.config.check_known_drive(&device) {
+            self.notifications
+                .push(Notification::error(NEW_FATX_DRIVE_TEXT));
+        }
+        self.config.contents.record_recent_location();
+
+        message_queue.push_back((Message::SyncConfig, SharedString::new()));
+        message_queue.push_back((Message::StartTargetAnalysis, SharedString::new()));
+    }
+
     /// Switches the target to the local drive mounted at `path`, records it in
     /// the recent locations, and queues a config sync + target analysis. Shared
     /// by the removable-drive picker and the debug folder picker.
@@ -311,6 +338,44 @@ impl State {
                     return;
                 }
                 self.select_local_mount(path, message_queue);
+            }
+            Message::RefreshFatxDrives => {
+                let app = weak.upgrade().unwrap();
+                app.global::<UiState<'_>>().set_fatx_drives(ModelRc::from(
+                    Rc::new(VecModel::from(crate::config::fatx_drives())),
+                ));
+            }
+            Message::SelectFatxDrive => {
+                let device = PathBuf::from(payload.as_str());
+                // Probing again on confirmation catches a drive unplugged
+                // between the listing and the click, and reports the reason
+                // (permissions above all) rather than a bare failure later.
+                let probe = txbm_core::fatx_dev::probe_path(&device);
+                if !probe.is_usable() {
+                    let text = slint::format!("{}: {}", device.display(), probe.label());
+                    self.notifications.push(Notification::error(text));
+                    // The confirm button already closed the modal; re-open it so
+                    // the user can pick another drive instead of being stuck.
+                    let app = weak.upgrade().unwrap();
+                    app.global::<UiState<'_>>().set_selecting_target(true);
+                    return;
+                }
+                self.select_fatx_device(device, message_queue);
+            }
+            Message::PickFatxImage => {
+                let app = weak.upgrade().unwrap();
+                let window_handle = app.window().window_handle();
+
+                let Some(path) = dialogs::pick_fatx_image(&window_handle) else {
+                    return;
+                };
+                let probe = txbm_core::fatx_dev::probe_path(&path);
+                if !probe.is_usable() {
+                    let text = slint::format!("{}: {}", path.display(), probe.label());
+                    self.notifications.push(Notification::error(text));
+                    return;
+                }
+                self.select_fatx_device(path, message_queue);
             }
             Message::RefreshDisplayedGames => {
                 let displayed_games = self
@@ -449,11 +514,13 @@ impl State {
                     return;
                 }
 
-                // A console over FTP takes no second connection while a job is
-                // writing to it: hold the scan back until the queue drains.
-                // A local drive has no such constraint, so it keeps refreshing
-                // after every job of a batch.
-                if self.is_job_running && matches!(target, Target::Ftp(_)) {
+                // A console takes no second session while a job is writing to
+                // it — over FTP the server only serves one connection, and on a
+                // FATX drive a second handle would read a filesystem the writer
+                // is still rearranging. Hold the scan back until the queue
+                // drains. A local drive has no such constraint, so it keeps
+                // refreshing after every job of a batch.
+                if self.is_job_running && !matches!(target, Target::Local(_)) {
                     self.rescan_deferred = true;
                     return;
                 }
@@ -559,6 +626,25 @@ impl State {
                         self.config.contents.target_kind = TargetKind::Local;
                         self.config.contents.mount_point = loc.mount_point;
                     }
+                    TargetKind::Fatx => {
+                        // The drive may have been unplugged since it was
+                        // recorded, or the machine rebooted with the disks in a
+                        // different order: probe before trusting the path.
+                        let probe = txbm_core::fatx_dev::probe_path(&loc.fatx.device);
+                        if !probe.is_usable() {
+                            let text = slint::format!(
+                                "{}: {}",
+                                loc.fatx.device.display(),
+                                probe.label()
+                            );
+                            self.notifications.push(Notification::error(text));
+                            let app = weak.upgrade().unwrap();
+                            app.global::<UiState<'_>>().set_selecting_target(true);
+                            return;
+                        }
+                        self.config.contents.target_kind = TargetKind::Fatx;
+                        self.config.contents.fatx = loc.fatx;
+                    }
                     TargetKind::Ftp => {
                         self.config.contents.target_kind = TargetKind::Ftp;
                         self.config.contents.console_ip = loc.console_ip;
@@ -644,6 +730,7 @@ impl State {
                 // for the next connection.
                 self.config.contents.target_kind = TargetKind::Local;
                 self.config.contents.mount_point = PathBuf::new();
+                self.config.contents.fatx = txbm_core::fatx::FatxConfig::default();
 
                 message_queue.push_back((Message::SyncConfig, SharedString::new()));
                 message_queue.push_back((Message::RefreshAll, SharedString::new()));
@@ -664,7 +751,9 @@ impl State {
                 let ui = app.global::<UiState<'_>>();
                 ui.set_configuring_storage(true);
                 ui.set_analyzing_target(true);
-                ui.set_storage_is_ftp(matches!(target, Target::Ftp(_)));
+                // A console-shaped target stores absolute `/Hdd1/...` paths, which
+                // no local folder picker can browse.
+                ui.set_storage_is_console(!matches!(target, Target::Local(_)));
 
                 let weak = weak.clone();
                 std::thread::spawn(move || {
@@ -1245,24 +1334,17 @@ impl State {
                         let status = txbm_core::target::local_storage_status(&mount);
                         set_storage_status(&app, status);
                     }
-                    // Console over FTP: read over the network on a thread.
-                    Some(Target::Ftp(ftp)) => {
+                    // Console-shaped target: reading it means either network
+                    // round trips or raw disk I/O, so it runs on a thread.
+                    Some(target) => {
                         let ui_state = app.global::<UiState<'_>>();
                         ui_state.set_fetching_aurora_paths(true);
                         ui_state.set_aurora_paths_error(SharedString::new());
 
                         let weak = weak.clone();
                         std::thread::spawn(move || {
-                            // One connection feeds both Toolbox cards.
-                            let res = FtpSession::connect(&ftp).map(|mut session| {
-                                let hdd = txbm_core::target::ftp_hdd_root(&mut session);
-                                let status = txbm_core::target::ftp_storage_status(
-                                    &mut session,
-                                    &hdd,
-                                );
-                                session.quit();
-                                status
-                            });
+                            // One session feeds both Toolbox cards.
+                            let res = target.storage_status();
 
                             let _ = weak.upgrade_in_event_loop(move |app| match res {
                                 Ok(status) => set_storage_status(&app, status),

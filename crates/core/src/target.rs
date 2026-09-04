@@ -12,9 +12,11 @@
 //!   3. built-in defaults (`Content/0000000000000000` + `Games`).
 
 use crate::config::{ConfigContents, GodLayout, TargetKind};
-use crate::data_dir::DATA_DIR;
+use crate::data_dir::TMP_DIR;
 use crate::drive_info::DriveInfo;
 use crate::ftp::{FtpConfig, FtpSession};
+use crate::fatx::{FatxConfig, FatxSession};
+use crate::remote_fs::{RemoteFs, RemoteSession};
 use crate::game::{self, Game, GameFormat};
 use crate::{DEFAULT_GOD_DIR, DEFAULT_XEX_DIR, DEFAULT_XBE_DIR};
 use anyhow::{Context, Result, bail};
@@ -47,6 +49,11 @@ pub const DEFAULT_SCAN_DEPTH: u32 = 2;
 pub enum Target {
     Local(PathBuf),
     Ftp(FtpConfig),
+    /// The console's own hard drive, plugged into this computer and driven
+    /// through its FATX filesystem (see [`crate::fatx`]). Its paths have the
+    /// same `/Hdd1/...` shape as the FTP target's, so the two share every code
+    /// path below [`RemoteSession`].
+    Fatx(FatxConfig),
 }
 
 impl Target {
@@ -67,14 +74,47 @@ impl Target {
                     Some(Target::Ftp(ftp))
                 }
             }
+            TargetKind::Fatx => {
+                let fatx = contents.fatx.clone();
+                if fatx.device.as_os_str().is_empty() {
+                    None
+                } else {
+                    Some(Target::Fatx(fatx))
+                }
+            }
         }
     }
 
-    /// Displayed label (local path or ftp://ip).
+    /// Displayed label (local path, ftp://ip, or the device path).
     pub fn display(&self) -> String {
         match self {
             Target::Local(path) => path.to_string_lossy().to_string(),
             Target::Ftp(ftp) => format!("ftp://{}", ftp.host),
+            Target::Fatx(fatx) => fatx.device.to_string_lossy().to_string(),
+        }
+    }
+
+    /// Opens a session on a console-shaped target. `writable` is only honoured
+    /// by the FATX backend, which opens the raw device read-only unless a
+    /// write is actually about to happen; over FTP every session can write.
+    ///
+    /// Fails on a local drive, which is not console-shaped and is never
+    /// reached through a session.
+    pub fn open_remote(&self, writable: bool) -> Result<RemoteSession> {
+        match self {
+            Target::Ftp(ftp) => Ok(RemoteSession::Ftp(FtpSession::connect(ftp)?)),
+            Target::Fatx(fatx) => Ok(RemoteSession::Fatx(FatxSession::open(fatx, writable)?)),
+            Target::Local(_) => bail!("this target is a local drive, not a console"),
+        }
+    }
+
+    /// Stable identity of a target, used to key the layout cache (so switching
+    /// consoles or disks never serves a stale layout) and the TitleID cache.
+    pub fn remote_key(&self) -> String {
+        match self {
+            Target::Ftp(ftp) => format!("ftp://{}", ftp.host),
+            Target::Fatx(fatx) => fatx.device.to_string_lossy().to_string(),
+            Target::Local(path) => path.to_string_lossy().to_string(),
         }
     }
 
@@ -89,7 +129,7 @@ impl Target {
                 drive_info.games_bytes = games.iter().map(|g| g.size).sum();
                 Ok((games, drive_info))
             }
-            Target::Ftp(ftp) => scan_ftp(ftp, cancel),
+            _ => self.scan_remote(cancel),
         }
     }
 
@@ -132,8 +172,9 @@ impl Target {
                 }
                 Ok(())
             }
-            Target::Ftp(ftp) => {
-                let mut session = FtpSession::connect(ftp)?;
+            _ => {
+                let mut session = self.open_remote(true)?;
+                let key = self.remote_key();
                 let result = (|| {
                     for path in &paths {
                         let remote = path.to_string_lossy().replace('\\', "/");
@@ -141,12 +182,12 @@ impl Target {
                             update_progress((done * 100 / total.max(1)) as u32);
                         })?;
                         // Same parent pruning as locally. Resolving the layout
-                        // (cached across calls, see `cached_ftp_layout`) only
+                        // (cached across calls, see `cached_remote_layout`) only
                         // happens for a folder the deletion actually emptied.
                         let (parent, _) = crate::ftp::parent_and_name(&remote);
                         if session.list_dir(&parent).is_empty() {
-                            let hdd = ftp_hdd_root(&mut session);
-                            if !cached_ftp_layout(&mut session, &hdd, &ftp.host)
+                            let hdd = remote_hdd_root(&mut session);
+                            if !cached_remote_layout(&mut session, &hdd, &key)
                                 .is_storage_root(&parent)
                             {
                                 let _ = session.remove_empty_dir(&parent);
@@ -155,8 +196,8 @@ impl Target {
                     }
                     Ok(())
                 })();
-                session.quit();
-                result
+                let closed = session.quit();
+                result.and(closed)
             }
         }
     }
@@ -386,11 +427,17 @@ impl TxbmSection {
 }
 
 /// On-disk `.txbm.json` manifest. It keeps **separate** sections for a USB
-/// (local) connection and an FTP (console) connection to the same physical
-/// disk, since the two express paths differently (mount-relative vs
-/// `/Device/...`). Each connection reads and updates only its own section, so a
-/// disk configured both ways keeps both valid. Stored next to the `Aurora`
-/// folder on the disk.
+/// (local) connection and a console connection to the same physical disk,
+/// since the two express paths differently (mount-relative vs `/Device/...`).
+/// Each connection reads and updates only its own section, so a disk
+/// configured both ways keeps both valid. Stored next to the `Aurora` folder
+/// on the disk.
+///
+/// The `ftp` section is shared by both console-shaped targets — over the
+/// network and over FATX — because they name the same folders the same way,
+/// so a drive configured over FTP is already configured when it is later
+/// plugged into this computer. It keeps its name for the sake of the
+/// manifests already written on users' disks.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct TxbmManifest {
@@ -414,8 +461,9 @@ fn looks_like_god_dir(path: &str) -> bool {
     normalize_path(path).ends_with("content/0000000000000000")
 }
 
-/// Finds the root of the console's internal hard drive (Hdd1).
-pub fn ftp_hdd_root(session: &mut FtpSession) -> String {
+/// Finds the root of the console's internal hard drive (Hdd1). A FATX target
+/// exposes its partition under that very name, so this answers for it too.
+pub fn remote_hdd_root(session: &mut dyn RemoteFs) -> String {
     session
         .list_root()
         .unwrap_or_default()
@@ -429,7 +477,7 @@ pub fn ftp_hdd_root(session: &mut FtpSession) -> String {
 // Aurora scan paths (read from its SQLite databases)
 // ---------------------------------------------------------------------------
 
-/// Aurora's configured scan paths, resolved as absolute FTP paths. These are
+/// Aurora's configured scan paths, resolved as absolute console paths. These are
 /// format-agnostic: the scanner detects each game's format from its content.
 #[derive(Debug, Clone)]
 pub struct AuroraScan {
@@ -497,8 +545,8 @@ fn aurora_dir_from_launch_ini(text: &str) -> Option<String> {
 /// Memoized on the session: several callers (manifest lookup, Aurora scan
 /// paths, title-update cache) may run against the same connection, and the
 /// Aurora install cannot move while it stays open.
-pub(crate) fn find_aurora_data_dir(session: &mut FtpSession) -> Option<String> {
-    if let Some(cached) = &session.aurora_data_dir_cache {
+pub(crate) fn find_aurora_data_dir(session: &mut dyn RemoteFs) -> Option<String> {
+    if let Some(cached) = session.aurora_data_dir_cache() {
         return cached.clone();
     }
     let result = (|| {
@@ -509,14 +557,14 @@ pub(crate) fn find_aurora_data_dir(session: &mut FtpSession) -> Option<String> {
         }
         None
     })();
-    session.aurora_data_dir_cache = Some(result.clone());
+    *session.aurora_data_dir_cache() = Some(result.clone());
     result
 }
 
 /// Resolves the Aurora install directory on one console volume: prefers a
 /// `launch.ini`'s `[Paths]` entry when present (whatever the actual layout),
 /// falling back to `Aurora` or `Dashboard/Aurora` at the volume's root.
-fn find_aurora_dir_on_root(session: &mut FtpSession, root: &str) -> Option<String> {
+fn find_aurora_dir_on_root(session: &mut dyn RemoteFs, root: &str) -> Option<String> {
     let root_path = format!("/{root}");
 
     let has_ini = session
@@ -553,7 +601,7 @@ fn find_aurora_dir_on_root(session: &mut FtpSession, root: &str) -> Option<Strin
 
 /// Looks for Aurora installation on the console's drives
 /// and returns its database folder.
-fn find_aurora_databases(session: &mut FtpSession) -> Option<String> {
+fn find_aurora_databases(session: &mut dyn RemoteFs) -> Option<String> {
     let db_dir = format!("{}/Databases", find_aurora_data_dir(session)?);
     let files = session.list_dir(&db_dir);
     let has_settings = files
@@ -565,16 +613,16 @@ fn find_aurora_databases(session: &mut FtpSession) -> Option<String> {
     (has_settings && has_content).then_some(db_dir)
 }
 
-/// Reads Aurora's ScanPaths (settings.db) and resolves them to FTP paths
+/// Reads Aurora's ScanPaths (settings.db) and resolves them to console paths
 /// via the MountedDevices table (content.db).
-pub fn aurora_paths(session: &mut FtpSession) -> Result<AuroraScan> {
+pub fn aurora_paths(session: &mut dyn RemoteFs) -> Result<AuroraScan> {
     let db_dir = find_aurora_databases(session)
-        .context("Aurora installation not found on console")?;
+        .context("Aurora installation not found on console / drive")?;
     let install_dir = db_dir
         .strip_suffix("/Data/Databases")
         .map(str::to_string);
 
-    let tmp_dir = DATA_DIR.join("tmp");
+    let tmp_dir = &*TMP_DIR;
     std::fs::create_dir_all(&tmp_dir)?;
 
     let settings_bytes = session.download_file(&format!("{db_dir}/settings.db"))?;
@@ -655,21 +703,21 @@ fn read_aurora_databases(
 /// `Aurora` folder** (i.e. the root of whichever device Aurora is installed on,
 /// e.g. `/Usb0` or `/Hdd1`), so the manifest travels with the Aurora install.
 /// Falls back to the internal drive when no Aurora installation is found.
-fn aurora_manifest_dir(session: &mut FtpSession) -> String {
+fn aurora_manifest_dir(session: &mut dyn RemoteFs) -> String {
     match find_aurora_data_dir(session) {
         // `/{device}/{Aurora}/Data` → keep `/{device}`.
         Some(data) => {
             let device = data.trim_start_matches('/').split('/').next().unwrap_or("Hdd1");
             format!("/{device}")
         }
-        None => format!("/{}", ftp_hdd_root(session)),
+        None => format!("/{}", remote_hdd_root(session)),
     }
 }
 
 /// Reads the whole manifest from a console (both `usb` and `ftp` sections), so
 /// a write can preserve the section it does not touch. Returns the default
 /// (empty) manifest when absent or unreadable.
-fn read_ftp_raw_manifest(session: &mut FtpSession, dir: &str) -> TxbmManifest {
+fn read_remote_raw_manifest(session: &mut dyn RemoteFs, dir: &str) -> TxbmManifest {
     // Check for the file with a LIST first: the console's FTP server can hang
     // the data channel on a RETR of a non-existent file (no data-channel
     // timeout), so never RETR blindly. See the Aurora FTP quirks.
@@ -689,18 +737,18 @@ fn read_ftp_raw_manifest(session: &mut FtpSession, dir: &str) -> TxbmManifest {
 
 /// Reads the console's storage configuration from the `ftp` section of the
 /// manifest (absolute `/Device/...` paths), if present.
-fn read_ftp_manifest(session: &mut FtpSession) -> Option<StorageConfig> {
+fn read_remote_manifest(session: &mut dyn RemoteFs) -> Option<StorageConfig> {
     let dir = aurora_manifest_dir(session);
-    read_ftp_raw_manifest(session, &dir)
+    read_remote_raw_manifest(session, &dir)
         .ftp
         .map(TxbmSection::into_storage)
 }
 
 /// Writes the console's storage configuration into the `ftp` section of the
 /// manifest (next to Aurora), preserving any existing `usb` section.
-pub fn write_ftp_manifest(session: &mut FtpSession, storage: &StorageConfig) -> Result<()> {
+pub fn write_remote_manifest(session: &mut dyn RemoteFs, storage: &StorageConfig) -> Result<()> {
     let dir = aurora_manifest_dir(session);
-    let mut manifest = read_ftp_raw_manifest(session, &dir);
+    let mut manifest = read_remote_raw_manifest(session, &dir);
     manifest.version = TxbmManifest::CURRENT_VERSION;
     manifest.ftp = Some(TxbmSection::from_storage(storage));
     let bytes = serde_json::to_vec_pretty(&manifest)?;
@@ -792,33 +840,34 @@ fn suggest_storage(locations: &[ScanLocation], root: &str) -> StorageConfig {
     }
 }
 
-/// Cache of the last [`TargetLayout`] resolved for a console, keyed by FTP
-/// host so switching consoles never serves a stale layout. Only used by
+/// Cache of the last [`TargetLayout`] resolved for a console, keyed by the
+/// target's identity so switching consoles (or drives) never serves a stale
+/// layout. Only used by
 /// [`Target::delete_game`]'s storage-root check: without a manifest,
-/// `ftp_layout` downloads and parses Aurora's `settings.db`/`content.db`,
+/// `remote_layout` downloads and parses Aurora's `settings.db`/`content.db`,
 /// which would otherwise redo the same work for every single game removed in
 /// a row from a nested-layout console. Cleared by
-/// [`write_ftp_manifest`], since writing a manifest changes what `ftp_layout`
+/// [`write_remote_manifest`], since writing a manifest changes what `remote_layout`
 /// resolves to.
 static FTP_LAYOUT_CACHE: std::sync::OnceLock<std::sync::Mutex<Option<(String, TargetLayout)>>> =
     std::sync::OnceLock::new();
 
-fn cached_ftp_layout(session: &mut FtpSession, hdd: &str, host: &str) -> TargetLayout {
+fn cached_remote_layout(session: &mut dyn RemoteFs, hdd: &str, host: &str) -> TargetLayout {
     let cache = FTP_LAYOUT_CACHE.get_or_init(|| std::sync::Mutex::new(None));
     if let Some((cached_host, layout)) = cache.lock().unwrap().as_ref()
         && cached_host == host
     {
         return layout.clone();
     }
-    let layout = ftp_layout(session, hdd);
+    let layout = remote_layout(session, hdd);
     *cache.lock().unwrap() = Some((host.to_string(), layout.clone()));
     layout
 }
 
-/// Resolves the layout of a console over FTP.
-pub fn ftp_layout(session: &mut FtpSession, hdd: &str) -> TargetLayout {
+/// Resolves the layout of a console, reached over the network or as a drive.
+pub fn remote_layout(session: &mut dyn RemoteFs, hdd: &str) -> TargetLayout {
     // 1. A manifest is authoritative: scan exactly the two configured dirs.
-    if let Some(storage) = read_ftp_manifest(session) {
+    if let Some(storage) = read_remote_manifest(session) {
         return TargetLayout {
             scan_locations: storage.scan_locations(),
             storage,
@@ -889,17 +938,17 @@ pub fn local_layout(mount: &Path) -> TargetLayout {
 #[derive(Debug, Clone)]
 pub struct StoragePathStatus {
     pub label: String,
-    /// FTP path (`/Device/dir/…`).
+    /// Console path (`/Device/dir/…`).
     pub path: String,
     /// Same location in Aurora's "Manage Paths" format (`Device:\dir\…`).
     pub aurora_path: String,
     pub covered_by_aurora: bool,
 }
 
-/// Converts an FTP path (`/Hdd1/Content/0000000000000000`) to the format shown
-/// in Aurora's "Manage Paths" screen (`Hdd1:\Content\0000000000000000`).
-fn aurora_console_path(ftp_path: &str) -> String {
-    let trimmed = ftp_path.trim_start_matches('/');
+/// Converts a console path (`/Hdd1/Content/0000000000000000`) to the format
+/// shown in Aurora's "Manage Paths" screen (`Hdd1:\Content\0000000000000000`).
+fn aurora_console_path(console_path: &str) -> String {
+    let trimmed = console_path.trim_start_matches('/');
     match trimmed.split_once('/') {
         Some((device, rest)) => format!("{device}:\\{}", rest.replace('/', "\\")),
         None => format!("{trimmed}:\\"),
@@ -995,11 +1044,11 @@ fn storage_path_rows(
 /// Reads the app's storage layout and Aurora's scan paths from a console, and
 /// reports which app folders Aurora is (not) configured to scan. The
 /// resolved [`GodLayout`] (from the manifest, or suggested otherwise) decides
-/// how deep Aurora must scan the GOD directory. Involves FTP I/O; run off the
-/// UI thread.
-pub fn ftp_storage_status(session: &mut FtpSession, hdd: &str) -> StorageStatus {
+/// how deep Aurora must scan the GOD directory. Involves I/O; run off the UI
+/// thread.
+pub fn remote_storage_status(session: &mut dyn RemoteFs, hdd: &str) -> StorageStatus {
     let root = format!("/{hdd}");
-    let manifest = read_ftp_manifest(session);
+    let manifest = read_remote_manifest(session);
 
     let (aurora_locs, aurora_install_dir, aurora_error) = match aurora_paths(session) {
         Ok(a) => (a.locations, a.install_dir, None),
@@ -1036,6 +1085,24 @@ pub fn ftp_storage_status(session: &mut FtpSession, hdd: &str) -> StorageStatus 
         has_uncovered,
         aurora_compared,
         god_layout: storage.god_layout,
+    }
+}
+
+impl Target {
+    /// Compares this target's storage folders with Aurora's scan paths (see
+    /// [`StorageStatus`]). Involves I/O — network round trips or raw disk
+    /// reads for a console — so run it off the UI thread.
+    pub fn storage_status(&self) -> Result<StorageStatus> {
+        match self {
+            Target::Local(mount) => Ok(local_storage_status(mount)),
+            _ => {
+                let mut session = self.open_remote(false)?;
+                let hdd = remote_hdd_root(&mut session);
+                let status = remote_storage_status(&mut session, &hdd);
+                session.quit()?;
+                Ok(status)
+            }
+        }
     }
 }
 
@@ -1106,7 +1173,7 @@ pub fn local_aurora_paths(mount: &Path) -> Result<AuroraScan> {
     )
 }
 
-/// Local counterpart of [`ftp_storage_status`]: lists the app's storage folders
+/// Local counterpart of [`remote_storage_status`]: lists the app's storage folders
 /// on a drive (relative to the mount). When the drive carries an Aurora install
 /// (a bootable USB key), its scan paths are mapped onto the mount and the app's
 /// folders are checked against them, just like for a console.
@@ -1195,11 +1262,11 @@ impl Target {
     pub fn analyze(&self) -> Result<TargetAnalysis> {
         match self {
             Target::Local(mount) => Ok(analyze_local(mount)),
-            Target::Ftp(ftp) => {
-                let mut session = FtpSession::connect(ftp)?;
-                let hdd = ftp_hdd_root(&mut session);
-                let analysis = analyze_ftp(&mut session, &hdd);
-                session.quit();
+            _ => {
+                let mut session = self.open_remote(false)?;
+                let hdd = remote_hdd_root(&mut session);
+                let analysis = analyze_remote(&mut session, &hdd);
+                session.quit()?;
                 Ok(analysis)
             }
         }
@@ -1211,7 +1278,9 @@ impl Target {
     pub fn display_path(&self, absolute: &str) -> String {
         match self {
             Target::Local(mount) => relativize_local(mount, absolute),
-            Target::Ftp(_) => absolute.to_string(),
+            // A console path is already in the form both the UI and the
+            // manifest use.
+            Target::Ftp(_) | Target::Fatx(_) => absolute.to_string(),
         }
     }
 
@@ -1224,7 +1293,7 @@ impl Target {
                 .strip_prefix(mount)
                 .ok()
                 .map(|rel| rel.to_string_lossy().replace('\\', "/")),
-            Target::Ftp(_) => Some(absolute.to_string_lossy().to_string()),
+            Target::Ftp(_) | Target::Fatx(_) => Some(absolute.to_string_lossy().to_string()),
         }
     }
 
@@ -1233,7 +1302,7 @@ impl Target {
     pub fn resolve_path(&self, form: &str) -> String {
         match self {
             Target::Local(mount) => resolve_local(mount, form),
-            Target::Ftp(_) => form.to_string(),
+            Target::Ftp(_) | Target::Fatx(_) => form.to_string(),
         }
     }
 
@@ -1254,14 +1323,16 @@ impl Target {
                 }
                 write_local_manifest(mount, storage)
             }
-            Target::Ftp(ftp) => {
-                let mut session = FtpSession::connect(ftp)?;
-                for dir in dirs {
-                    session.ensure_dir(dir)?;
-                }
-                let result = write_ftp_manifest(&mut session, storage);
-                session.quit();
-                result
+            _ => {
+                let mut session = self.open_remote(true)?;
+                let result = (|| {
+                    for dir in dirs {
+                        session.ensure_dir(dir)?;
+                    }
+                    write_remote_manifest(&mut session, storage)
+                })();
+                let closed = session.quit();
+                result.and(closed)
             }
         }
     }
@@ -1288,8 +1359,8 @@ fn build_candidates(discovered: &[String], suggested: &StorageConfig, root: &str
     candidates
 }
 
-fn analyze_ftp(session: &mut FtpSession, hdd: &str) -> TargetAnalysis {
-    if let Some(storage) = read_ftp_manifest(session) {
+fn analyze_remote(session: &mut dyn RemoteFs, hdd: &str) -> TargetAnalysis {
+    if let Some(storage) = read_remote_manifest(session) {
         let candidates = build_candidates(&[], &storage, &format!("/{hdd}"));
         return TargetAnalysis {
             already_configured: true,
@@ -1516,7 +1587,12 @@ fn push_candidate(found: &mut Vec<String>, path: &Path) {
 // FTP scan (generic, format-agnostic per location)
 // ---------------------------------------------------------------------------
 
-fn scan_ftp(ftp: &FtpConfig, cancel: &AtomicBool) -> Result<(Vec<Game>, DriveInfo)> {
+impl Target {
+    /// Scans a console-shaped target (FTP or FATX). Both walk the same
+    /// `/Hdd1/...` tree through the same scanner; only the drive information
+    /// at the end differs, since a FATX partition can be measured and a
+    /// console over FTP cannot.
+    fn scan_remote(&self, cancel: &AtomicBool) -> Result<(Vec<Game>, DriveInfo)> {
     let check_cancel = || -> Result<()> {
         if cancel.load(Ordering::Relaxed) {
             bail!(SCAN_CANCELLED);
@@ -1525,11 +1601,11 @@ fn scan_ftp(ftp: &FtpConfig, cancel: &AtomicBool) -> Result<(Vec<Game>, DriveInf
     };
 
     check_cancel()?;
-    let mut session = FtpSession::connect(ftp)?;
-    let hdd = ftp_hdd_root(&mut session);
-    let layout = ftp_layout(&mut session, &hdd);
+    let mut session = self.open_remote(false)?;
+    let hdd = remote_hdd_root(&mut session);
+    let layout = remote_layout(&mut session, &hdd);
 
-    let mut scanner = FtpScanner {
+    let mut scanner = RemoteScanner {
         session: &mut session,
         cancel: &check_cancel,
         games: Vec::new(),
@@ -1539,7 +1615,7 @@ fn scan_ftp(ftp: &FtpConfig, cancel: &AtomicBool) -> Result<(Vec<Game>, DriveInf
         crate::scan::walk(&mut scanner, &location.path, location.depth)?;
     }
     // Release the borrow on `session` before quitting it.
-    let FtpScanner {
+    let RemoteScanner {
         mut games,
         games_bytes,
         ..
@@ -1548,32 +1624,59 @@ fn scan_ftp(ftp: &FtpConfig, cancel: &AtomicBool) -> Result<(Vec<Game>, DriveInf
     // it belongs to instead of being counted twice.
     crate::game::merge_extracted_content(&mut games);
 
-    session.quit();
+    // A FATX partition knows exactly how full it is, and reading that is the
+    // last thing done with the session.
+    let space = match &mut session {
+        RemoteSession::Fatx(fatx) => fatx.space().ok(),
+        RemoteSession::Ftp(_) => None,
+    };
+    session.quit()?;
 
-    let drive_info = DriveInfo {
-        label: format!("{} (FTP)", ftp.host),
-        used_bytes: 0,
-        total_bytes: 0,
-        games_bytes,
-        fs_kind: Default::default(),
-        allocation_granularity: 0,
+    let drive_info = match self {
+        Target::Fatx(fatx) => DriveInfo {
+            label: fatx.device.to_string_lossy().to_string(),
+            used_bytes: space.map_or(0, |s| s.used_bytes()),
+            total_bytes: space.map_or(0, |s| s.total_bytes),
+            games_bytes,
+            fs_kind: Default::default(),
+            fs_label: "FATX".to_string(),
+            // The cluster size, which is what a file on this filesystem is
+            // rounded up to, exactly like a mounted drive's block size.
+            allocation_granularity: space.map_or(0, |s| s.bytes_per_cluster),
+        },
+        // Nothing over FTP reports the console's free space.
+        Target::Ftp(ftp) => DriveInfo {
+            label: format!("{} (FTP)", ftp.host),
+            used_bytes: 0,
+            total_bytes: 0,
+            games_bytes,
+            fs_kind: Default::default(),
+            fs_label: String::new(),
+            allocation_granularity: 0,
+        },
+        // Never reached: a local drive is scanned by `scan`, not here.
+        Target::Local(path) => DriveInfo {
+            label: path.to_string_lossy().to_string(),
+            ..Default::default()
+        },
     };
 
     Ok((games, drive_info))
+    }
 }
 
-/// FTP [`DirScanner`], detecting the format of every game found (GOD/Arcade
+/// Console [`DirScanner`], detecting the format of every game found (GOD/Arcade
 /// under `<TitleID>` folders, extracted under folders holding a
 /// `default.xex`/`default.xbe`) via the shared walk. Games accumulate as
 /// internal state; the scan depth and recursion are handled by [`crate::scan`].
-struct FtpScanner<'a> {
-    session: &'a mut FtpSession,
+struct RemoteScanner<'a> {
+    session: &'a mut dyn RemoteFs,
     cancel: &'a dyn Fn() -> Result<()>,
     games: Vec<Game>,
     games_bytes: u64,
 }
 
-impl crate::scan::DirScanner for FtpScanner<'_> {
+impl crate::scan::DirScanner for RemoteScanner<'_> {
     type Path = String;
 
     fn child_dirs(&mut self, dir: &String) -> Result<Vec<(String, String)>> {
@@ -1596,7 +1699,7 @@ impl crate::scan::DirScanner for FtpScanner<'_> {
         // GOD / Arcade: an 8-hex TitleID folder holding a content package
         // (and/or orphaned DLC / a title update).
         if game::is_title_id(name)
-            && push_god_games_ftp(
+            && push_god_games_remote(
                 self.session,
                 path,
                 name,
@@ -1610,7 +1713,7 @@ impl crate::scan::DirScanner for FtpScanner<'_> {
 
         // Extracted game: a folder directly holding default.xex / default.xbe.
         if let Some(format) = detect_extracted(&children) {
-            push_extracted_ftp(
+            push_extracted_remote(
                 self.session,
                 path,
                 name,
@@ -1644,10 +1747,10 @@ fn detect_extracted(children: &[crate::ftp::RemoteEntry]) -> Option<GameFormat> 
     }
 }
 
-/// Handles a GOD/Arcade `<TitleID>` folder over FTP. Returns true when a game
+/// Handles a GOD/Arcade `<TitleID>` folder on a console. Returns true when a game
 /// (or an incomplete DLC/title-update-only entry) was pushed.
-fn push_god_games_ftp(
-    session: &mut FtpSession,
+fn push_god_games_remote(
+    session: &mut dyn RemoteFs,
     title_dir: &str,
     title_id_raw: &str,
     sub_entries: &[crate::ftp::RemoteEntry],
@@ -1730,9 +1833,9 @@ fn push_god_games_ftp(
     true
 }
 
-/// Pushes an extracted game found over FTP.
-fn push_extracted_ftp(
-    session: &mut FtpSession,
+/// Pushes an extracted game found on a console.
+fn push_extracted_remote(
+    session: &mut dyn RemoteFs,
     game_dir: &str,
     folder_name: &str,
     format: GameFormat,
@@ -1741,8 +1844,8 @@ fn push_extracted_ftp(
 ) {
     let size = session.dir_size(game_dir, 3);
     // TitleID from the folder-name suffix if present; games added by hand are
-    // resolved later (covers pass), not here — one RETR per game would slow
-    // the scan down.
+    // resolved later (covers pass), not here — reading one executable per game
+    // would slow the scan down.
     let (title, id) = game::split_title_id_suffix(folder_name);
     let id = id.unwrap_or_default();
     let search_term = format!("{title}\0{id}").to_lowercase();

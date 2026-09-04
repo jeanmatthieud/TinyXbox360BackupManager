@@ -10,7 +10,7 @@
 //! configures `launch.ini`.
 
 use crate::archive;
-use crate::data_dir::DATA_DIR;
+use crate::data_dir::TMP_DIR;
 use crate::drive_info::DriveInfo;
 use anyhow::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
@@ -191,7 +191,7 @@ pub fn create_badavatar(
     check_cancel(cancel)?;
 
     // Fresh working directory for downloads and extraction.
-    let work = DATA_DIR.join("tmp").join("badavatar");
+    let work = TMP_DIR.join("badavatar");
     let _ = fs::remove_dir_all(&work);
     fs::create_dir_all(&work).with_context(|| format!("creating {}", work.display()))?;
 

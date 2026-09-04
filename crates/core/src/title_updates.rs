@@ -14,7 +14,7 @@
 //! The console only tolerates one FTP connection at a time, so every
 //! operation here opens its own short-lived session.
 
-use crate::ftp::FtpSession;
+use crate::remote_fs::RemoteFs;
 use crate::game::{FATX_MAX_NAME, Game};
 use crate::target::{self, Target};
 use crate::util::sha1_hex;
@@ -43,10 +43,10 @@ impl Target {
     pub fn installed_title_updates(&self, game: &Game) -> Result<Vec<InstalledTitleUpdate>> {
         match self {
             Target::Local(_) => Ok(installed_local(game.content_dir())),
-            Target::Ftp(ftp) => {
-                let mut session = FtpSession::connect(ftp)?;
-                let result = installed_ftp(&mut session, game.content_dir());
-                session.quit();
+            _ => {
+                let mut session = self.open_remote(false)?;
+                let result = installed_remote(&mut session, game.content_dir());
+                session.quit()?;
                 result
             }
         }
@@ -57,10 +57,10 @@ impl Target {
     pub fn cached_title_update_hashes(&self, title_id: &str) -> Result<Vec<String>> {
         match self {
             Target::Local(path) => Ok(cached_hashes_local(path, title_id)),
-            Target::Ftp(ftp) => {
-                let mut session = FtpSession::connect(ftp)?;
-                let result = cached_hashes_ftp(&mut session, title_id);
-                session.quit();
+            _ => {
+                let mut session = self.open_remote(false)?;
+                let result = cached_hashes_remote(&mut session, title_id);
+                session.quit()?;
                 Ok(result)
             }
         }
@@ -84,10 +84,10 @@ impl Target {
                 std::fs::write(dest_dir.join(truncate_fatx(&file_name)), bytes)
                     .with_context(|| format!("writing {file_name}"))
             }
-            Target::Ftp(ftp) => {
-                let mut session = FtpSession::connect(ftp)?;
+            _ => {
+                let mut session = self.open_remote(true)?;
                 let result = (|| {
-                    let Some((file_name, bytes)) = find_cached_ftp(&mut session, &game.id, hash)?
+                    let Some((file_name, bytes)) = find_cached_remote(&mut session, &game.id, hash)?
                     else {
                         bail!(
                             "this title update is not in Aurora's cache; \
@@ -100,8 +100,8 @@ impl Target {
                     );
                     session.put_bytes(&remote_dir, &truncate_fatx(&file_name), &bytes)
                 })();
-                session.quit();
-                result
+                let closed = session.quit();
+                result.and(closed)
             }
         }
     }
@@ -114,15 +114,15 @@ impl Target {
                 std::fs::remove_file(&path)
                     .with_context(|| format!("removing {}", path.display()))
             }
-            Target::Ftp(ftp) => {
-                let mut session = FtpSession::connect(ftp)?;
+            _ => {
+                let mut session = self.open_remote(true)?;
                 let remote_dir = format!(
                     "{}/{TITLE_UPDATE_DIR}",
                     game.content_dir().to_string_lossy().replace('\\', "/")
                 );
                 let result = session.remove_file(&remote_dir, file_name);
-                session.quit();
-                result
+                let closed = session.quit();
+                result.and(closed)
             }
         }
     }
@@ -149,7 +149,7 @@ fn installed_local(title_dir: &Path) -> Vec<InstalledTitleUpdate> {
         .collect()
 }
 
-fn installed_ftp(session: &mut FtpSession, title_dir: &Path) -> Result<Vec<InstalledTitleUpdate>> {
+fn installed_remote(session: &mut dyn RemoteFs, title_dir: &Path) -> Result<Vec<InstalledTitleUpdate>> {
     let remote = format!(
         "{}/{TITLE_UPDATE_DIR}",
         title_dir.to_string_lossy().replace('\\', "/")
@@ -221,7 +221,7 @@ fn find_cached_local(
     Ok(None)
 }
 
-fn cached_hashes_ftp(session: &mut FtpSession, title_id: &str) -> Vec<String> {
+fn cached_hashes_remote(session: &mut dyn RemoteFs, title_id: &str) -> Vec<String> {
     let Some(data_dir) = target::find_aurora_data_dir(session) else {
         return Vec::new();
     };
@@ -243,8 +243,8 @@ fn cached_hashes_ftp(session: &mut FtpSession, title_id: &str) -> Vec<String> {
 
 /// Looks for `hash`'s cached download under Aurora's
 /// `Data/TitleUpdates/<profile>/<TitleID>/<hash>/` cache.
-fn find_cached_ftp(
-    session: &mut FtpSession,
+fn find_cached_remote(
+    session: &mut dyn RemoteFs,
     title_id: &str,
     hash: &str,
 ) -> Result<Option<(String, Vec<u8>)>> {
