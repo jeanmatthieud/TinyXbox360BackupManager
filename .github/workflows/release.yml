@@ -85,9 +85,6 @@ jobs:
           - runner: ubuntu-24.04-arm
             arch: aarch64
             target: aarch64-unknown-linux-gnu
-          - runner: ubuntu-24.04
-            arch: i686
-            target: i686-unknown-linux-gnu
 
     steps:
       # Runs before the checkout so actions/checkout finds a git binary.
@@ -115,15 +112,6 @@ jobs:
           # llvm-22 is what ships llvm-ar-22 (used as AR below); clang-22 alone does not.
           apt-get install -y --no-install-recommends clang-22 lld-22 llvm-22
 
-      - name: Install i686 dependencies
-        if: matrix.arch == 'i686'
-        env:
-          DEBIAN_FRONTEND: noninteractive
-        run: |
-          dpkg --add-architecture i386
-          apt-get update
-          apt-get install -y gcc-multilib pkg-config:i386 libfontconfig1-dev:i386
-
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@1.97
         with:
@@ -139,7 +127,6 @@ jobs:
           case "${{ matrix.arch }}" in
             x86_64) YQ_ARCH=amd64 ;;
             aarch64) YQ_ARCH=arm64 ;;
-            i686) YQ_ARCH=386 ;;
           esac
           wget -O /usr/local/bin/yq "https://github.com/mikefarah/yq/releases/latest/download/yq_linux_${YQ_ARCH}"
           chmod +x /usr/local/bin/yq
@@ -169,8 +156,6 @@ jobs:
           RUSTFLAGS: -C linker-plugin-lto -C link-arg=-fuse-ld=lld-22
           CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER: clang-22
           CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: clang-22
-          CARGO_TARGET_I686_UNKNOWN_LINUX_GNU_LINKER: clang-22
-          PKG_CONFIG_i686_unknown_linux_gnu: i686-pc-linux-gnu-pkg-config
 
       - name: Package AppImage
         run: |
