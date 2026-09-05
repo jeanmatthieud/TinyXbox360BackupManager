@@ -163,6 +163,11 @@ export struct DisplayedGame {
     // True when only DLC and/or a title update are installed, with no
     // actual game package (base install removed or never completed).
     incomplete: bool,
+    // True while the running job writes into this game's folder — a second
+    // disc or a DLC being added under its TitleID, or its own deletion. Its
+    // size and contents are in flux, so the card is veiled and neither opens
+    // its details nor offers a deletion of its own.
+    busy: bool,
 }
 
 // Status of one stored component (disc / DLC / title update) shown in the

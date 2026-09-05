@@ -27,7 +27,7 @@ use crate::{file_drop::FileDropHandler, state::State};
 use anyhow::{Result, bail};
 use slint::{BackendSelector, ComponentHandle, ModelRc, SharedString, ToSharedString};
 use std::{collections::VecDeque, process::Command};
-use txbm_core::data_dir::{DATA_DIR, sweep_work_dirs};
+use txbm_core::data_dir::{DATA_DIR, sweep_retired};
 
 slint::include_modules!();
 
@@ -119,13 +119,16 @@ fn main() -> Result<()> {
     // a killed import strands the whole game it was extracting, and a user
     // whose disk quietly lost 8 GB has no way of connecting the two.
     //
-    // On a thread, because removing tens of thousands of extracted files must
-    // not hold the window back — and started here, before the event loop, so
-    // it is done long before any job of this run could write in there.
+    // The debris is moved aside right here, synchronously — this run must not
+    // start writing in those folders (the first scan already stages Aurora's
+    // databases in them) while a deletion is still walking them. That rename
+    // is instant; the deletion itself then runs on a thread, on folders
+    // nothing else will ever touch again.
     {
+        let retired = txbm_core::data_dir::retire_work_dirs();
         let weak = app.as_weak();
         std::thread::spawn(move || {
-            let reclaimed = sweep_work_dirs();
+            let reclaimed = sweep_retired(retired);
             if reclaimed == 0 {
                 return;
             }

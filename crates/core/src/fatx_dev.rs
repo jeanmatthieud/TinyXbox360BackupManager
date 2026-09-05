@@ -76,7 +76,13 @@ pub fn list_fatx_drives() -> Vec<FatxDrive> {
     let mut drives: Vec<FatxDrive> = candidates()
         .into_iter()
         .map(|mut drive| {
-            drive.probe = probe_device(&drive.path);
+            // [`FatxProbe::Unreadable`] is the placeholder an enumeration that
+            // has not probed anything leaves behind. A platform that had to
+            // probe to enumerate at all (Windows) keeps its result rather than
+            // paying for a second pass over every disk.
+            if drive.probe == FatxProbe::Unreadable {
+                drive.probe = probe_device(&drive.path);
+            }
             drive
         })
         .collect();
@@ -102,6 +108,15 @@ fn partition_offset() -> u64 {
         .unwrap_or(0)
 }
 
+/// Read sizes tried at the partition offset, largest first. A raw device only
+/// accepts I/O in whole multiples of its block size — macOS's unbuffered
+/// `/dev/rdiskN` and Windows's `\\.\PhysicalDriveN` both refuse anything else
+/// outright — so the signature is read as a full block rather than as the four
+/// bytes actually wanted. 4096 covers a 4K-native disk, 512 the classic ones,
+/// and the last size is for a plain file: a disk image is under no such
+/// constraint, and may well stop a few bytes after the signature.
+const PROBE_READ_SIZES: [usize; 3] = [4096, 512, 4];
+
 /// Reads the four signature bytes at the partition offset.
 fn probe_device(path: &Path) -> FatxProbe {
     let mut file = match std::fs::File::open(path) {
@@ -114,18 +129,33 @@ fn probe_device(path: &Path) -> FatxProbe {
         }
     };
 
-    if file.seek(SeekFrom::Start(partition_offset())).is_err() {
-        return FatxProbe::Unreadable;
-    }
+    let offset = partition_offset();
     let mut signature = [0u8; 4];
-    match file.read_exact(&mut signature) {
-        Ok(()) => {}
-        Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => {
-            return FatxProbe::AccessDenied;
+    let mut last_error = None;
+    let mut read = false;
+    for size in PROBE_READ_SIZES {
+        // Every attempt seeks again: a failed read leaves the position
+        // unspecified, and a device rejecting the size may not have moved it.
+        if file.seek(SeekFrom::Start(offset)).is_err() {
+            return FatxProbe::Unreadable;
         }
-        // A short read means the disk stops before the partition would start:
-        // whatever it is, it is not an Xbox 360 drive.
-        Err(_) => return FatxProbe::NoFilesystem,
+        let mut block = vec![0u8; size];
+        match file.read_exact(&mut block) {
+            Ok(()) => {
+                signature.copy_from_slice(&block[..4]);
+                read = true;
+                break;
+            }
+            Err(e) => last_error = Some(e.kind()),
+        }
+    }
+    if !read {
+        return match last_error {
+            Some(std::io::ErrorKind::PermissionDenied) => FatxProbe::AccessDenied,
+            // Every size was refused, or the disk stops before the partition
+            // would start: whatever it is, it is not an Xbox 360 drive.
+            _ => FatxProbe::NoFilesystem,
+        };
     }
 
     if &signature == SIGNATURE_X360 {
@@ -211,17 +241,46 @@ fn read_sys(path: &Path) -> Option<String> {
 
 /// Kernel names (`sda`, `nvme0n1p2`…) of every device with something mounted
 /// off it, so their whole disk can be kept out of the list.
+///
+/// A mount is rarely on a bare partition: with LVM, LUKS or software RAID the
+/// mount source is a `/dev/mapper/…` symlink onto a `dm-N` (or an `mdN`) that
+/// merely *stands for* real partitions. Those are followed down to the disks
+/// actually backing them — otherwise the drive holding the user's running
+/// system would be offered for raw writing.
 #[cfg(target_os = "linux")]
 fn mounted_devices() -> Vec<String> {
     let Ok(mounts) = std::fs::read_to_string("/proc/self/mounts") else {
         return Vec::new();
     };
-    mounts
+    let mut pending: Vec<String> = mounts
         .lines()
         .filter_map(|line| line.split_whitespace().next())
-        .filter_map(|dev| dev.strip_prefix("/dev/"))
-        .map(|dev| dev.to_string())
-        .collect()
+        .filter(|dev| dev.starts_with("/dev/"))
+        // Resolves `/dev/mapper/root` (a symlink) to `/dev/dm-0`, the kernel
+        // name `/sys/block` knows it by.
+        .map(|dev| std::fs::canonicalize(dev).unwrap_or_else(|_| PathBuf::from(dev)))
+        .filter_map(|dev| dev.file_name().map(|n| n.to_string_lossy().to_string()))
+        .collect();
+
+    let mut mounted: Vec<String> = Vec::new();
+    while let Some(name) = pending.pop() {
+        if mounted.contains(&name) {
+            continue;
+        }
+        // A stacked setup (LUKS on LVM on RAID) needs the walk to go on past
+        // the first level, hence the worklist.
+        if name.starts_with("dm-") || name.starts_with("md") {
+            if let Ok(slaves) = std::fs::read_dir(format!("/sys/block/{name}/slaves")) {
+                pending.extend(
+                    slaves
+                        .flatten()
+                        .map(|e| e.file_name().to_string_lossy().to_string()),
+                );
+            }
+        }
+        mounted.push(name);
+    }
+    mounted
 }
 
 /// Windows exposes whole disks as `\\.\PhysicalDriveN` with no directory to
@@ -239,11 +298,14 @@ fn candidates() -> Vec<FatxDrive> {
                 // a wrong number.
                 size_bytes: 0,
                 is_removable: false,
-                probe: FatxProbe::Unreadable,
+                // Which of the sixteen numbers exist can only be told by
+                // opening them, so the probe happens here — and is kept, so
+                // `list_fatx_drives` does not open every disk a second time.
+                probe: probe_device(&path),
                 path,
             }
         })
-        .filter(|d| !matches!(probe_device(&d.path), FatxProbe::Unreadable))
+        .filter(|d| d.probe != FatxProbe::Unreadable)
         .collect()
 }
 
@@ -255,13 +317,19 @@ fn candidates() -> Vec<FatxDrive> {
     let Ok(entries) = std::fs::read_dir("/dev") else {
         return Vec::new();
     };
+    let mounted = mounted_disk_numbers();
     entries
         .flatten()
         .filter_map(|entry| {
             let name = entry.file_name().to_string_lossy().to_string();
             // Whole disks only: `rdisk3` yes, its `rdisk3s1` slices no.
             let number = name.strip_prefix("rdisk")?;
-            if !number.chars().all(|c| c.is_ascii_digit()) {
+            if number.is_empty() || !number.chars().all(|c| c.is_ascii_digit()) {
+                return None;
+            }
+            // An Xbox 360 disk has nothing the system could mount, so a disk
+            // with a mounted volume on it is the user's own and is left alone.
+            if mounted.iter().any(|m| m == number) {
                 return None;
             }
             Some(FatxDrive {
@@ -272,6 +340,29 @@ fn candidates() -> Vec<FatxDrive> {
                 probe: FatxProbe::Unreadable,
             })
         })
+        .collect()
+}
+
+/// Numbers of the disks with a mounted volume on them (`disk3s1` → `3`), read
+/// from `mount` since macOS exposes no `/proc/self/mounts`. Note that an APFS
+/// container is itself a synthesized disk, so this hides `disk3` without
+/// hiding the physical `disk1` behind it — the probe is what keeps that one
+/// out of the picker, this only spares it from being opened at all.
+#[cfg(target_os = "macos")]
+fn mounted_disk_numbers() -> Vec<String> {
+    let Ok(output) = std::process::Command::new("/sbin/mount").output() else {
+        return Vec::new();
+    };
+    String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .filter_map(|line| line.split_whitespace().next())
+        .filter_map(|dev| dev.strip_prefix("/dev/disk"))
+        .map(|rest| {
+            rest.chars()
+                .take_while(char::is_ascii_digit)
+                .collect::<String>()
+        })
+        .filter(|number| !number.is_empty())
         .collect()
 }
 

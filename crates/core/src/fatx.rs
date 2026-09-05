@@ -164,6 +164,16 @@ impl FatxSession {
         Some(format!("/{}", rest.join("/")))
     }
 
+    /// Whether a console path names the volume a FATX session exposes. The
+    /// manifest a console writes is shared between the FTP and the FATX
+    /// target, and it may well point at a folder on another device
+    /// (`/Usb0/Content/…`) — which this connection simply does not have.
+    pub fn path_is_on_volume(path: &str) -> bool {
+        let normalized = path.replace('\\', "/");
+        let device = normalized.trim_matches('/').split('/').next().unwrap_or("");
+        device.eq_ignore_ascii_case(FATX_VOLUME)
+    }
+
     fn resolve_or_err(&self, path: &str) -> Result<String> {
         self.resolve(path)
             .ok_or_else(|| anyhow!("{path} is not on the connected FATX drive"))

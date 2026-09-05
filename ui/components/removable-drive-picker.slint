@@ -156,6 +156,7 @@ export component FatxDrivePicker inherits VerticalLayout {
             icon: IconSet.RefreshCw;
             tooltip: "Refresh";
             width: 30px;
+            disabled: UiState.scanning-fatx-drives;
             clicked => {
                 root.selected-drive = -1;
                 Dispatcher.dispatch(Message.RefreshFatxDrives, "");
@@ -163,7 +164,13 @@ export component FatxDrivePicker inherits VerticalLayout {
         }
     }
 
-    if UiState.fatx-drives.length == 0: VerticalLayout {
+    // Probing every disk of the machine is slow enough to be worth saying so.
+    if UiState.scanning-fatx-drives: Text {
+        text: "Looking for Xbox 360 hard drives…";
+        color: MyPalette.foreground.transparentize(0.3);
+    }
+
+    if !UiState.scanning-fatx-drives && UiState.fatx-drives.length == 0: VerticalLayout {
         spacing: 6px;
 
         Text {

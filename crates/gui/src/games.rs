@@ -66,6 +66,9 @@ impl From<&Game> for DisplayedGame {
             is_arcade: game.format == GameFormat::Arcade,
             cover,
             incomplete: game.incomplete,
+            // Filled in by `RefreshDisplayedGames`, which is the only place
+            // that knows what the job queue is doing.
+            busy: false,
         }
     }
 }

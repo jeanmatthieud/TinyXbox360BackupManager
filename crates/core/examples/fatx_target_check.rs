@@ -49,6 +49,10 @@ fn main() -> anyhow::Result<()> {
     let mut config = Config::load();
     config.contents.target_kind = TargetKind::Fatx;
     config.contents.fatx = FatxConfig::new(image.clone());
+    // These are the developer's own settings, and `convert::perform` obeys
+    // this one by deleting the file it was given: an ISO passed on the command
+    // line must survive a check run.
+    config.contents.remove_sources_games = false;
 
     let target = Target::from_config(&config.contents).unwrap();
     println!("target: {}", target.display());

@@ -1605,13 +1605,40 @@ impl Target {
     let hdd = remote_hdd_root(&mut session);
     let layout = remote_layout(&mut session, &hdd);
 
+    // A FATX connection holds one device, while the manifest it shares with the
+    // FTP target may name folders on another one (`/Usb0/Content/…`). Listing
+    // those yields nothing, which would show as an empty library rather than as
+    // the "that location is on a disk this connection does not have" it is.
+    let (locations, elsewhere): (Vec<_>, Vec<_>) = if matches!(session, RemoteSession::Fatx(_)) {
+        layout
+            .scan_locations
+            .iter()
+            .partition(|l| crate::fatx::FatxSession::path_is_on_volume(&l.path))
+    } else {
+        (layout.scan_locations.iter().collect(), Vec::new())
+    };
+    // Only fatal when it leaves nothing to scan: a console whose games are
+    // split between its hard drive and a USB stick is scanned for what this
+    // connection can actually reach.
+    if locations.is_empty()
+        && let Some(location) = elsewhere.first()
+    {
+        bail!(
+            "{} is not on the connected drive: this is the console's {} hard drive, and that \
+             folder is on another device. Connect over FTP to reach it, or point the library at \
+             a folder on this drive.",
+            location.path,
+            crate::fatx::FATX_VOLUME
+        );
+    }
+
     let mut scanner = RemoteScanner {
         session: &mut session,
         cancel: &check_cancel,
         games: Vec::new(),
         games_bytes: 0,
     };
-    for location in &layout.scan_locations {
+    for location in locations {
         crate::scan::walk(&mut scanner, &location.path, location.depth)?;
     }
     // Release the borrow on `session` before quitting it.

@@ -3,7 +3,11 @@
 //! FTP transfer to the console (Aurora FTP server).
 //!
 //! Specificities of the console server:
-//! - only one connection at a time (no multiple streams);
+//! - several connections at once are fine as long as they only *read*
+//!   (parallel scans and queries). One write, on the other hand, must be the
+//!   only write in flight: two uploads at the same time leave games the
+//!   console can no longer read. That is what the job queue serializes
+//!   (`crates/core/src/job_queue.rs`);
 //! - path arguments of commands (LIST, STOR, DELE...) are poorly handled:
 //!   must navigate with CWD then only use relative names;
 //! - NLST returns complete LIST lines.

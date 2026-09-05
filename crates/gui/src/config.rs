@@ -94,11 +94,14 @@ impl From<txbm_core::config::TargetKind> for TargetKind {
     }
 }
 
-/// Builds the model backing `UiState.fatx-drives` by enumerating the raw disks
-/// attached to this computer and probing each for an Xbox 360 filesystem
-/// (queried live, not from the config).
-pub fn fatx_drives() -> Vec<DisplayedFatxDrive> {
-    txbm_core::fatx_dev::list_fatx_drives()
+/// Builds the model backing `UiState.fatx-drives` from a live enumeration of
+/// the raw disks attached to this computer (see
+/// [`txbm_core::fatx_dev::list_fatx_drives`], which opens and probes every one
+/// of them and therefore runs on a worker thread, never on the event loop).
+pub fn displayed_fatx_drives(
+    drives: Vec<txbm_core::fatx_dev::FatxDrive>,
+) -> Vec<DisplayedFatxDrive> {
+    drives
         .into_iter()
         .map(|d| DisplayedFatxDrive {
             name: d.name.to_shared_string(),

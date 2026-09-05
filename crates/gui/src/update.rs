@@ -3,8 +3,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 use crate::{
-    AppWindow, Dispatcher, DisplayedConfig, DisplayedDriveInfo, DisplayedGame, DisplayedGameToAdd,
-    DisplayedJob, DisplayedStoragePath, DisplayedTitleUpdate, JobKind, Message, Notification, Page,
+    AppWindow, Dispatcher, DisplayedConfig, DisplayedDriveInfo, DisplayedFatxDrive, DisplayedGame,
+    DisplayedGameToAdd, DisplayedJob, DisplayedStoragePath, DisplayedTitleUpdate, JobKind, Message,
+    Notification, Page,
     PendingQueueAction, UiState, covers, dialogs, game_details, jobs::perform_job, state::State,
     title_updates, util,
 };
@@ -142,12 +143,38 @@ impl State {
             .collect::<Vec<_>>();
 
         let conflicts = displayed.iter().filter(|g| g.already_installed).count() as i32;
-        self.games_to_add = picked.into_iter().map(|g| g.path).collect();
+        self.games_to_add = picked.into_iter().collect();
         self.displayed_games_to_add.set_vec(displayed);
 
         let app = weak.upgrade().unwrap();
         app.global::<UiState<'_>>()
             .set_games_to_add_conflicts(conflicts);
+    }
+
+    /// The job currently running, if any. It sits at index 0 of the queue
+    /// until `JobFinished` removes it.
+    fn running_job(&self) -> Option<&QueuedJob> {
+        self.is_job_running.then(|| self.job_queue.front()).flatten()
+    }
+
+    /// True when a job is already writing to a console-shaped target, and so
+    /// when nothing else may write to it.
+    ///
+    /// Only writes are exclusive: reading beside them is fine, and several
+    /// connections may read at once. What must never happen is a second write
+    /// — two uploads at once over FTP leave games the console cannot read, and
+    /// on a FATX drive two writers would each rearrange a FAT the other holds
+    /// a stale copy of. Serializing that single write is the whole point of
+    /// the job queue, so "a job is running" is exactly "a write is in flight",
+    /// and anything writing outside the queue has to check this.
+    ///
+    /// A local drive has no such constraint, and neither has "no target".
+    fn console_write_in_flight(&self) -> bool {
+        self.is_job_running
+            && matches!(
+                Target::from_config(&self.config.contents),
+                Some(Target::Ftp(_) | Target::Fatx(_))
+            )
     }
 
     /// Cancels the whole job queue: the running item (index 0) is only
@@ -341,9 +368,33 @@ impl State {
             }
             Message::RefreshFatxDrives => {
                 let app = weak.upgrade().unwrap();
-                app.global::<UiState<'_>>().set_fatx_drives(ModelRc::from(
-                    Rc::new(VecModel::from(crate::config::fatx_drives())),
-                ));
+                let ui_state = app.global::<UiState<'_>>();
+                if ui_state.get_scanning_fatx_drives() {
+                    return;
+                }
+
+                // Enumerating means opening every physical disk and reading a
+                // block several gigabytes into it: a sleeping external drive
+                // takes seconds to answer, and each candidate is tried in turn.
+                // Far too much for the event loop, so the picker shows a
+                // progress line while a thread does it.
+                ui_state.set_scanning_fatx_drives(true);
+                ui_state.set_fatx_drives(ModelRc::from(Rc::new(
+                    VecModel::<DisplayedFatxDrive>::default(),
+                )));
+
+                let weak = weak.clone();
+                std::thread::spawn(move || {
+                    let drives = txbm_core::fatx_dev::list_fatx_drives();
+
+                    let _ = weak.upgrade_in_event_loop(move |app| {
+                        let ui_state = app.global::<UiState<'_>>();
+                        ui_state.set_fatx_drives(ModelRc::from(Rc::new(VecModel::from(
+                            crate::config::displayed_fatx_drives(drives),
+                        ))));
+                        ui_state.set_scanning_fatx_drives(false);
+                    });
+                });
             }
             Message::SelectFatxDrive => {
                 let device = PathBuf::from(payload.as_str());
@@ -378,6 +429,14 @@ impl State {
                 self.select_fatx_device(path, message_queue);
             }
             Message::RefreshDisplayedGames => {
+                // The game the running job is writing into, if it names one:
+                // its folder is being rewritten (a second disc, a DLC, a
+                // deletion…), so the library veils it rather than let it be
+                // opened on contents that are in flux.
+                let running = self.running_job();
+                let busy_title_id = running.and_then(QueuedJob::writes_title_id);
+                let busy_path = running.map(QueuedJob::path);
+
                 let displayed_games = self
                     .games
                     .iter()
@@ -393,7 +452,17 @@ impl State {
                             && (self.games_filter.is_empty()
                                 || game.search_term.contains(&self.games_filter))
                     })
-                    .map(DisplayedGame::from)
+                    .map(|game| {
+                        let mut displayed = DisplayedGame::from(game);
+                        // By TitleID, so a second disc queued for a game
+                        // already installed veils that game; by path too, for
+                        // a deletion of an extracted game that has no
+                        // readable TitleID at all.
+                        displayed.busy = busy_title_id
+                            .is_some_and(|id| id.eq_ignore_ascii_case(&game.id))
+                            || busy_path == Some(game.path.as_path());
+                        displayed
+                    })
                     .collect::<Vec<_>>();
 
                 self.displayed_games.set_vec(displayed_games);
@@ -514,13 +583,14 @@ impl State {
                     return;
                 }
 
-                // A console takes no second session while a job is writing to
-                // it — over FTP the server only serves one connection, and on a
-                // FATX drive a second handle would read a filesystem the writer
-                // is still rearranging. Hold the scan back until the queue
-                // drains. A local drive has no such constraint, so it keeps
-                // refreshing after every job of a batch.
-                if self.is_job_running && !matches!(target, Target::Local(_)) {
+                // A scan walks the whole library, the folder the running job is
+                // writing to included, and would list a game that is only half
+                // copied. Reading beside a write is allowed (see
+                // `console_write_in_flight`), but reading *that* is pointless,
+                // so the scan waits for the queue to drain. A local drive has
+                // no such constraint, and keeps refreshing after every job of
+                // a batch.
+                if self.console_write_in_flight() {
                     self.rescan_deferred = true;
                     return;
                 }
@@ -1063,9 +1133,16 @@ impl State {
                 self.set_games_to_add(picked, weak);
             }
             Message::ConfirmGamesToAdd => {
-                while let Some(path) = self.games_to_add.pop_front() {
+                while let Some(picked) = self.games_to_add.pop_front() {
                     let _ = self.displayed_games_to_add.remove(0);
-                    self.enqueue_job(QueuedJob::Add(path), message_queue, weak);
+                    self.enqueue_job(
+                        QueuedJob::Add {
+                            path: picked.path,
+                            title_id: picked.installs_title_id,
+                        },
+                        message_queue,
+                        weak,
+                    );
                 }
 
                 let app = weak.upgrade().unwrap();
@@ -1110,6 +1187,10 @@ impl State {
                         message_queue.push_back((Message::RefreshAll, SharedString::new()));
                     }
 
+                    // Nothing is being written to any more, so the cards that
+                    // were greyed out come back (see `running_job`).
+                    message_queue.push_back((Message::RefreshDisplayedGames, SharedString::new()));
+
                     // The queue is now drained: carry out the disconnect/quit
                     // the user was waiting on, if any.
                     self.run_pending_queue_action(message_queue, weak);
@@ -1135,6 +1216,10 @@ impl State {
 
                 self.job_cancel
                     .store(false, std::sync::atomic::Ordering::Relaxed);
+
+                // This job's target game (when it names one) is greyed out in
+                // the library for as long as it runs — see `running_job`.
+                message_queue.push_back((Message::RefreshDisplayedGames, SharedString::new()));
 
                 let weak = weak.clone();
                 let config = self.config.clone();
@@ -1584,6 +1669,14 @@ impl State {
                 }
             }
             Message::ActivateTitleUpdate => {
+                // This one *writes* to the console, so it must not run beside
+                // the queue's own write either (see `console_write_in_flight`).
+                if self.console_write_in_flight() {
+                    self.notifications.push(Notification::info(
+                        "Wait for the transfer queue to finish before changing a title update",
+                    ));
+                    return;
+                }
                 let Some((path, hash)) = payload.split_once('\n') else {
                     return;
                 };
@@ -1624,6 +1717,13 @@ impl State {
                 });
             }
             Message::DeactivateTitleUpdate => {
+                // A write too: same rule as `ActivateTitleUpdate` above.
+                if self.console_write_in_flight() {
+                    self.notifications.push(Notification::info(
+                        "Wait for the transfer queue to finish before changing a title update",
+                    ));
+                    return;
+                }
                 let Some((path, file_name)) = payload.split_once('\n') else {
                     return;
                 };

@@ -82,6 +82,9 @@ export global UiState {
 
     // Raw disks that may hold an Xbox 360 filesystem, for the FATX picker.
     in-out property <[DisplayedFatxDrive]> fatx-drives;
+    // True while that list is being built: every disk is opened and probed,
+    // which a sleeping drive can make take several seconds.
+    in-out property <bool> scanning-fatx-drives;
 
     in-out property <DisplayedConfig> config;
     in-out property <string> app-version;
