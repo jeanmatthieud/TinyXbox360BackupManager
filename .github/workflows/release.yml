@@ -94,7 +94,9 @@ jobs:
           wget -O /etc/apt/trusted.gpg.d/apt.llvm.org.asc https://apt.llvm.org/llvm-snapshot.gpg.key
           echo "deb http://apt.llvm.org/bullseye/ llvm-toolchain-bullseye-22 main" > /etc/apt/sources.list.d/llvm.list
           apt-get update
-          apt-get install -y clang-22 lld-22
+          # debian-security also indexes a (broken/removed) clang-22 and lld-22 build under a
+          # version string that beats apt.llvm.org's own, so pin to our repo explicitly.
+          apt-get install -y --no-install-recommends -t llvm-toolchain-bullseye-22 clang-22 lld-22
 
       - name: Install i686 dependencies
         if: matrix.arch == 'i686'
