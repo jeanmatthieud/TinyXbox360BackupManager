@@ -13,12 +13,20 @@ name: Release
 #      with the built assets.
 #
 # On pull_request: the `build-*` jobs run for validation only (no release).
+#
+# `docs/` holds the GitHub Pages site, which ships no code: changing it alone
+# must never cut a release nor spend the cross-compilation matrix. A push that
+# touches `docs/` *and* code still runs normally.
 
 on:
   push:
     branches:
       - main
+    paths-ignore:
+      - 'docs/**'
   pull_request:
+    paths-ignore:
+      - 'docs/**'
   workflow_dispatch:
 
 permissions:
