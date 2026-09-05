@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TinyXbox360BackupManager — put your games on your Xbox 360</title>
+<meta name="description" content="A tiny, free app that copies your Xbox 360 game backups onto your console — in the format it expects, with box art, add-ons and multi-disc games handled for you.">
+<link rel="icon" href="assets/TinyXbox360BackupManager-256x256.png">
+<meta property="og:title" content="TinyXbox360BackupManager">
+<meta property="og:description" content="Put your game backups on your Xbox 360 — the easy way.">
+<meta property="og:image" content="https://jeanmatthieud.github.io/TinyXbox360BackupManager/assets/screenshot.png">
+<meta property="og:type" content="website">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#f1f3f2;
+  --paper-2:#e7eae9;
+  --card:#ffffff;
+  --ink:#171b1d;
+  --ink-2:#3d4649;
+  --slate:#6a7579;
+  --edge:#d5dbd8;
+  --ring:#6cc24a;
+  --ring-deep:#0e7a12;
+  --shadow:0 1px 2px rgba(23,27,29,.06), 0 18px 44px -24px rgba(23,27,29,.35);
+  --maxw:1140px;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0;background:var(--paper);color:var(--ink);
+  font-family:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  font-size:17px;line-height:1.65;
+  -webkit-font-smoothing:antialiased;
+}
+h1,h2,h3,.face{font-family:Archivo,system-ui,sans-serif;font-weight:700;letter-spacing:-.02em;line-height:1.06}
+p{margin:0 0 1em}
+a{color:inherit}
+img{max-width:100%;display:block}
+.wrap{max-width:var(--maxw);margin-inline:auto;padding-inline:24px}
+
+/* ---------- header ---------- */
+.top{position:sticky;top:0;z-index:20;background:rgba(241,243,242,.86);backdrop-filter:blur(10px);border-bottom:1px solid transparent;transition:border-color .2s}
+.top.stuck{border-bottom-color:var(--edge)}
+.top .wrap{display:flex;align-items:center;gap:18px;height:64px}
+.brand{display:flex;align-items:center;gap:10px;text-decoration:none;font-family:Archivo;font-weight:600;letter-spacing:-.015em}
+.brand img{width:28px;height:28px;border-radius:7px}
+.brand span{font-size:16px}
+.brand b{font-weight:600}
+.top nav{margin-left:auto;display:flex;align-items:center;gap:26px}
+.top nav a{text-decoration:none;color:var(--ink-2);font-size:15px}
+.top nav a:hover{color:var(--ink)}
+/* the plain-link colour above must not bleed into the button */
+.top nav a.btn,.top nav a.btn:hover{color:#fff}
+@media (max-width:760px){.top nav a.hide-sm{display:none}}
+
+/* ---------- buttons ---------- */
+.btn{
+  display:inline-flex;align-items:center;gap:9px;
+  padding:13px 22px;border-radius:999px;text-decoration:none;
+  font-family:Archivo;font-weight:600;font-size:16px;letter-spacing:-.01em;
+  background:var(--ink);color:#fff;border:1px solid var(--ink);
+  transition:transform .12s ease, background .15s ease;
+}
+.btn:hover{background:#000;transform:translateY(-1px)}
+.btn.sm{padding:9px 17px;font-size:15px}
+.btn.ghost{background:transparent;color:var(--ink);border-color:var(--edge)}
+.btn.ghost:hover{background:#fff;border-color:#c3ccc7}
+.btn svg{width:17px;height:17px;flex:none}
+
+/* ---------- hero ---------- */
+.hero{position:relative;overflow:hidden;padding:76px 0 150px}
+/* the console's ring of light, spilling from under the app window */
+.glow{
+  position:absolute;left:50%;top:330px;width:min(760px,70vw);height:440px;
+  transform:translateX(-4%);pointer-events:none;border-radius:50%;
+  background:radial-gradient(closest-side,rgba(108,194,74,.75),rgba(108,194,74,0) 70%);
+  filter:blur(34px);
+}
+.hero-grid{display:grid;grid-template-columns:minmax(0,1.12fr) minmax(0,1fr);gap:56px;align-items:center}
+h1{font-size:clamp(38px,5vw,60px);margin:0 0 22px}
+h1 em{font-style:normal;display:block}
+.lede{font-size:clamp(18px,2vw,20.5px);color:var(--ink-2);max-width:34em;margin-bottom:30px}
+.cta-row{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+.cta-note{font-size:14.5px;color:var(--slate);margin:16px 0 0}
+.shot{
+  position:relative;border-radius:14px;overflow:hidden;background:#1e1e1e;
+  border:1px solid rgba(23,27,29,.12);
+  box-shadow:0 2px 4px rgba(23,27,29,.08), 0 40px 70px -30px rgba(23,27,29,.55);
+}
+.hero .shot{margin-right:-70px}
+@media (max-width:980px){
+  .hero{padding-top:48px}
+  .hero-grid{grid-template-columns:1fr;gap:40px}
+  .hero .shot{margin-right:0}
+  .ring{width:420px;height:420px;top:-150px;right:-150px}
+}
+
+/* ---------- generic section ---------- */
+section{padding:92px 0}
+.sec-head{margin-bottom:44px}
+.sec-head h2{font-size:clamp(28px,3.6vw,40px);margin:0 0 14px;max-width:13em}
+.sec-head p{color:var(--ink-2);margin:0;max-width:52ch}
+#relinfo{display:block;margin-top:.4em;color:var(--slate)}
+.rule{border:0;border-top:1px solid var(--edge);margin:0}
+
+/* ---------- needs ---------- */
+.needs{background:var(--card);border-block:1px solid var(--edge);padding:56px 0}
+.needs ul{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(4,1fr);gap:30px}
+.needs li{display:flex;gap:14px;align-items:flex-start}
+.needs .tick{flex:none;width:22px;height:22px;margin-top:3px;border-radius:50%;background:rgba(108,194,74,.16);display:grid;place-items:center}
+.needs .tick svg{width:12px;height:12px;stroke:var(--ring-deep);stroke-width:3;fill:none}
+.needs h3{font-size:17px;margin:0 0 3px;letter-spacing:-.01em}
+.needs p{margin:0;font-size:15.5px;color:var(--slate);line-height:1.55}
+@media (max-width:1040px){.needs ul{grid-template-columns:repeat(2,1fr);gap:28px}}
+@media (max-width:620px){.needs ul{grid-template-columns:1fr;gap:22px}}
+
+/* ---------- steps ---------- */
+.steps{counter-reset:s}
+.step{
+  display:grid;grid-template-columns:88px minmax(0,1fr) minmax(0,1fr);
+  gap:40px;align-items:center;padding:40px 0;border-top:1px solid var(--edge);
+}
+.step:last-child{border-bottom:1px solid var(--edge)}
+.step .num{
+  counter-increment:s;font-family:Archivo;font-weight:700;font-size:46px;
+  color:var(--edge);line-height:1;letter-spacing:-.04em;
+}
+.step .num::before{content:counter(s,decimal-leading-zero)}
+.step h3{font-size:clamp(22px,2.6vw,28px);margin:0 0 12px}
+.step p{color:var(--ink-2);margin:0;max-width:44ch}
+.step p + p{margin-top:.7em}
+.step .aside{font-size:15.5px;color:var(--slate);line-height:1.6}
+.step .aside strong{color:var(--ink-2);font-weight:600}
+@media (max-width:860px){
+  .step{grid-template-columns:56px 1fr;gap:20px}
+  .step .num{font-size:34px}
+  .step .aside{grid-column:2}
+}
+
+/* ---------- ways ---------- */
+.ways{display:grid;grid-template-columns:repeat(3,1fr);gap:0;border-top:1px solid var(--edge)}
+.way{padding:34px 34px 34px 0;border-right:1px solid var(--edge)}
+.way:first-child{padding-left:0}
+.way:not(:first-child){padding-left:34px}
+.way:last-child{border-right:0;padding-right:0}
+.way .glyph{height:34px;margin-bottom:20px;color:var(--ink);opacity:.85}
+.way .glyph svg{height:34px;width:auto;stroke:currentColor;fill:none;stroke-width:1.4}
+.way h3{font-size:20px;margin:0 0 10px}
+.way p{font-size:15.5px;color:var(--ink-2);margin:0 0 .8em}
+.way .tag{display:inline-block;font-size:13px;font-weight:600;font-family:Archivo;
+  padding:3px 10px;border-radius:999px;background:rgba(108,194,74,.15);color:var(--ring-deep)}
+.way .tag.warn{background:rgba(200,120,0,.13);color:#8a5500}
+@media (max-width:860px){
+  .ways{grid-template-columns:1fr}
+  .way,.way:not(:first-child){padding:28px 0;border-right:0;border-bottom:1px solid var(--edge)}
+  .way:last-child{border-bottom:0}
+}
+
+/* ---------- handled ---------- */
+.handled{background:var(--card);border-block:1px solid var(--edge)}
+.dl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:2px 56px}
+.dl > div{padding:24px 0;border-top:1px solid var(--edge)}
+.dl h3{font-size:18px;margin:0 0 6px}
+.dl p{font-size:15.5px;color:var(--ink-2);margin:0;max-width:46ch}
+@media (max-width:860px){.dl{grid-template-columns:1fr;gap:0}}
+
+/* ---------- download ---------- */
+.dls{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+.os{
+  background:var(--card);border:1px solid var(--edge);border-radius:12px;
+  padding:26px;display:flex;flex-direction:column;gap:14px;
+}
+.os h3{font-size:19px;margin:0;display:flex;align-items:center;gap:10px}
+.os h3 svg{width:20px;height:20px;fill:currentColor}
+.os p{font-size:14.5px;color:var(--slate);margin:0;flex:1}
+.os code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px;
+  background:var(--paper-2);padding:2px 6px;border-radius:5px;word-break:break-all}
+.os .btn{align-self:flex-start}
+@media (max-width:860px){.dls{grid-template-columns:1fr}}
+
+/* ---------- faq ---------- */
+.faq-layout{display:grid;grid-template-columns:minmax(0,320px) minmax(0,1fr);gap:0 64px;align-items:start}
+.faq-layout .sec-head{margin-bottom:0;position:sticky;top:96px}
+.faq details{border-top:1px solid var(--edge);padding:4px 0}
+.faq details:last-of-type{border-bottom:1px solid var(--edge)}
+.faq summary{
+  cursor:pointer;list-style:none;padding:18px 34px 18px 0;position:relative;
+  font-family:Archivo;font-weight:600;font-size:18px;letter-spacing:-.01em;
+}
+.faq summary::-webkit-details-marker{display:none}
+.faq summary::after{
+  content:"";position:absolute;right:6px;top:50%;width:10px;height:10px;
+  border-right:2px solid var(--slate);border-bottom:2px solid var(--slate);
+  transform:translateY(-70%) rotate(45deg);transition:transform .2s;
+}
+.faq details[open] summary::after{transform:translateY(-30%) rotate(-135deg)}
+.faq .a{padding:0 40px 20px 0;color:var(--ink-2);font-size:16px}
+.faq .a p:last-child{margin-bottom:0}
+.faq .a a{text-decoration:none;box-shadow:inset 0 -1px 0 var(--ring);padding-bottom:1px}
+.faq .a a:hover{box-shadow:inset 0 -2px 0 var(--ring-deep)}
+@media (max-width:900px){
+  .faq-layout{grid-template-columns:1fr}
+  .faq-layout .sec-head{position:static;margin-bottom:36px}
+}
+
+/* ---------- closing ---------- */
+.closing{text-align:center;padding:96px 0}
+.closing h2{font-size:clamp(30px,4.4vw,48px);margin:0 0 18px}
+.closing p{color:var(--ink-2);max-width:46ch;margin:0 auto 28px}
+
+/* ---------- footer ---------- */
+footer{background:var(--ink);color:#c8d0d2;padding:56px 0 40px;font-size:15px}
+footer a{color:#fff;text-decoration:none;border-bottom:1px solid rgba(255,255,255,.28)}
+footer a:hover{border-bottom-color:#fff}
+.foot-grid{display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:40px;margin-bottom:40px}
+footer h4{font-family:Archivo;font-weight:600;font-size:14px;color:#fff;margin:0 0 12px;letter-spacing:.01em}
+footer ul{list-style:none;margin:0;padding:0}
+footer li{margin-bottom:8px}
+.legal{border-top:1px solid rgba(255,255,255,.14);padding-top:22px;font-size:13.5px;color:#8d9799;line-height:1.6}
+.legal p{margin:0 0 .5em}
+@media (max-width:860px){.foot-grid{grid-template-columns:1fr;gap:28px}}
+
+/* ---------- entrance ---------- */
+@media (prefers-reduced-motion:no-preference){
+  .rise{opacity:0;transform:translateY(14px);animation:rise .7s cubic-bezier(.2,.7,.3,1) forwards}
+  .rise.d1{animation-delay:.06s}.rise.d2{animation-delay:.13s}.rise.d3{animation-delay:.2s}
+  @keyframes rise{to{opacity:1;transform:none}}
+  .glow{opacity:0;animation:power 1.1s ease-out .35s forwards}
+  @keyframes power{0%{opacity:0}35%{opacity:.9}52%{opacity:.25}100%{opacity:1}}
+}
+:focus-visible{outline:2px solid var(--ring-deep);outline-offset:3px;border-radius:4px}
+</style>
+</head>
+<body>
+
+<header class="top" id="top">
+  <div class="wrap">
+    <a class="brand" href="#top">
+      <img src="assets/TinyXbox360BackupManager-256x256.png" alt="">
+      <span>Tiny<b>Xbox360</b>BackupManager</span>
+    </a>
+    <nav>
+      <a href="#how" class="hide-sm">How it works</a>
+      <a href="#faq" class="hide-sm">Questions</a>
+      <a href="https://github.com/jeanmatthieud/TinyXbox360BackupManager" class="hide-sm">GitHub</a>
+      <a class="btn sm" href="#download">Download</a>
+    </nav>
+  </div>
+</header>
+
+<div class="hero">
+  <div class="glow" aria-hidden="true"></div>
+  <div class="wrap hero-grid">
+    <div>
+      <h1 class="rise">Your games.<em>On your Xbox&nbsp;360.</em><em>Tonight.</em></h1>
+      <p class="lede rise d1">Start with a console that has never been touched. This little app unlocks it, then fills it with your games — box art, add-ons and multi-disc titles handled for you. You never have to learn how any of it works.</p>
+      <div class="cta-row rise d2">
+        <a class="btn" href="#download" id="cta">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v13m0 0 5-5m-5 5-5-5M4 21h16"/></svg>
+          <span id="cta-label">Download — it's free</span>
+        </a>
+        <a class="btn ghost" href="#how">See how it works</a>
+      </div>
+      <p class="cta-note rise d2">Free and open source. Windows, macOS and Linux. Nothing to install alongside it.</p>
+    </div>
+    <div class="shot rise d3">
+      <img src="assets/screenshot.png" alt="The app showing a grid of Xbox 360 games with their box art, sizes and title IDs." width="800" height="600">
+    </div>
+  </div>
+</div>
+
+<div class="needs" id="needs">
+  <div class="wrap">
+    <ul>
+      <li>
+        <span class="tick"><svg viewBox="0 0 24 24"><path d="m4 12 6 6L20 6"/></svg></span>
+        <div><h3>An Xbox 360</h3><p>Any one of them. Already unlocked, or straight out of the cupboard as it left the factory — the app handles both.</p></div>
+      </li>
+      <li>
+        <span class="tick"><svg viewBox="0 0 24 24"><path d="m4 12 6 6L20 6"/></svg></span>
+        <div><h3>A USB drive</h3><p>This is what unlocks the console. A small stick will do the job — but a USB hard drive does it and holds your games too.</p></div>
+      </li>
+      <li>
+        <span class="tick"><svg viewBox="0 0 24 24"><path d="m4 12 6 6L20 6"/></svg></span>
+        <div><h3>Room for the games</h3><p>Either that USB hard drive, or a hard drive inside the console. Games are 6–8 GB each, so a stick won't hold many.</p></div>
+      </li>
+      <li>
+        <span class="tick"><svg viewBox="0 0 24 24"><path d="m4 12 6 6L20 6"/></svg></span>
+        <div><h3>Your game files</h3><p>The disc images of the games you want on there. ISO files, arcade downloads, whatever you have.</p></div>
+      </li>
+    </ul>
+  </div>
+</div>
+
+<section id="how">
+  <div class="wrap">
+    <div class="sec-head">
+      <h2>From an untouched console to playing</h2>
+      <p>The app asks where you're starting from and takes you the rest of the way. Skip straight to the last step if your console is already unlocked.</p>
+    </div>
+    <div class="steps">
+
+      <div class="step">
+        <div class="num"></div>
+        <div>
+          <h3>Tell it where you're starting from</h3>
+          <p>The first time you open the app, it asks one question: is your console already unlocked, or is it still exactly as it left the factory?</p>
+          <p>From your answer it lays out the path in front of you, one screen at a time. There's no guide to find, no forum thread to decode.</p>
+        </div>
+        <div class="aside">Unlocking a console is normally an evening of cross-referencing tutorials. This is the part the app was built to remove.</div>
+      </div>
+
+      <div class="step">
+        <div class="num"></div>
+        <div>
+          <h3>Make the boot drive</h3>
+          <p>Plug in a USB drive and click once. The app downloads everything the console needs, puts it on the drive in the right shape, and shows you what to do on the console itself.</p>
+          <p>Your 360 boots from it, and comes back with a proper home screen that can play games from a hard drive.</p>
+        </div>
+        <div class="aside">Use a USB hard drive rather than a small stick and you're done in one go: the drive that unlocks the console becomes the drive your games live on. It never formats or repartitions anything — it only writes files onto the drive you point it at.</div>
+      </div>
+
+      <div class="step">
+        <div class="num"></div>
+        <div>
+          <h3>Connect to the console</h3>
+          <p>Click the plug icon at the bottom left and pick your console or a USB drive. Plugged-in drives appear in a list; the console just needs the IP address shown on its own screen.</p>
+          <p>The app then looks at what's already there and shows you where it plans to put things. Click <strong>Confirm</strong> — it remembers, and won't ask again.</p>
+        </div>
+        <div class="aside">Games already on the console show up straight away, covers and all.</div>
+      </div>
+
+      <div class="step">
+        <div class="num"></div>
+        <div>
+          <h3>Add your games</h3>
+          <p>Press <strong>+</strong>, or drag your files onto the window. Each one gets converted to the format the console expects and copied across, one after another, while you watch the queue.</p>
+        </div>
+        <div class="aside">Then turn the console on. Your games are right there on the home screen, with their box art, as if they'd been bought there.</div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<section style="padding-top:0">
+  <div class="wrap">
+    <div class="sec-head">
+      <h2>Three ways to get the games across</h2>
+      <p>Pick whichever suits your setup. The app works the same in all three.</p>
+    </div>
+    <div class="ways">
+
+      <div class="way">
+        <div class="glyph"><svg viewBox="0 0 32 32"><rect x="11" y="4" width="10" height="15" rx="2"/><path d="M14 4V2h4v2M13 19v7a3 3 0 0 0 3 3 3 3 0 0 0 3-3v-7"/></svg></div>
+        <h3>A USB drive</h3>
+        <p>Plug a USB stick or drive into your computer, fill it here, plug it into the console. No network involved.</p>
+        <span class="tag">Simplest</span>
+      </div>
+
+      <div class="way">
+        <div class="glyph"><svg viewBox="0 0 32 32"><path d="M4 12a17 17 0 0 1 24 0M8.5 17a11 11 0 0 1 15 0M13 22a5 5 0 0 1 6 0"/><circle cx="16" cy="26.5" r="1.6" fill="currentColor" stroke="none"/></svg></div>
+        <h3>Over your network</h3>
+        <p>Leave the console on and send games to it over Wi‑Fi or Ethernet, from the sofa. Nothing to unplug, nothing to carry.</p>
+        <span class="tag">Most convenient</span>
+      </div>
+
+      <div class="way">
+        <div class="glyph"><svg viewBox="0 0 32 32"><rect x="3" y="8" width="26" height="16" rx="3"/><circle cx="9" cy="16" r="2"/><path d="M15 16h9"/></svg></div>
+        <h3>The console's own hard drive</h3>
+        <p>Take the drive out of the console, connect it to your computer and fill it directly. Much faster for a big library — but it asks more of you.</p>
+        <span class="tag warn">Experimental</span>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<div class="handled">
+  <section>
+    <div class="wrap">
+      <div class="sec-head">
+        <h2>The fiddly parts, handled</h2>
+        <p>This is the stuff people usually spend an evening reading forum threads about. You don't have to.</p>
+      </div>
+      <div class="dl">
+        <div>
+          <h3>Box art appears by itself</h3>
+          <p>Covers are fetched and kept, so your console's home screen looks like a proper shelf instead of a list of codes.</p>
+        </div>
+        <div>
+          <h3>Games on two discs work</h3>
+          <p>Titles like GTA V that came with an install disc: hand over both files, it sorts out what goes where.</p>
+        </div>
+        <div>
+          <h3>Add-ons and updates land in the right place</h3>
+          <p>Extra content bundled with a game gets installed alongside it, so anything it unlocks is unlocked when you play.</p>
+        </div>
+        <div>
+          <h3>Arcade games straight from the archive</h3>
+          <p>Small downloadable titles usually come as a .zip or .7z. Drop the archive in as it is — no unpacking first.</p>
+        </div>
+        <div>
+          <h3>Original Xbox games too</h3>
+          <p>Your old first-Xbox discs work on the 360, and this app prepares them the same way it does 360 games.</p>
+        </div>
+        <div>
+          <h3>Removing a game is one click</h3>
+          <p>The list you see is what's really on the console. Delete something here and it's gone from there, cleanly.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<section id="download">
+  <div class="wrap">
+    <div class="sec-head">
+      <h2>Download</h2>
+      <p>One file. No installer to click through, no account, no toolbar.<span id="relinfo"></span></p>
+    </div>
+    <div class="dls">
+
+      <div class="os">
+        <h3><svg viewBox="0 0 24 24"><path d="M3 5.5 10 4.6v6.9H3zm8-1.1 10-1.4v8.4H11zM3 12.5h7v6.9l-7-.9zm8 0h10v8.4l-10-1.4z"/></svg> Windows</h3>
+        <p>Windows 7 and later. Grab the file ending in <code>windows-x64.exe</code> and double-click it.</p>
+        <a class="btn" id="dl-win" href="https://github.com/jeanmatthieud/TinyXbox360BackupManager/releases/latest">Download for Windows</a>
+      </div>
+
+      <div class="os">
+        <h3><svg viewBox="0 0 24 24"><path d="M16.4 12.7c0-2.3 1.9-3.4 2-3.5-1.1-1.6-2.8-1.8-3.4-1.8-1.4-.1-2.8.9-3.5.9s-1.8-.9-3-.8c-1.5 0-2.9.9-3.7 2.3-1.6 2.7-.4 6.8 1.1 9 .8 1.1 1.7 2.3 2.9 2.2 1.2 0 1.6-.7 3-.7s1.8.7 3 .7c1.3 0 2.1-1.1 2.8-2.2.9-1.2 1.3-2.4 1.3-2.5-.1 0-2.5-1-2.5-3.6zM14.1 5.4c.6-.8 1-1.9.9-3-.9 0-2 .6-2.7 1.4-.6.7-1.1 1.8-.9 2.9 1 .1 2-.5 2.7-1.3z"/></svg> macOS</h3>
+        <p>macOS 10.14 and later, Intel and Apple Silicon. Open the DMG and drag the app to Applications.</p>
+        <a class="btn" id="dl-mac" href="https://github.com/jeanmatthieud/TinyXbox360BackupManager/releases/latest">Download for macOS</a>
+      </div>
+
+      <div class="os">
+        <h3><svg viewBox="0 0 24 24"><path d="M12 2c2.3 0 3.5 1.8 3.4 4.3 0 1.3.4 2 1.2 3.2 1.1 1.7 1.6 2.6 2.2 4.6.5 1.6.2 2.6-.3 3 .3 1 .1 1.9-.6 2.4-.8.6-2.1.5-3.3.9-.9.3-1.6.8-2.6.8s-1.7-.5-2.6-.8c-1.2-.4-2.5-.3-3.3-.9-.7-.5-.9-1.4-.6-2.4-.5-.4-.8-1.4-.3-3 .6-2 1.1-2.9 2.2-4.6.8-1.2 1.2-1.9 1.2-3.2C8.5 3.8 9.7 2 12 2z"/></svg> Linux</h3>
+        <p>Get the <code>.AppImage</code>, make it executable, run it. Works on any recent distribution.</p>
+        <a class="btn" id="dl-linux" href="https://github.com/jeanmatthieud/TinyXbox360BackupManager/releases/latest">Download for Linux</a>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<section class="faq-sec" style="padding-top:0" id="faq">
+  <div class="wrap faq-layout">
+    <div class="sec-head"><h2>Questions people actually ask</h2></div>
+    <div class="faq">
+
+      <details open>
+        <summary>Will this work on a normal, untouched Xbox 360?</summary>
+        <div class="a"><p>Yes — that's the starting point the app is designed for. A console straight from the factory can only run discs, so before anything else it has to be unlocked. The app makes the USB drive that does it (it uses the well-known ABadAvatar route, and installs the Aurora home screen), tells you which buttons to press on the console, and only then moves on to your games.</p></div>
+      </details>
+
+      <details>
+        <summary>Is unlocking my console risky?</summary>
+        <div class="a"><p>It's software only — nothing is soldered, opened or permanently altered, and the app never formats or repartitions a disk. Two things are worth knowing all the same: it ends your warranty, and a console modified this way must stay off Xbox Live, because Microsoft bans them. Keep it offline and it will happily play everything on its hard drive for years.</p></div>
+      </details>
+
+      <details>
+        <summary>Where do the games actually get stored?</summary>
+        <div class="a">
+          <p>In one of two places, and you need to have decided which before you start. Either on a <strong>USB hard drive plugged into the console</strong> — the very same drive you used to unlock it, as long as it's a real hard drive and not a small memory stick — or on a <strong>hard drive inside the console</strong>. Several 360 models were sold with no internal drive at all, so check the side of yours.</p>
+          <p>Budget 6 to 8 GB per game: a 16 GB stick holds two. USB drives have to be formatted as FAT32, and the app tells you plainly when one isn't.</p>
+        </div>
+      </details>
+
+      <details>
+        <summary>Can I connect the console's internal SATA drive to my computer?</summary>
+        <div class="a">
+          <p>Yes — take the hard drive out of the console and connect it to a SATA port or a USB adapter. It's by far the quickest way to fill a big library, but it's the one path marked <strong>experimental</strong>, and it asks a little more of you.</p>
+          <p>Your computer can't read an Xbox 360 drive: it won't appear in Explorer or Finder, and the app has to talk to the disk directly. That needs permission to do so. On <strong>Windows</strong> it's simple — right-click the app and choose <em>Run as administrator</em>, and the drive shows up in the list. On <strong>macOS</strong> and <strong>Linux</strong> there's one command to run first; the <a href="https://github.com/jeanmatthieud/TinyXbox360BackupManager#electric_plug-using-the-consoles-hard-drive">README explains each system step by step</a>.</p>
+          <p>One rule above all: when your computer offers to <em>format</em>, <em>initialise</em> or <em>repair</em> that drive, always say no. It doesn't recognise the Xbox's filesystem and accepting wipes every game on it. Back the drive up before your first write.</p>
+        </div>
+      </details>
+
+      <details>
+        <summary>Do I need to understand ISOs, GOD, STFS, title IDs?</summary>
+        <div class="a"><p>No. That's the whole point. You give it a file, it works out what the file is and does the right thing with it. Those words appear in the app only where they help you recognise something — never as a decision you have to make.</p></div>
+      </details>
+
+      <details>
+        <summary>Where do I get the games?</summary>
+        <div class="a"><p>That part is up to you, and it's your responsibility. The app ships with no games and downloads none — it takes the disc images you already have and prepares them for the console. It exists so you can play the games you own without wearing out twenty-year-old discs; what you feed it is between you and your conscience.</p></div>
+      </details>
+
+      <details>
+        <summary>Is it really free? What's the catch?</summary>
+        <div class="a"><p>It's free, open source, and there's no catch — one person builds it in the evenings between freelance work and two small daughters. If it saves you a night of head-scratching, <a href="https://github.com/sponsors/jeanmatthieud">a small donation</a> keeps it going.</p></div>
+      </details>
+
+      <details>
+        <summary>Can it break my console or lose my games?</summary>
+        <div class="a"><p>The two everyday routes — over the network, or through a USB drive — are the safe, well-trodden ones: the app writes files and nothing else. The only path that carries real risk is working on the console's own drive directly, which is why it's marked experimental and gets its own answer above.</p></div>
+      </details>
+
+      <details>
+        <summary>Is this made by Microsoft?</summary>
+        <div class="a"><p>Not at all. It's an independent project, not affiliated with or endorsed by Microsoft, and it's meant strictly for legal backups of games you own.</p></div>
+      </details>
+
+    </div>
+  </div>
+</section>
+
+<div class="closing">
+  <div class="wrap">
+    <h2>Go and play something.</h2>
+    <p>Download it, plug in your console, and have your library back this evening.</p>
+    <a class="btn" href="https://github.com/jeanmatthieud/TinyXbox360BackupManager/releases/latest">Get TinyXbox360BackupManager</a>
+  </div>
+</div>
+
+<footer>
+  <div class="wrap">
+    <div class="foot-grid">
+      <div>
+        <h4>TinyXbox360BackupManager</h4>
+        <p style="max-width:32ch;margin:0">A tiny game backup manager for the Xbox 360, made by <a href="https://github.com/jeanmatthieud">Jean-Matthieu Dechriste</a>.</p>
+      </div>
+      <div>
+        <h4>Project</h4>
+        <ul>
+          <li><a href="https://github.com/jeanmatthieud/TinyXbox360BackupManager">Source code</a></li>
+          <li><a href="https://github.com/jeanmatthieud/TinyXbox360BackupManager/releases">All releases</a></li>
+          <li><a href="https://github.com/jeanmatthieud/TinyXbox360BackupManager/issues">Report a problem</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Support the work</h4>
+        <ul>
+          <li><a href="https://github.com/sponsors/jeanmatthieud">GitHub Sponsors</a></li>
+          <li><a href="https://ko-fi.com/W6I723OON9">Ko-fi</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="legal">
+      <p>Intended strictly for legal game backup use. Not affiliated with or endorsed by Microsoft. Using it with pirated or unauthorised copies of games is prohibited.</p>
+      <p>Released under the GPL-3.0 licence.</p>
+    </div>
+  </div>
+</footer>
+
+<script>
+(function(){
+  var top = document.getElementById('top');
+  var onScroll = function(){ top.classList.toggle('stuck', window.scrollY > 8); };
+  onScroll(); addEventListener('scroll', onScroll, {passive:true});
+
+  var p = navigator.userAgentData && navigator.userAgentData.platform || navigator.platform || '';
+  var os = /Win/i.test(p) ? 'Windows' : /Mac/i.test(p) ? 'macOS' : /Linux|X11/i.test(p) ? 'Linux' : null;
+  if (os) document.getElementById('cta-label').textContent = 'Download for ' + os + ' — free';
+
+  // Name the current version and point each button straight at its file.
+  // If GitHub can't be reached, the buttons keep their "latest release" links.
+  var api = 'https://api.github.com/repos/jeanmatthieud/TinyXbox360BackupManager/releases/latest';
+  fetch(api, {headers:{Accept:'application/vnd.github+json'}})
+    .then(function(r){ if(!r.ok) throw 0; return r.json(); })
+    .then(function(rel){
+      var pick = function(id, re){
+        var a = (rel.assets||[]).filter(function(x){ return re.test(x.name); })[0];
+        var el = document.getElementById(id);
+        if (a && el) el.href = a.browser_download_url;
+        return a;
+      };
+      var win = pick('dl-win', /windows-x64\.exe$/i);
+      pick('dl-mac', /macos-universal\.dmg$/i);
+      var lin = pick('dl-linux', /linux-x86_64\.AppImage$/i);
+
+      var note = document.getElementById('relinfo');
+      if (note && rel.tag_name) {
+        var size = (win || lin || {}).size;
+        note.textContent = 'Latest version: ' + rel.tag_name
+          + (size ? ', about ' + Math.round(size / 1048576) + ' MB' : '') + '.';
+      }
+    })
+    .catch(function(){});
+})();
+</script>
+</body>
+</html>
