@@ -64,8 +64,14 @@ jobs:
     needs: version
     if: github.event_name == 'pull_request' || needs.version.outputs.published == 'true'
     runs-on: ${{ matrix.runner }}
+    # The released binary links dynamically against the build host's glibc, so the
+    # container -- not the runner -- sets the minimum glibc our AppImage requires.
+    # Ubuntu 22.04 (glibc 2.35) is the oldest base still receiving updates; Debian 11
+    # (glibc 2.31) was used until it went EOL on 2026-08-31 and its security pool
+    # started being purged. Don't bump this without accepting a higher glibc floor for
+    # end users. The runner itself only hosts the container, so it can stay current.
     container:
-      image: rust:1.97-bullseye
+      image: ubuntu:22.04
     defaults:
       run:
         shell: bash
@@ -73,40 +79,55 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - runner: ubuntu-22.04
+          - runner: ubuntu-24.04
             arch: x86_64
             target: x86_64-unknown-linux-gnu
-          - runner: ubuntu-22.04-arm
+          - runner: ubuntu-24.04-arm
             arch: aarch64
             target: aarch64-unknown-linux-gnu
-          - runner: ubuntu-22.04
+          - runner: ubuntu-24.04
             arch: i686
             target: i686-unknown-linux-gnu
 
     steps:
+      # Runs before the checkout so actions/checkout finds a git binary.
+      - name: Install build dependencies
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            ca-certificates curl wget gnupg git build-essential \
+            pkg-config libfontconfig1-dev file
+
       - name: Checkout
         uses: actions/checkout@v6
         with:
           fetch-depth: 1
 
       - name: Install LLVM
+        env:
+          DEBIAN_FRONTEND: noninteractive
         run: |
           wget -O /etc/apt/trusted.gpg.d/apt.llvm.org.asc https://apt.llvm.org/llvm-snapshot.gpg.key
-          echo "deb http://apt.llvm.org/bullseye/ llvm-toolchain-bullseye-22 main" > /etc/apt/sources.list.d/llvm.list
+          echo "deb http://apt.llvm.org/jammy/ llvm-toolchain-jammy-22 main" > /etc/apt/sources.list.d/llvm.list
           apt-get update
-          # debian-security also indexes a (broken/removed) clang-22 and lld-22 build under a
-          # version string that beats apt.llvm.org's own, so pin to our repo explicitly.
-          apt-get install -y --no-install-recommends -t llvm-toolchain-bullseye-22 clang-22 lld-22
+          # llvm-22 is what ships llvm-ar-22 (used as AR below); clang-22 alone does not.
+          apt-get install -y --no-install-recommends clang-22 lld-22 llvm-22
 
       - name: Install i686 dependencies
         if: matrix.arch == 'i686'
+        env:
+          DEBIAN_FRONTEND: noninteractive
         run: |
           dpkg --add-architecture i386
           apt-get update
           apt-get install -y gcc-multilib pkg-config:i386 libfontconfig1-dev:i386
 
-      - name: Install rust-src
-        run: rustup component add rust-src
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@1.97
+        with:
+          components: rust-src
 
       - name: Download appimagetool
         run: |
