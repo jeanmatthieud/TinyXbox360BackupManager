@@ -32,6 +32,7 @@ pub mod unity_mirror;
 pub mod updates;
 pub mod util;
 pub mod xbe;
+pub mod xdvd;
 pub mod xex;
 
 /// Standard folder of GOD / official content on the console.

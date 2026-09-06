@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Conversion pipeline adapted from the iso2god binary (https://github.com/iliazeus/iso2god-rs).
 
+use crate::xdvd::XdvdImage;
 use anyhow::{Context, Result};
-use iso2god::executable::TitleInfo;
-use iso2god::{game_list, god, iso};
+use iso2god::{game_list, god};
 use std::fs::{self, File};
 use std::io::{Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
@@ -21,23 +21,20 @@ pub fn convert_to_god(
     cancel: &AtomicBool,
     progress: &mut dyn FnMut(u64, u64),
 ) -> Result<PathBuf> {
-    let source_iso_file =
-        File::open(source_iso).context("opening source ISO")?;
     let source_iso_file_meta =
         fs::metadata(source_iso).context("reading ISO metadata")?;
 
-    let mut iso_reader =
-        iso::IsoReader::read(source_iso_file).context("reading source ISO")?;
+    let mut image = XdvdImage::open(source_iso).context("reading source ISO")?;
+    let root_offset = image.root_offset()?;
 
-    let title_info =
-        TitleInfo::from_image(&mut iso_reader).context("reading game executable")?;
+    let title_info = image.title_info().context("reading game executable")?;
     let exe_info = title_info.execution_info;
     let content_type = title_info.content_type;
 
     // Remove unused space at the end of the image (equivalent to --trim=from-end).
-    let data_size = iso_reader
-        .get_max_used_prefix_size()
-        .min(source_iso_file_meta.len() - iso_reader.volume_descriptor.root_offset);
+    let data_size = image
+        .max_used_prefix_size()?
+        .min(source_iso_file_meta.len() - root_offset);
 
     let block_count = data_size.div_ceil(god::BLOCK_SIZE);
     let part_count = block_count.div_ceil(god::BLOCKS_PER_PART);
@@ -61,7 +58,7 @@ pub fn convert_to_god(
             anyhow::bail!(crate::convert::CONVERSION_CANCELLED);
         }
         let mut iso_data_volume = File::open(source_iso)?;
-        iso_data_volume.seek(SeekFrom::Start(iso_reader.volume_descriptor.root_offset))?;
+        iso_data_volume.seek(SeekFrom::Start(root_offset))?;
 
         let part_file = File::options()
             .write(true)
