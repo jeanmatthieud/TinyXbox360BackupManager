@@ -579,7 +579,13 @@ impl State {
                     return;
                 };
 
+                // A scan already under way started before whatever just changed
+                // the library, so its result cannot show it: the refresh is
+                // held back rather than dropped. Dropping it left a game that
+                // a queued add had just written invisible until the user
+                // rescanned by hand.
                 if self.is_scanning {
+                    self.rescan_deferred = true;
                     return;
                 }
 
@@ -634,6 +640,13 @@ impl State {
 
                 message_queue.push_back((Message::SetStatus, SharedString::new()));
 
+                // A refresh asked for while this scan was running: it is only
+                // worth anything now the scan is out of the way. Taken here so
+                // it is dropped along with a cancelled or failed scan — the
+                // user cancelled the walk, replaying it right away would undo
+                // exactly what they asked for.
+                let deferred = std::mem::take(&mut self.rescan_deferred);
+
                 match SCAN_RESULT.lock().unwrap().take() {
                     Some(Ok((games, drive_info))) => {
                         self.games = games;
@@ -641,6 +654,11 @@ impl State {
 
                         app.global::<UiState<'_>>()
                             .set_drive_info(DisplayedDriveInfo::from(&self.drive_info));
+
+                        if deferred {
+                            message_queue.push_back((Message::RefreshAll, SharedString::new()));
+                            return;
+                        }
 
                         message_queue.push_back((Message::RefreshSorting, SharedString::new()));
                         message_queue.push_back((Message::DownloadCovers, SharedString::new()));
@@ -1026,16 +1044,25 @@ impl State {
                 }
             }
             Message::SetGameId => {
-                // Payload: "<path>\n<TitleID>", sent by the covers pass
-                // once a TitleID has been resolved over FTP.
-                if let Some((path, id)) = payload.split_once('\n') {
+                // Payload: alternating "<path>\n<TitleID>" lines — the whole
+                // batch the covers pass resolved over FTP, in one message.
+                // The merge and the model rebuild below are O(N) over the
+                // library each, so they run once for the batch, not once per
+                // game.
+                let mut lines = payload.lines();
+                let mut any = false;
+                while let (Some(path), Some(id)) = (lines.next(), lines.next()) {
                     let path = Path::new(path);
                     for game in self.games.iter_mut().filter(|g| g.path == path) {
                         game.id = id.to_string();
                         game.search_term = format!("{}\0{id}", game.title).to_lowercase();
                     }
-                    // The ID was unknown at scan time, so any orphaned DLC/title
-                    // update entry sharing it couldn't be folded in yet.
+                    any = true;
+                }
+                if any {
+                    // The IDs were unknown at scan time, so any orphaned
+                    // DLC/title update entry sharing one couldn't be folded in
+                    // yet.
                     txbm_core::game::merge_extracted_content(&mut self.games);
                     message_queue.push_back((Message::RefreshDisplayedGames, SharedString::new()));
                 }

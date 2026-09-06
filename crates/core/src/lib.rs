@@ -19,6 +19,8 @@ pub mod game;
 pub mod game_details;
 pub mod god;
 pub mod god_dirs;
+pub mod hash_cache;
+pub mod instance;
 pub mod iso_info;
 pub mod job_queue;
 pub mod mobcat;

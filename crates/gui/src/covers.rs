@@ -42,6 +42,17 @@ pub fn download_covers(
         mobcat::ensure_db();
     }
 
+    // Every refresh rebuilds the whole library model, and each row of it costs
+    // two filesystem calls (the cached cover, then its thumbnail). One per
+    // downloaded cover meant O(N²) of them — on a 600-game library with an
+    // empty cache, hundreds of thousands of stat calls on the UI thread, which
+    // is what made the grid stutter through the first cover pass. New covers
+    // are shown in batches instead; `FinishedDownloadingCovers` does the last
+    // refresh, so nothing is left waiting for the next tick.
+    const REFRESH_EVERY: std::time::Duration = std::time::Duration::from_millis(400);
+    let mut pending = false;
+    let mut last_refresh = std::time::Instant::now();
+
     for game in &games {
         if game.id.is_empty() {
             continue;
@@ -53,7 +64,10 @@ pub fn download_covers(
         // covers cached by a previous run that have no thumbnail yet.
         let thumbnailed = covers::ensure_thumbnail(&covers_dir, &game.id).unwrap_or(false);
 
-        if downloaded || thumbnailed {
+        pending |= downloaded || thumbnailed;
+        if pending && last_refresh.elapsed() >= REFRESH_EVERY {
+            pending = false;
+            last_refresh = std::time::Instant::now();
             let _ = weak.upgrade_in_event_loop(move |app| {
                 app.global::<Dispatcher<'_>>()
                     .invoke_dispatch(Message::RefreshDisplayedGames, SharedString::new());
@@ -84,6 +98,7 @@ fn resolve_remote_title_ids(games: &mut [Game], target: &Target, weak: &Weak<App
 
     let mut cache = TitleIdCache::load();
     let mut cache_dirty = false;
+    let mut resolved: Vec<String> = Vec::new();
     let mut session: Option<RemoteSession> = None;
     let cache_key = target.remote_key();
 
@@ -126,11 +141,7 @@ fn resolve_remote_title_ids(games: &mut [Game], target: &Target, weak: &Weak<App
         if let Some(id) = id {
             game.id = id.clone();
             game.search_term = format!("{}\0{id}", game.title).to_lowercase();
-            let payload = slint::format!("{remote_path}\n{id}");
-            let _ = weak.upgrade_in_event_loop(move |app| {
-                app.global::<Dispatcher<'_>>()
-                    .invoke_dispatch(Message::SetGameId, payload);
-            });
+            resolved.push(format!("{remote_path}\n{id}"));
         }
     }
 
@@ -139,5 +150,18 @@ fn resolve_remote_title_ids(games: &mut [Game], target: &Target, weak: &Weak<App
     }
     if cache_dirty {
         cache.save();
+    }
+
+    // One message for the whole pass: each `SetGameId` re-runs
+    // `merge_extracted_content` over the library and rebuilds the whole
+    // displayed model, so sending one per resolved game made the pass
+    // quadratic for no visible gain — the covers download follows immediately
+    // and refreshes the grid anyway.
+    if !resolved.is_empty() {
+        let payload = resolved.join("\n").into();
+        let _ = weak.upgrade_in_event_loop(move |app| {
+            app.global::<Dispatcher<'_>>()
+                .invoke_dispatch(Message::SetGameId, payload);
+        });
     }
 }

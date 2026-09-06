@@ -9,6 +9,24 @@ use std::io::{Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
 
+/// Removes the output of a cancelled conversion: the `<mediaID>.data` folder
+/// holding its parts, its CON header, and then — only while they are empty —
+/// the package and `<TitleID>` folders above them.
+///
+/// The two `remove_dir` calls are deliberately not recursive: they succeed
+/// exactly when this conversion is the only thing that ever put anything
+/// there, and fail harmlessly the moment another disc, a DLC folder or a
+/// title update shares the tree.
+fn cleanup_partial(file_layout: &god::FileLayout<'_>, title_dir: &Path) {
+    let data_dir = file_layout.data_dir_path();
+    let _ = fs::remove_dir_all(&data_dir);
+    let _ = fs::remove_file(file_layout.con_header_file_path());
+    if let Some(package_dir) = data_dir.parent() {
+        let _ = fs::remove_dir(package_dir);
+    }
+    let _ = fs::remove_dir(title_dir);
+}
+
 /// Converts an Xbox 360 game ISO to GOD in `content_dir`
 /// (the `Content/0000000000000000` folder of the target).
 /// Returns the created title folder (`content_dir/<TitleID>`).
@@ -32,12 +50,29 @@ pub fn convert_to_god(
     let content_type = title_info.content_type;
 
     // Remove unused space at the end of the image (equivalent to --trim=from-end).
-    let data_size = image
-        .max_used_prefix_size()?
-        .min(source_iso_file_meta.len() - root_offset);
+    // A truncated or malformed image can put the root past the end of the file,
+    // and an image whose filesystem reports nothing in use yields no part at
+    // all — both would underflow the arithmetic below (`part_count - 1` reaches
+    // `u64::MAX` in a release build, where overflow checks are off).
+    let available = source_iso_file_meta
+        .len()
+        .checked_sub(root_offset)
+        .with_context(|| {
+            format!(
+                "{} is truncated: its filesystem starts past the end of the file",
+                source_iso.display()
+            )
+        })?;
+    let data_size = image.max_used_prefix_size()?.min(available);
 
     let block_count = data_size.div_ceil(god::BLOCK_SIZE);
     let part_count = block_count.div_ceil(god::BLOCKS_PER_PART);
+    if part_count == 0 {
+        anyhow::bail!(
+            "{} holds no data to convert: it is truncated or not a readable image",
+            source_iso.display()
+        );
+    }
 
     let file_layout = god::FileLayout::new(content_dir, &exe_info, content_type);
 
@@ -53,8 +88,14 @@ pub fn convert_to_god(
 
     for part_index in 0..part_count {
         if crate::convert::is_cancelled(cancel) {
-            // Drop the partially-written GOD title folder before bailing.
-            let _ = fs::remove_dir_all(&title_dir);
+            // Drop what this conversion wrote — and nothing else. The
+            // `<TitleID>` folder is shared: the game's DLC (`00000002`), its
+            // title updates (`000B0000`) and its other discs (same package
+            // folder, another media ID) all sit in it, and re-adding a game
+            // that is already installed converts straight into the live
+            // folder. Removing the whole thing on a cancel destroyed all of
+            // it.
+            cleanup_partial(&file_layout, &title_dir);
             anyhow::bail!(crate::convert::CONVERSION_CANCELLED);
         }
         let mut iso_data_volume = File::open(source_iso)?;

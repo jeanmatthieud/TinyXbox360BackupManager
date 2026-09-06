@@ -186,14 +186,20 @@ pub fn perform(
                 let hdd = remote_hdd_root(&mut session);
                 let storage = remote_layout(&mut session, &hdd).storage;
 
+                // Walked once here and reused below: the staged tree is tens of
+                // thousands of files for an extracted game.
+                let total = crate::util::dir_size(&staging);
+
                 // A FATX drive knows its free space, so a transfer that cannot
                 // possibly fit is refused before it starts filling the disk —
                 // rather than failing halfway through with a partial game
-                // installed.
+                // installed. The comparison is made in allocated bytes: FATX
+                // hands out whole clusters, so a plain byte count understates
+                // what an extracted game really needs by a wide margin.
                 if let crate::remote_fs::RemoteSession::Fatx(fatx) = &mut session
                     && let Ok(space) = fatx.space()
                 {
-                    let needed = crate::util::dir_size(&staging);
+                    let needed = crate::util::dir_size_on(&staging, space.bytes_per_cluster);
                     if needed > space.free_bytes {
                         bail!(
                             "not enough space on the console drive: {} needed, {} free",
@@ -212,7 +218,6 @@ pub fn perform(
                 // re-running the transfer, which overwrites them) is up to the
                 // user.
                 let upload = (|| -> Result<()> {
-                    let total = crate::util::dir_size(&staging);
                     let mut sent_before: u64 = 0;
 
                     // Maps upload progress to the 50-100% band; the per-file
@@ -249,6 +254,10 @@ pub fn perform(
                             }
                             let name = entry.file_name().to_string_lossy().to_string();
                             let base = sent_before;
+                            // What this title contributed to the running total,
+                            // taken from the upload's own progress instead of
+                            // walking the staged tree a second time.
+                            let uploaded = std::cell::Cell::new(0u64);
                             // A GOD title goes where that TitleID already sits
                             // on the console — whatever layout put it there —
                             // so re-adding a game overwrites it instead of
@@ -269,9 +278,12 @@ pub fn perform(
                                 &entry.path(),
                                 &remote_path,
                                 cancel,
-                                &mut |sent, _, speed| report(base, sent, speed),
+                                &mut |sent, _, speed| {
+                                    uploaded.set(sent);
+                                    report(base, sent, speed);
+                                },
                             )?;
-                            sent_before += crate::util::dir_size(&entry.path());
+                            sent_before += uploaded.get();
                         }
                     }
 
@@ -457,8 +469,8 @@ fn convert_into(
                 phase("Merging the content");
 
                 // Expected structure: Content/0000000000000000/<TitleID>/...
-                let extracted_content = find_dir_ci(&tmp, "Content")
-                    .and_then(|c| find_dir_ci(&c, "0000000000000000"))
+                let extracted_content = crate::util::find_dir_ci(&tmp, "Content")
+                    .and_then(|c| crate::util::find_dir_ci(&c, "0000000000000000"))
                     .context(
                         "unexpected structure: no Content/0000000000000000 folder \
                          in this image (is it really an install disc / DLC?)",
@@ -574,29 +586,42 @@ fn install_stfs_package(
     std::fs::create_dir_all(&dest_dir)?;
     let dest = dest_dir.join(&file_name);
 
-    // Re-adding a package overwrites it, like GOD re-conversion does.
+    // Re-adding a package overwrites it, like GOD re-conversion does — but
+    // the copy lands beside the target and is renamed over it only once it is
+    // complete. Writing straight into `dest` meant an interrupted re-add left
+    // a working DLC either truncated (the write got that far) or deleted (the
+    // cancellation path removed it): both destroy content the user had.
+    let staged = dest_dir.join(format!("{file_name}.txbm-part"));
     let total = std::fs::metadata(&info.path)?.len();
-    let mut src = std::fs::File::open(&info.path)
-        .with_context(|| format!("opening {}", info.path.display()))?;
-    let mut dst = std::fs::File::create(&dest)
-        .with_context(|| format!("creating {}", dest.display()))?;
-    let mut buf = vec![0u8; 1 << 20];
-    let mut done: u64 = 0;
-    loop {
-        if is_cancelled(cancel) {
-            // Drop the partially-written destination file before bailing.
-            drop(dst);
-            let _ = std::fs::remove_file(&dest);
-            bail!(CONVERSION_CANCELLED);
+
+    let copy = (|| -> Result<()> {
+        let mut src = std::fs::File::open(&info.path)
+            .with_context(|| format!("opening {}", info.path.display()))?;
+        let mut dst = std::fs::File::create(&staged)
+            .with_context(|| format!("creating {}", staged.display()))?;
+        let mut buf = vec![0u8; 1 << 20];
+        let mut done: u64 = 0;
+        loop {
+            if is_cancelled(cancel) {
+                bail!(CONVERSION_CANCELLED);
+            }
+            let n = std::io::Read::read(&mut src, &mut buf)?;
+            if n == 0 {
+                break;
+            }
+            std::io::Write::write_all(&mut dst, &buf[..n])?;
+            done += n as u64;
+            update_progress(done, total);
         }
-        let n = std::io::Read::read(&mut src, &mut buf)?;
-        if n == 0 {
-            break;
-        }
-        std::io::Write::write_all(&mut dst, &buf[..n])?;
-        done += n as u64;
-        update_progress(done, total);
+        Ok(())
+    })();
+
+    if let Err(e) = copy {
+        let _ = std::fs::remove_file(&staged);
+        return Err(e);
     }
+    std::fs::rename(&staged, &dest)
+        .with_context(|| format!("installing {}", dest.display()))?;
     Ok(())
 }
 
@@ -976,19 +1001,4 @@ mod tests {
 
         std::fs::remove_dir_all(&dir).unwrap();
     }
-}
-
-fn find_dir_ci(base: &Path, name: &str) -> Option<PathBuf> {
-    let entries = std::fs::read_dir(base).ok()?;
-    for entry in entries.flatten() {
-        if entry.path().is_dir()
-            && entry
-                .file_name()
-                .to_string_lossy()
-                .eq_ignore_ascii_case(name)
-        {
-            return Some(entry.path());
-        }
-    }
-    None
 }

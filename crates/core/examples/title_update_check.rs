@@ -42,10 +42,11 @@ fn main() -> anyhow::Result<()> {
             );
         }
 
-        let installed = target.installed_title_updates(game)?;
+        let state = target.title_update_state(game)?;
+        let installed = state.installed;
         println!("  installed title updates: {installed:?}");
 
-        let cached = target.cached_title_update_hashes(&game.id)?;
+        let cached = state.cached_hashes;
         println!("  Aurora-cached hashes: {cached:?}");
 
         match txbm_core::unity::title_updates(&game.id) {

@@ -45,6 +45,26 @@ fn main() -> Result<()> {
         bail!("Failed to get data dir");
     }
 
+    // Only one copy of the app may run: a second one moves the scratch folders
+    // the first is converting into aside as debris and deletes them, and both
+    // would write to the same console at once. Taken before anything else
+    // touches those folders, and held for the whole process.
+    let _instance = match txbm_core::instance::lock() {
+        txbm_core::instance::InstanceGuard::Acquired(lock) => Some(lock),
+        txbm_core::instance::InstanceGuard::AlreadyRunning => {
+            let message = "TinyXbox360BackupManager is already running.";
+            eprintln!("{message}");
+            rfd::MessageDialog::new()
+                .set_level(rfd::MessageLevel::Info)
+                .set_title("TinyXbox360BackupManager")
+                .set_description(message)
+                .show();
+            return Ok(());
+        }
+        // No usable lock file: carry on rather than refuse to start.
+        txbm_core::instance::InstanceGuard::Unavailable => None,
+    };
+
     let (file_drop_handler, file_drop_dispatcher) = FileDropHandler::new();
 
     BackendSelector::new()
@@ -151,6 +171,10 @@ fn main() -> Result<()> {
             bail!(e);
         }
 
+        // Release the single-instance lock first: the replacement process
+        // starts before this one exits and would otherwise find itself locked
+        // out by its own parent.
+        drop(_instance);
         return restart_with_sw_rendering();
     }
 

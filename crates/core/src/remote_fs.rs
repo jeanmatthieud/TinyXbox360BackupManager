@@ -38,6 +38,11 @@ pub trait RemoteFs {
     /// of it. Used to read a package header out of a multi-hundred-MB file.
     fn download_prefix(&mut self, path: &str, max_bytes: usize) -> Result<Vec<u8>>;
 
+    /// SHA1 hex digest of a file's content, hashed as it streams in so the
+    /// file never sits in memory as a whole. Title updates are routinely
+    /// 100 MB and are only ever read to be identified by their hash.
+    fn sha1_file(&mut self, path: &str) -> Result<String>;
+
     /// Creates a directory and every missing level above it.
     fn ensure_dir(&mut self, dir: &str) -> Result<()>;
 
@@ -96,6 +101,10 @@ impl RemoteFs for FtpSession {
 
     fn download_prefix(&mut self, path: &str, max_bytes: usize) -> Result<Vec<u8>> {
         FtpSession::download_prefix(self, path, max_bytes)
+    }
+
+    fn sha1_file(&mut self, path: &str) -> Result<String> {
+        FtpSession::sha1_file(self, path)
     }
 
     fn ensure_dir(&mut self, dir: &str) -> Result<()> {
@@ -189,6 +198,10 @@ impl RemoteFs for RemoteSession {
 
     fn download_prefix(&mut self, path: &str, max_bytes: usize) -> Result<Vec<u8>> {
         self.inner().download_prefix(path, max_bytes)
+    }
+
+    fn sha1_file(&mut self, path: &str) -> Result<String> {
+        self.inner().sha1_file(path)
     }
 
     fn ensure_dir(&mut self, dir: &str) -> Result<()> {

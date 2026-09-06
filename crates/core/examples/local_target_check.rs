@@ -31,10 +31,11 @@ fn main() -> anyhow::Result<()> {
             println!("  dlc — {} bytes", dlc.size);
         }
 
-        let installed = target.installed_title_updates(game)?;
+        let state = target.title_update_state(game)?;
+        let installed = state.installed;
         println!("  installed title updates: {installed:?}");
 
-        let cached = target.cached_title_update_hashes(&game.id)?;
+        let cached = state.cached_hashes;
         println!("  Aurora-cached hashes: {cached:?}");
     }
 

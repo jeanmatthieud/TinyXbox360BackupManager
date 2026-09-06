@@ -622,20 +622,33 @@ pub fn aurora_paths(session: &mut dyn RemoteFs) -> Result<AuroraScan> {
         .strip_suffix("/Data/Databases")
         .map(str::to_string);
 
-    let tmp_dir = &*TMP_DIR;
+    // A folder of this call's own: several callers reach here at once (the
+    // storage status, the layout resolution, the Toolbox cards — the Aurora
+    // help modal dispatches its refresh with no re-entrancy guard at all).
+    // Under fixed names one thread's `write` truncated the file the other's
+    // `rusqlite` had open, and its `remove_file` deleted the other's copy
+    // mid-read — surfacing as a bogus "reading ScanPaths" failure, or as a
+    // layout read from half a database and silently fallen back to the
+    // defaults, i.e. the wrong library.
+    static CALL: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let tmp_dir = TMP_DIR.join(format!(
+        "aurora-db-{}-{}",
+        std::process::id(),
+        CALL.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    ));
     std::fs::create_dir_all(&tmp_dir)?;
 
-    let settings_bytes = session.download_file(&format!("{db_dir}/settings.db"))?;
-    let content_bytes = session.download_file(&format!("{db_dir}/content.db"))?;
-    let settings_path = tmp_dir.join("aurora-settings.db");
-    let content_path = tmp_dir.join("aurora-content.db");
-    std::fs::write(&settings_path, settings_bytes)?;
-    std::fs::write(&content_path, content_bytes)?;
+    let result = (|| {
+        let settings_bytes = session.download_file(&format!("{db_dir}/settings.db"))?;
+        let content_bytes = session.download_file(&format!("{db_dir}/content.db"))?;
+        let settings_path = tmp_dir.join("settings.db");
+        let content_path = tmp_dir.join("content.db");
+        std::fs::write(&settings_path, settings_bytes)?;
+        std::fs::write(&content_path, content_bytes)?;
+        read_aurora_databases(&settings_path, &content_path, install_dir)
+    })();
 
-    let result = read_aurora_databases(&settings_path, &content_path, install_dir);
-
-    let _ = std::fs::remove_file(&settings_path);
-    let _ = std::fs::remove_file(&content_path);
+    let _ = std::fs::remove_dir_all(&tmp_dir);
 
     result
 }
@@ -1149,6 +1162,15 @@ fn local_aurora_dir(mount: &Path) -> Option<PathBuf> {
         }
     }
     None
+}
+
+/// Aurora's `Data` folder on a mounted drive — the local pendant of
+/// [`find_aurora_data_dir`]. Everything Aurora keeps for itself (its
+/// databases, its title-update cache) hangs off it, and it is never to be
+/// guessed as `<mount>/Aurora/Data`: [`local_aurora_dir`] is what knows about
+/// `launch.ini`, `Dashboard/Aurora` and case-insensitive lookups.
+pub(crate) fn local_aurora_data_dir(mount: &Path) -> Option<PathBuf> {
+    find_child_ci(&local_aurora_dir(mount)?, "Data")
 }
 
 /// Locates Aurora's databases on a mounted drive (Aurora on a bootable USB key
@@ -1787,6 +1809,21 @@ fn push_god_games_remote(
     let title_id = title_id_raw.to_uppercase();
     let mut found_package = false;
 
+    // The DLC folder is shared by every package under this TitleID, so it is
+    // measured once — and only when it is actually there, `sub_entries`
+    // already says so — and charged to the first package alone. Measuring it
+    // inside the loop billed it to each package in turn, double-counting its
+    // bytes in the drive gauge for a TitleID holding both a GOD and an Arcade
+    // package, and cost a wasted round trip per game on an FTP scan.
+    let has_dlc = sub_entries
+        .iter()
+        .any(|s| s.is_dir && s.name.eq_ignore_ascii_case(&crate::stfs::dlc_dir_name()));
+    let mut dlc_size = if has_dlc {
+        session.dir_size(&format!("{title_dir}/{}", crate::stfs::dlc_dir_name()), 3)
+    } else {
+        0
+    };
+
     for sub in sub_entries {
         let Some((_, format, is_x360)) = game::INSTALLED_CONTENT_TYPES
             .iter()
@@ -1795,9 +1832,8 @@ fn push_god_games_remote(
             continue;
         };
         found_package = true;
-        let dlc_size =
-            session.dir_size(&format!("{title_dir}/{}", crate::stfs::dlc_dir_name()), 3);
-        let size = session.dir_size(&format!("{title_dir}/{}", sub.name), 3) + dlc_size;
+        let size = session.dir_size(&format!("{title_dir}/{}", sub.name), 3)
+            + std::mem::take(&mut dlc_size);
         let title = u32::from_str_radix(&title_id, 16)
             .ok()
             .and_then(iso2god::game_list::find_title_by_id)
@@ -1824,9 +1860,6 @@ fn push_god_games_remote(
     // No game package: only DLC and/or a title update sit here, orphaned from
     // a base install that was removed or never completed. Still surface it,
     // flagged incomplete.
-    let has_dlc = sub_entries
-        .iter()
-        .any(|s| s.is_dir && s.name.eq_ignore_ascii_case(&crate::stfs::dlc_dir_name()));
     let has_title_update = sub_entries.iter().any(|s| {
         s.is_dir && s.name.eq_ignore_ascii_case(&crate::stfs::title_update_dir_name())
     });
@@ -1834,7 +1867,7 @@ fn push_god_games_remote(
         return false;
     }
 
-    let dlc_size = session.dir_size(&format!("{title_dir}/{}", crate::stfs::dlc_dir_name()), 3);
+    // `dlc_size` is still the measurement taken above: no package claimed it.
     let title_update_size = session.dir_size(
         &format!("{title_dir}/{}", crate::stfs::title_update_dir_name()),
         3,

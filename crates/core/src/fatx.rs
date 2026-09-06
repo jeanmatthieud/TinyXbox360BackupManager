@@ -463,6 +463,16 @@ impl RemoteFs for FatxSession {
         Ok(out)
     }
 
+    fn sha1_file(&mut self, path: &str) -> Result<String> {
+        let resolved = self.resolve_or_err(path)?;
+        let mut file = self
+            .fs
+            .open(&resolved)
+            .with_context(|| format!("opening {path}"))?;
+        crate::util::sha1_hex_reader(&mut file)
+            .with_context(|| format!("reading {path}"))
+    }
+
     fn ensure_dir(&mut self, dir: &str) -> Result<()> {
         self.ensure_writable()?;
         let resolved = self.resolve_or_err(dir)?;
