@@ -33,7 +33,9 @@ export component LibraryStorageCard inherits ToolboxCard {
             indeterminate: true;
         }
 
-        if UiState.config.target-kind == TargetKind.Ftp && !UiState.fetching-aurora-paths: IconButton {
+        // Console-shaped targets (FTP and FATX alike), as in the scan-paths
+        // card next to it.
+        if UiState.config.target-kind != TargetKind.Local && !UiState.fetching-aurora-paths: IconButton {
             icon: IconSet.RefreshCcw;
             width: self.height;
             clicked => {

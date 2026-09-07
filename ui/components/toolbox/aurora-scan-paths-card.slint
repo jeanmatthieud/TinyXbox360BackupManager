@@ -27,7 +27,9 @@ export component AuroraScanPathsCard inherits ToolboxCard {
             indeterminate: true;
         }
 
-        if UiState.config.target-kind == TargetKind.Ftp && !UiState.fetching-aurora-paths: IconButton {
+        // Every console-shaped target, FATX included: the page itself is shown
+        // for both (see device-status-page.slint), so both need the refresh.
+        if UiState.config.target-kind != TargetKind.Local && !UiState.fetching-aurora-paths: IconButton {
             icon: IconSet.RefreshCcw;
             width: self.height;
             clicked => {

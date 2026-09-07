@@ -23,9 +23,10 @@ pub fn fetch(target: &Target, game: &Game) -> Result<Vec<DisplayedTitleUpdate>> 
     }
 
     let entries = unity::title_updates(&game.id)?;
-    let installed = target.installed_title_updates(game)?;
-    let cached_hashes = target.cached_title_update_hashes(&game.id)?;
-    Ok(merge(entries, &installed, &cached_hashes))
+    // One session for both halves: opening a second one costs another FTP
+    // login and another full Aurora-install discovery.
+    let state = target.title_update_state(game)?;
+    Ok(merge(entries, &state.installed, &state.cached_hashes))
 }
 
 fn merge(

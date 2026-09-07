@@ -3,8 +3,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 use crate::{
-    AppWindow, Dispatcher, DisplayedConfig, DisplayedDriveInfo, DisplayedGame, DisplayedGameToAdd,
-    DisplayedJob, DisplayedStoragePath, DisplayedTitleUpdate, JobKind, Message, Notification, Page,
+    AppWindow, Dispatcher, DisplayedConfig, DisplayedDriveInfo, DisplayedFatxDrive, DisplayedGame,
+    DisplayedGameToAdd, DisplayedJob, DisplayedStoragePath, DisplayedTitleUpdate, JobKind, Message,
+    Notification, Page,
     PendingQueueAction, UiState, covers, dialogs, game_details, jobs::perform_job, state::State,
     title_updates, util,
 };
@@ -21,6 +22,11 @@ use txbm_core::{
     ftp::FtpSession, game::Game, game_details::ContentKind, job_queue::QueuedJob,
     target::{StorageConfig, Target, TargetAnalysis},
 };
+
+/// Shown once per console drive, the first time it is opened directly. Writing
+/// to FATX from a PC is young, and a mistake here costs the user their whole
+/// game library — so they get told before, not after.
+const NEW_FATX_DRIVE_TEXT: &str = "Xbox 360 hard drive connected\nThis writes to the console's own filesystem directly. Back the drive up before adding or deleting games.";
 
 const NEW_DRIVE_TEXT: &str = "New drive detected\nOnce the games are on the console, remember to add the content paths in Aurora\n(Settings > Content Paths)";
 
@@ -137,12 +143,38 @@ impl State {
             .collect::<Vec<_>>();
 
         let conflicts = displayed.iter().filter(|g| g.already_installed).count() as i32;
-        self.games_to_add = picked.into_iter().map(|g| g.path).collect();
+        self.games_to_add = picked.into_iter().collect();
         self.displayed_games_to_add.set_vec(displayed);
 
         let app = weak.upgrade().unwrap();
         app.global::<UiState<'_>>()
             .set_games_to_add_conflicts(conflicts);
+    }
+
+    /// The job currently running, if any. It sits at index 0 of the queue
+    /// until `JobFinished` removes it.
+    fn running_job(&self) -> Option<&QueuedJob> {
+        self.is_job_running.then(|| self.job_queue.front()).flatten()
+    }
+
+    /// True when a job is already writing to a console-shaped target, and so
+    /// when nothing else may write to it.
+    ///
+    /// Only writes are exclusive: reading beside them is fine, and several
+    /// connections may read at once. What must never happen is a second write
+    /// — two uploads at once over FTP leave games the console cannot read, and
+    /// on a FATX drive two writers would each rearrange a FAT the other holds
+    /// a stale copy of. Serializing that single write is the whole point of
+    /// the job queue, so "a job is running" is exactly "a write is in flight",
+    /// and anything writing outside the queue has to check this.
+    ///
+    /// A local drive has no such constraint, and neither has "no target".
+    fn console_write_in_flight(&self) -> bool {
+        self.is_job_running
+            && matches!(
+                Target::from_config(&self.config.contents),
+                Some(Target::Ftp(_) | Target::Fatx(_))
+            )
     }
 
     /// Cancels the whole job queue: the running item (index 0) is only
@@ -230,6 +262,28 @@ impl State {
         }
     }
 
+    /// Switches the target to the Xbox 360 hard drive (or disk image) at
+    /// `device`, records it in the recent locations, and queues a config sync
+    /// + target analysis. Shared by the FATX drive picker and the hidden
+    /// disk-image picker.
+    fn select_fatx_device(
+        &mut self,
+        device: PathBuf,
+        message_queue: &mut VecDeque<(Message, SharedString)>,
+    ) {
+        self.config.contents.target_kind = TargetKind::Fatx;
+        self.config.contents.fatx = txbm_core::fatx::FatxConfig::new(device.clone());
+
+        if self.config.check_known_drive(&device) {
+            self.notifications
+                .push(Notification::error(NEW_FATX_DRIVE_TEXT));
+        }
+        self.config.contents.record_recent_location();
+
+        message_queue.push_back((Message::SyncConfig, SharedString::new()));
+        message_queue.push_back((Message::StartTargetAnalysis, SharedString::new()));
+    }
+
     /// Switches the target to the local drive mounted at `path`, records it in
     /// the recent locations, and queues a config sync + target analysis. Shared
     /// by the removable-drive picker and the debug folder picker.
@@ -312,7 +366,77 @@ impl State {
                 }
                 self.select_local_mount(path, message_queue);
             }
+            Message::RefreshFatxDrives => {
+                let app = weak.upgrade().unwrap();
+                let ui_state = app.global::<UiState<'_>>();
+                if ui_state.get_scanning_fatx_drives() {
+                    return;
+                }
+
+                // Enumerating means opening every physical disk and reading a
+                // block several gigabytes into it: a sleeping external drive
+                // takes seconds to answer, and each candidate is tried in turn.
+                // Far too much for the event loop, so the picker shows a
+                // progress line while a thread does it.
+                ui_state.set_scanning_fatx_drives(true);
+                ui_state.set_fatx_drives(ModelRc::from(Rc::new(
+                    VecModel::<DisplayedFatxDrive>::default(),
+                )));
+
+                let weak = weak.clone();
+                std::thread::spawn(move || {
+                    let drives = txbm_core::fatx_dev::list_fatx_drives();
+
+                    let _ = weak.upgrade_in_event_loop(move |app| {
+                        let ui_state = app.global::<UiState<'_>>();
+                        ui_state.set_fatx_drives(ModelRc::from(Rc::new(VecModel::from(
+                            crate::config::displayed_fatx_drives(drives),
+                        ))));
+                        ui_state.set_scanning_fatx_drives(false);
+                    });
+                });
+            }
+            Message::SelectFatxDrive => {
+                let device = PathBuf::from(payload.as_str());
+                // Probing again on confirmation catches a drive unplugged
+                // between the listing and the click, and reports the reason
+                // (permissions above all) rather than a bare failure later.
+                let probe = txbm_core::fatx_dev::probe_path(&device);
+                if !probe.is_usable() {
+                    let text = slint::format!("{}: {}", device.display(), probe.label());
+                    self.notifications.push(Notification::error(text));
+                    // The confirm button already closed the modal; re-open it so
+                    // the user can pick another drive instead of being stuck.
+                    let app = weak.upgrade().unwrap();
+                    app.global::<UiState<'_>>().set_selecting_target(true);
+                    return;
+                }
+                self.select_fatx_device(device, message_queue);
+            }
+            Message::PickFatxImage => {
+                let app = weak.upgrade().unwrap();
+                let window_handle = app.window().window_handle();
+
+                let Some(path) = dialogs::pick_fatx_image(&window_handle) else {
+                    return;
+                };
+                let probe = txbm_core::fatx_dev::probe_path(&path);
+                if !probe.is_usable() {
+                    let text = slint::format!("{}: {}", path.display(), probe.label());
+                    self.notifications.push(Notification::error(text));
+                    return;
+                }
+                self.select_fatx_device(path, message_queue);
+            }
             Message::RefreshDisplayedGames => {
+                // The game the running job is writing into, if it names one:
+                // its folder is being rewritten (a second disc, a DLC, a
+                // deletion…), so the library veils it rather than let it be
+                // opened on contents that are in flux.
+                let running = self.running_job();
+                let busy_title_id = running.and_then(QueuedJob::writes_title_id);
+                let busy_path = running.map(QueuedJob::path);
+
                 let displayed_games = self
                     .games
                     .iter()
@@ -328,7 +452,17 @@ impl State {
                             && (self.games_filter.is_empty()
                                 || game.search_term.contains(&self.games_filter))
                     })
-                    .map(DisplayedGame::from)
+                    .map(|game| {
+                        let mut displayed = DisplayedGame::from(game);
+                        // By TitleID, so a second disc queued for a game
+                        // already installed veils that game; by path too, for
+                        // a deletion of an extracted game that has no
+                        // readable TitleID at all.
+                        displayed.busy = busy_title_id
+                            .is_some_and(|id| id.eq_ignore_ascii_case(&game.id))
+                            || busy_path == Some(game.path.as_path());
+                        displayed
+                    })
                     .collect::<Vec<_>>();
 
                 self.displayed_games.set_vec(displayed_games);
@@ -445,15 +579,24 @@ impl State {
                     return;
                 };
 
+                // A scan already under way started before whatever just changed
+                // the library, so its result cannot show it: the refresh is
+                // held back rather than dropped. Dropping it left a game that
+                // a queued add had just written invisible until the user
+                // rescanned by hand.
                 if self.is_scanning {
+                    self.rescan_deferred = true;
                     return;
                 }
 
-                // A console over FTP takes no second connection while a job is
-                // writing to it: hold the scan back until the queue drains.
-                // A local drive has no such constraint, so it keeps refreshing
-                // after every job of a batch.
-                if self.is_job_running && matches!(target, Target::Ftp(_)) {
+                // A scan walks the whole library, the folder the running job is
+                // writing to included, and would list a game that is only half
+                // copied. Reading beside a write is allowed (see
+                // `console_write_in_flight`), but reading *that* is pointless,
+                // so the scan waits for the queue to drain. A local drive has
+                // no such constraint, and keeps refreshing after every job of
+                // a batch.
+                if self.console_write_in_flight() {
                     self.rescan_deferred = true;
                     return;
                 }
@@ -497,6 +640,13 @@ impl State {
 
                 message_queue.push_back((Message::SetStatus, SharedString::new()));
 
+                // A refresh asked for while this scan was running: it is only
+                // worth anything now the scan is out of the way. Taken here so
+                // it is dropped along with a cancelled or failed scan — the
+                // user cancelled the walk, replaying it right away would undo
+                // exactly what they asked for.
+                let deferred = std::mem::take(&mut self.rescan_deferred);
+
                 match SCAN_RESULT.lock().unwrap().take() {
                     Some(Ok((games, drive_info))) => {
                         self.games = games;
@@ -504,6 +654,11 @@ impl State {
 
                         app.global::<UiState<'_>>()
                             .set_drive_info(DisplayedDriveInfo::from(&self.drive_info));
+
+                        if deferred {
+                            message_queue.push_back((Message::RefreshAll, SharedString::new()));
+                            return;
+                        }
 
                         message_queue.push_back((Message::RefreshSorting, SharedString::new()));
                         message_queue.push_back((Message::DownloadCovers, SharedString::new()));
@@ -558,6 +713,25 @@ impl State {
                         }
                         self.config.contents.target_kind = TargetKind::Local;
                         self.config.contents.mount_point = loc.mount_point;
+                    }
+                    TargetKind::Fatx => {
+                        // The drive may have been unplugged since it was
+                        // recorded, or the machine rebooted with the disks in a
+                        // different order: probe before trusting the path.
+                        let probe = txbm_core::fatx_dev::probe_path(&loc.fatx.device);
+                        if !probe.is_usable() {
+                            let text = slint::format!(
+                                "{}: {}",
+                                loc.fatx.device.display(),
+                                probe.label()
+                            );
+                            self.notifications.push(Notification::error(text));
+                            let app = weak.upgrade().unwrap();
+                            app.global::<UiState<'_>>().set_selecting_target(true);
+                            return;
+                        }
+                        self.config.contents.target_kind = TargetKind::Fatx;
+                        self.config.contents.fatx = loc.fatx;
                     }
                     TargetKind::Ftp => {
                         self.config.contents.target_kind = TargetKind::Ftp;
@@ -644,6 +818,7 @@ impl State {
                 // for the next connection.
                 self.config.contents.target_kind = TargetKind::Local;
                 self.config.contents.mount_point = PathBuf::new();
+                self.config.contents.fatx = txbm_core::fatx::FatxConfig::default();
 
                 message_queue.push_back((Message::SyncConfig, SharedString::new()));
                 message_queue.push_back((Message::RefreshAll, SharedString::new()));
@@ -664,7 +839,9 @@ impl State {
                 let ui = app.global::<UiState<'_>>();
                 ui.set_configuring_storage(true);
                 ui.set_analyzing_target(true);
-                ui.set_storage_is_ftp(matches!(target, Target::Ftp(_)));
+                // A console-shaped target stores absolute `/Hdd1/...` paths, which
+                // no local folder picker can browse.
+                ui.set_storage_is_console(!matches!(target, Target::Local(_)));
 
                 let weak = weak.clone();
                 std::thread::spawn(move || {
@@ -867,16 +1044,25 @@ impl State {
                 }
             }
             Message::SetGameId => {
-                // Payload: "<path>\n<TitleID>", sent by the covers pass
-                // once a TitleID has been resolved over FTP.
-                if let Some((path, id)) = payload.split_once('\n') {
+                // Payload: alternating "<path>\n<TitleID>" lines — the whole
+                // batch the covers pass resolved over FTP, in one message.
+                // The merge and the model rebuild below are O(N) over the
+                // library each, so they run once for the batch, not once per
+                // game.
+                let mut lines = payload.lines();
+                let mut any = false;
+                while let (Some(path), Some(id)) = (lines.next(), lines.next()) {
                     let path = Path::new(path);
                     for game in self.games.iter_mut().filter(|g| g.path == path) {
                         game.id = id.to_string();
                         game.search_term = format!("{}\0{id}", game.title).to_lowercase();
                     }
-                    // The ID was unknown at scan time, so any orphaned DLC/title
-                    // update entry sharing it couldn't be folded in yet.
+                    any = true;
+                }
+                if any {
+                    // The IDs were unknown at scan time, so any orphaned
+                    // DLC/title update entry sharing one couldn't be folded in
+                    // yet.
                     txbm_core::game::merge_extracted_content(&mut self.games);
                     message_queue.push_back((Message::RefreshDisplayedGames, SharedString::new()));
                 }
@@ -974,9 +1160,16 @@ impl State {
                 self.set_games_to_add(picked, weak);
             }
             Message::ConfirmGamesToAdd => {
-                while let Some(path) = self.games_to_add.pop_front() {
+                while let Some(picked) = self.games_to_add.pop_front() {
                     let _ = self.displayed_games_to_add.remove(0);
-                    self.enqueue_job(QueuedJob::Add(path), message_queue, weak);
+                    self.enqueue_job(
+                        QueuedJob::Add {
+                            path: picked.path,
+                            title_id: picked.installs_title_id,
+                        },
+                        message_queue,
+                        weak,
+                    );
                 }
 
                 let app = weak.upgrade().unwrap();
@@ -1021,6 +1214,10 @@ impl State {
                         message_queue.push_back((Message::RefreshAll, SharedString::new()));
                     }
 
+                    // Nothing is being written to any more, so the cards that
+                    // were greyed out come back (see `running_job`).
+                    message_queue.push_back((Message::RefreshDisplayedGames, SharedString::new()));
+
                     // The queue is now drained: carry out the disconnect/quit
                     // the user was waiting on, if any.
                     self.run_pending_queue_action(message_queue, weak);
@@ -1046,6 +1243,10 @@ impl State {
 
                 self.job_cancel
                     .store(false, std::sync::atomic::Ordering::Relaxed);
+
+                // This job's target game (when it names one) is greyed out in
+                // the library for as long as it runs — see `running_job`.
+                message_queue.push_back((Message::RefreshDisplayedGames, SharedString::new()));
 
                 let weak = weak.clone();
                 let config = self.config.clone();
@@ -1245,24 +1446,17 @@ impl State {
                         let status = txbm_core::target::local_storage_status(&mount);
                         set_storage_status(&app, status);
                     }
-                    // Console over FTP: read over the network on a thread.
-                    Some(Target::Ftp(ftp)) => {
+                    // Console-shaped target: reading it means either network
+                    // round trips or raw disk I/O, so it runs on a thread.
+                    Some(target) => {
                         let ui_state = app.global::<UiState<'_>>();
                         ui_state.set_fetching_aurora_paths(true);
                         ui_state.set_aurora_paths_error(SharedString::new());
 
                         let weak = weak.clone();
                         std::thread::spawn(move || {
-                            // One connection feeds both Toolbox cards.
-                            let res = FtpSession::connect(&ftp).map(|mut session| {
-                                let hdd = txbm_core::target::ftp_hdd_root(&mut session);
-                                let status = txbm_core::target::ftp_storage_status(
-                                    &mut session,
-                                    &hdd,
-                                );
-                                session.quit();
-                                status
-                            });
+                            // One session feeds both Toolbox cards.
+                            let res = target.storage_status();
 
                             let _ = weak.upgrade_in_event_loop(move |app| match res {
                                 Ok(status) => set_storage_status(&app, status),
@@ -1502,6 +1696,14 @@ impl State {
                 }
             }
             Message::ActivateTitleUpdate => {
+                // This one *writes* to the console, so it must not run beside
+                // the queue's own write either (see `console_write_in_flight`).
+                if self.console_write_in_flight() {
+                    self.notifications.push(Notification::info(
+                        "Wait for the transfer queue to finish before changing a title update",
+                    ));
+                    return;
+                }
                 let Some((path, hash)) = payload.split_once('\n') else {
                     return;
                 };
@@ -1542,6 +1744,13 @@ impl State {
                 });
             }
             Message::DeactivateTitleUpdate => {
+                // A write too: same rule as `ActivateTitleUpdate` above.
+                if self.console_write_in_flight() {
+                    self.notifications.push(Notification::info(
+                        "Wait for the transfer queue to finish before changing a title update",
+                    ));
+                    return;
+                }
                 let Some((path, file_name)) = payload.split_once('\n') else {
                     return;
                 };

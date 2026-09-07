@@ -3,39 +3,49 @@
 //! extracting it, and inspects any STFS package header found in it:
 //! `cargo run -p txbm-core --example inspect_content_disc -- <iso path>`
 
-use anyhow::{Context, Result};
-use iso2god::iso::{self, DirectoryTable};
-use std::fs::File;
-use std::io::Read;
+use anyhow::{Context, Result, anyhow};
+use std::path::PathBuf;
 use txbm_core::stfs;
+use txbm_core::xdvd::XdvdImage;
+use xdvdfs::blockdev::OffsetWrapper;
 
 fn main() -> Result<()> {
     let path = std::env::args()
         .nth(1)
         .expect("usage: inspect_content_disc <iso path>");
+    let path = PathBuf::from(path);
 
-    let file = File::open(&path).context("opening ISO")?;
-    let mut reader = iso::IsoReader::read(file).context("reading ISO (invalid XDVDFS?)")?;
+    let mut image = XdvdImage::open(&path)?;
+    println!("volume offset: {:#x}", image.root_offset()?);
+    println!("used size:     {}", image.max_used_prefix_size()?);
 
-    println!("{:?}", reader.volume_descriptor);
+    // The listing needs the raw file tree, which `XdvdImage` does not expose.
+    let file = std::fs::File::open(&path).context("opening ISO")?;
+    let mut dev = OffsetWrapper::new(std::io::BufReader::new(file))
+        .map_err(|e| anyhow!("invalid XDVDFS image: {e}"))?;
+    let volume = xdvdfs::read::read_volume(&mut dev)
+        .map_err(|e| anyhow!("reading XDVDFS volume: {e}"))?;
+    let tree = volume
+        .root_table
+        .file_tree(&mut dev)
+        .map_err(|e| anyhow!("reading file tree: {e}"))?;
 
-    let mut files = Vec::new();
-    collect_files(String::new(), &reader.directory_table, &mut files);
-
-    for (entry_path, size) in &files {
-        println!("{size:12} {entry_path}");
-
-        let windows_path: iso::WindowsPath = entry_path.as_str().into();
-        let Ok(Some(reader_ref)) = reader.get_entry(&windows_path) else {
-            continue;
-        };
-        // A STFS header always sits in the first few KiB: no need to read
-        // the whole (possibly huge) package.
-        let header_len = (*size as usize).min(0x2000);
-        let mut buf = vec![0u8; header_len];
-        if reader_ref.read_exact(&mut buf).is_err() {
+    for (dir, node) in &tree {
+        if node.node.dirent.is_directory() {
             continue;
         }
+        let name = node
+            .name_str::<std::io::Error>()
+            .map_err(|e| anyhow!("invalid file name: {e}"))?;
+        let entry_path = format!("{dir}/{name}");
+        let size = node.node.dirent.data.size();
+        println!("{size:12} {entry_path}");
+
+        // A STFS header always sits in the first few KiB: no need to read
+        // the whole (possibly huge) package.
+        let Ok(buf) = image.read_prefix(node, 0x2000) else {
+            continue;
+        };
         let mut cursor = std::io::Cursor::new(buf);
         if let Ok(Some(info)) = stfs::inspect_reader(&mut cursor, entry_path.clone().into()) {
             println!(
@@ -53,15 +63,4 @@ fn main() -> Result<()> {
     }
 
     Ok(())
-}
-
-fn collect_files(path: String, dir: &DirectoryTable, out: &mut Vec<(String, u32)>) {
-    for entry in &dir.entries {
-        let entry_path = format!("{path}\\{}", entry.name);
-        if let Some(subdir) = &entry.subdirectory {
-            collect_files(entry_path, subdir, out);
-        } else {
-            out.push((entry_path, entry.size));
-        }
-    }
 }

@@ -50,7 +50,7 @@ pub fn perform_job(
     weak: &Weak<AppWindow>,
 ) {
     let res = match &job {
-        QueuedJob::Add(in_path) => perform_add(in_path, config, &cancel, weak),
+        QueuedJob::Add { path, .. } => perform_add(path, config, &cancel, weak),
         QueuedJob::Delete(game) => perform_delete(game, config, &cancel, weak),
         QueuedJob::DeleteContent {
             game,
@@ -91,7 +91,7 @@ pub fn perform_job(
 
         match &job {
             // Both change what the library holds: rescan it.
-            QueuedJob::Add(_) | QueuedJob::Delete(_) => {
+            QueuedJob::Add { .. } | QueuedJob::Delete(_) => {
                 dispatcher.invoke_dispatch(Message::RefreshAll, SharedString::new());
             }
             // A component removal only changes what is inside one game, so it
@@ -119,7 +119,7 @@ fn is_cancellation(e: &anyhow::Error) -> bool {
 /// stays silent: the library refresh speaks for it.
 fn success_text(job: &QueuedJob) -> Option<SharedString> {
     match job {
-        QueuedJob::Add(_) => None,
+        QueuedJob::Add { .. } => None,
         QueuedJob::Delete(game) => Some(slint::format!("{} deleted", game.title)),
         QueuedJob::DeleteContent { .. } => Some("Content deleted".into()),
     }
@@ -127,7 +127,7 @@ fn success_text(job: &QueuedJob) -> Option<SharedString> {
 
 fn cancelled_text(job: &QueuedJob) -> SharedString {
     match job {
-        QueuedJob::Add(_) => "Conversion cancelled".into(),
+        QueuedJob::Add { .. } => "Conversion cancelled".into(),
         // Unlike a conversion, a cancelled deletion leaves whatever it already
         // removed removed: say so instead of implying nothing happened.
         QueuedJob::Delete(game) => slint::format!(
@@ -142,7 +142,7 @@ fn cancelled_text(job: &QueuedJob) -> SharedString {
 
 fn failure_text(job: &QueuedJob, e: &anyhow::Error) -> SharedString {
     match job {
-        QueuedJob::Add(_) => slint::format!("Conversion failed: {e:#}"),
+        QueuedJob::Add { .. } => slint::format!("Conversion failed: {e:#}"),
         QueuedJob::Delete(_) => slint::format!("Failed to delete game: {e:#}"),
         QueuedJob::DeleteContent { .. } => slint::format!("Failed to delete content: {e:#}"),
     }

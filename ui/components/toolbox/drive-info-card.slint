@@ -9,13 +9,22 @@ import { HorizontalLine } from "../horizontal-line.slint";
 import { MyPalette } from "../../styling.slint";
 import { UiState } from "../../ui-state.slint";
 
-// Filesystem / allocation-granularity report for a local drive target.
+// Filesystem / allocation-granularity report for a drive target: a drive
+// mounted by this computer, or the console's own hard drive read as FATX.
+//
+// The two are judged by opposite standards. A mounted drive is one the user
+// formatted, so the card tells them whether they chose what the console can
+// read; a FATX drive was formatted by the console itself, so there is nothing
+// to choose and nothing to warn about — its filesystem and its cluster size
+// are reported as facts.
 export component DriveInfoCard inherits ToolboxCard {
+    private property <bool> is-fatx: UiState.drive-info.fs-kind == "FATX";
     private property <int> optimal-allocation-granularity: (UiState.drive-info.total-gib <= 32) ? 32768 : 65536;
-    private property <bool> is-optimal-allocation-granularity: UiState.drive-info.allocation-granularity == optimal-allocation-granularity;
+    private property <bool> is-optimal-allocation-granularity: is-fatx
+        || UiState.drive-info.allocation-granularity == optimal-allocation-granularity;
 
     pure function fs-icon(fs-kind: string) -> Icon {
-        if fs-kind == "FAT32" {
+        if fs-kind == "FAT32" || fs-kind == "FATX" {
             IconSet.Check
         } else {
             IconSet.TriangleAlert
@@ -23,7 +32,9 @@ export component DriveInfoCard inherits ToolboxCard {
     }
 
     pure function fs-comment(fs-kind: string) -> string {
-        if fs-kind == "FAT32" {
+        if fs-kind == "FATX" {
+            "the Xbox 360's own filesystem — formatted by the console"
+        } else if fs-kind == "FAT32" {
             "optimal choice for Xbox 360 USB storage"
         } else if fs-kind == "NTFS" || fs-kind == "exFAT" {
             "not readable by the Xbox 360 (fine for a local staging folder)"
@@ -40,8 +51,10 @@ export component DriveInfoCard inherits ToolboxCard {
         }
     }
 
-    pure function allocation-granularity-comment(optimal: bool) -> string {
-        if optimal {
+    pure function allocation-granularity-comment(optimal: bool, fatx: bool) -> string {
+        if fatx {
+            "cluster size chosen by the console; nothing to change"
+        } else if optimal {
             "optimal"
         } else {
             "not optimal, but should work"
@@ -79,7 +92,7 @@ export component DriveInfoCard inherits ToolboxCard {
         }
 
         Text {
-            text: "Allocation granularity: \{UiState.drive-info.allocation-granularity}  (\{allocation-granularity-comment(is-optimal-allocation-granularity)})";
+            text: "Allocation granularity: \{UiState.drive-info.allocation-granularity}  (\{allocation-granularity-comment(is-optimal-allocation-granularity, is-fatx)})";
         }
     }
 }

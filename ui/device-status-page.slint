@@ -52,14 +52,16 @@ export component DeviceStatusPage inherits VerticalLayout {
 
             if UiState.config.target-kind == TargetKind.Ftp && !UiState.config.target.is-empty: ConsoleCard { }
 
-            if UiState.config.target-kind == TargetKind.Local: DriveInfoCard { }
+            // A FATX drive reports its size and free space just like a mounted
+            // one, so it gets the same card.
+            if UiState.config.target-kind == TargetKind.Local || UiState.config.target-kind == TargetKind.Fatx: DriveInfoCard { }
 
             // App storage folders (and, on a console, their Aurora coverage).
             LibraryStorageCard { }
 
             // Aurora scan paths: always for a console; for a local drive only
             // when it carries an Aurora install (otherwise nothing to show).
-            if !UiState.config.target.is-empty && (UiState.config.target-kind == TargetKind.Ftp || UiState.aurora-scan-paths.length > 0): AuroraScanPathsCard { }
+            if !UiState.config.target.is-empty && (UiState.config.target-kind != TargetKind.Local || UiState.aurora-scan-paths.length > 0): AuroraScanPathsCard { }
         }
     }
 }

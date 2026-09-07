@@ -12,9 +12,3 @@ rustflags = ["-C", "link-arg=/STACK:8000000"]
 
 [target.i686-pc-windows-msvc]
 rustflags = ["-C", "link-arg=/STACK:8000000"]
-
-[target.x86_64-win7-windows-msvc]
-rustflags = ["-C", "link-arg=/STACK:8000000"]
-
-[target.i686-win7-windows-msvc]
-rustflags = ["-C", "link-arg=/STACK:8000000"]

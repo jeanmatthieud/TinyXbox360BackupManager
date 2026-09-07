@@ -3,7 +3,11 @@
 //! FTP transfer to the console (Aurora FTP server).
 //!
 //! Specificities of the console server:
-//! - only one connection at a time (no multiple streams);
+//! - several connections at once are fine as long as they only *read*
+//!   (parallel scans and queries). One write, on the other hand, must be the
+//!   only write in flight: two uploads at the same time leave games the
+//!   console can no longer read. That is what the job queue serializes
+//!   (`crates/core/src/job_queue.rs`);
 //! - path arguments of commands (LIST, STOR, DELE...) are poorly handled:
 //!   must navigate with CWD then only use relative names;
 //! - NLST returns complete LIST lines.
@@ -398,6 +402,33 @@ impl FtpSession {
         Ok(buf)
     }
 
+    /// SHA1 of a remote file, hashed block by block as it arrives so a
+    /// hundred-megabyte title update never sits in memory as a whole.
+    ///
+    /// The read runs to completion, so — unlike [`Self::download_prefix`] —
+    /// the transfer ends the way the server expects and the session stays
+    /// usable; a read error mid-`RETR` leaves the data connection out of sync
+    /// and poisons it, exactly as a truncated prefix read does.
+    pub fn sha1_file(&mut self, remote_path: &str) -> Result<String> {
+        let (parent, name) = parent_and_name(remote_path);
+        self.cwd(&parent)?;
+        let mut stream = self
+            .stream
+            .retr_as_stream(&name)
+            .with_context(|| format!("downloading {remote_path}"))?;
+
+        let hash = crate::util::sha1_hex_reader(&mut stream);
+        if hash.is_err() {
+            self.poisoned = true;
+        }
+        let hash = hash.with_context(|| format!("reading {remote_path}"))?;
+
+        self.stream
+            .finalize_retr_stream(stream)
+            .with_context(|| format!("finishing the download of {remote_path}"))?;
+        Ok(hash)
+    }
+
     /// Counts files in a remote directory, recursively.
     pub fn count_files(&mut self, remote_dir: &str) -> u64 {
         let mut count = 0;
@@ -437,6 +468,13 @@ impl FtpSession {
         cancel: &AtomicBool,
         progress: &mut dyn FnMut(u64, u64),
     ) -> Result<()> {
+        // `cwd` walks the whole path from the root, one command per component,
+        // so it is issued once for the directory rather than once per file:
+        // an extracted game is 5 000 to 20 000 files, and a CWD chain before
+        // each `DELE` turned a single deletion into ~100 000 round trips on
+        // the console's FTP server. Only a recursive call moves the working
+        // directory out from under us.
+        let mut cwd_is_here = false;
         for entry in self.list_dir(remote_dir) {
             if cancel.load(Ordering::Relaxed) {
                 bail!(crate::target::DELETION_CANCELLED);
@@ -450,8 +488,12 @@ impl FtpSession {
                     cancel,
                     progress,
                 )?;
+                cwd_is_here = false;
             } else {
-                self.cwd(remote_dir)?;
+                if !cwd_is_here {
+                    self.cwd(remote_dir)?;
+                    cwd_is_here = true;
+                }
                 self.stream
                     .rm(&entry.name)
                     .with_context(|| format!("removing {remote_dir}/{}", entry.name))?;

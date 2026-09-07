@@ -221,6 +221,12 @@ fn push_god_games_local(title_dir: &Path, title_id_raw: &str, games: &mut Vec<Ga
     let title_id = title_id_raw.to_uppercase();
     let mut found_package = false;
 
+    // Measured once and charged to the first package alone: the DLC folder
+    // belongs to the TitleID, not to a package, and a `<TitleID>` holding both
+    // a GOD and an Arcade package counted its bytes twice in the drive gauge.
+    let dlc_dir = title_dir.join(crate::stfs::dlc_dir_name());
+    let mut dlc_size = dir_size(&dlc_dir);
+
     for (content_type, format, is_x360) in INSTALLED_CONTENT_TYPES {
         let type_dir = title_dir.join(content_type);
         if !type_dir.is_dir() {
@@ -240,7 +246,7 @@ fn push_god_games_local(title_dir: &Path, title_id_raw: &str, games: &mut Vec<Ga
             title,
             format,
             path: title_dir.to_path_buf(),
-            size: dir_size(&type_dir) + dir_size(&title_dir.join(crate::stfs::dlc_dir_name())),
+            size: dir_size(&type_dir) + std::mem::take(&mut dlc_size),
             is_x360,
             search_term,
             incomplete: false,
@@ -255,7 +261,6 @@ fn push_god_games_local(title_dir: &Path, title_id_raw: &str, games: &mut Vec<Ga
     // No game package: only DLC and/or a title update sit here, orphaned from
     // a base install that was removed or never completed. Still surface it,
     // flagged incomplete.
-    let dlc_dir = title_dir.join(crate::stfs::dlc_dir_name());
     let title_update_dir = title_dir.join(crate::stfs::title_update_dir_name());
     if !dlc_dir.is_dir() && !title_update_dir.is_dir() {
         return false;
@@ -270,7 +275,8 @@ fn push_god_games_local(title_dir: &Path, title_id_raw: &str, games: &mut Vec<Ga
         title,
         format: GameFormat::God,
         path: title_dir.to_path_buf(),
-        size: dir_size(&dlc_dir) + dir_size(&title_update_dir),
+        // `dlc_size` is still the measurement above: no package claimed it.
+        size: dlc_size + dir_size(&title_update_dir),
         is_x360: true,
         search_term,
         incomplete: true,

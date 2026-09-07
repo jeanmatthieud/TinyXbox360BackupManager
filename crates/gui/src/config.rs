@@ -3,14 +3,14 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 use crate::{
-    DisplayedBadAvatarConfig, DisplayedConfig, DisplayedRecentLocation, DisplayedRemovableDrive,
-    GodLayout, TargetKind,
+    DisplayedBadAvatarConfig, DisplayedConfig, DisplayedFatxDrive, DisplayedRecentLocation,
+    DisplayedRemovableDrive, GodLayout, TargetKind,
 };
 use crate::util::GIB;
 use slint::{ModelRc, SharedString, ToSharedString, VecModel};
 use txbm_core::{
     badavatar::UrlField,
-    config::{Config, GodLayout as CoreGodLayout, TargetKind as CoreTargetKind},
+    config::{Config, GodLayout as CoreGodLayout},
     target::Target,
 };
 
@@ -52,7 +52,7 @@ pub fn recent_locations(config: &Config) -> Vec<DisplayedRecentLocation> {
         .iter()
         .map(|l| DisplayedRecentLocation {
             name: l.display_name().to_shared_string(),
-            is_ftp: matches!(l.kind, CoreTargetKind::Ftp),
+            kind: l.kind.into(),
         })
         .collect()
 }
@@ -89,8 +89,32 @@ impl From<txbm_core::config::TargetKind> for TargetKind {
         match kind {
             txbm_core::config::TargetKind::Local => TargetKind::Local,
             txbm_core::config::TargetKind::Ftp => TargetKind::Ftp,
+            txbm_core::config::TargetKind::Fatx => TargetKind::Fatx,
         }
     }
+}
+
+/// Builds the model backing `UiState.fatx-drives` from a live enumeration of
+/// the raw disks attached to this computer (see
+/// [`txbm_core::fatx_dev::list_fatx_drives`], which opens and probes every one
+/// of them and therefore runs on a worker thread, never on the event loop).
+pub fn displayed_fatx_drives(
+    drives: Vec<txbm_core::fatx_dev::FatxDrive>,
+) -> Vec<DisplayedFatxDrive> {
+    drives
+        .into_iter()
+        .map(|d| DisplayedFatxDrive {
+            name: d.name.to_shared_string(),
+            path: d.path.to_string_lossy().to_shared_string(),
+            size_text: if d.size_bytes > 0 {
+                SharedString::from(format!("{:.1} GiB", d.size_bytes as f32 / GIB))
+            } else {
+                SharedString::new()
+            },
+            detail: d.probe.label().to_shared_string(),
+            usable: d.probe.is_usable(),
+        })
+        .collect()
 }
 
 impl From<CoreGodLayout> for GodLayout {

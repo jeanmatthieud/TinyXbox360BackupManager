@@ -15,7 +15,7 @@
 //!    of creating a flat duplicate next to the nested original.
 
 use crate::config::GodLayout;
-use crate::ftp::FtpSession;
+use crate::remote_fs::RemoteFs;
 use crate::game::is_title_id;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -95,11 +95,11 @@ fn contains_title_dir(dir: &Path, title_id: &str) -> bool {
 /// Snapshot of every `<TitleID>` folder already present under a console's GOD
 /// directory (flat or nested under a named parent), keyed by TitleID.
 ///
-/// Built with one `LIST` per already-existing named parent, same as the
+/// Built with one listing per already-existing named parent, same as the
 /// per-title lookup it replaces — but built **once per upload batch** and
 /// reused for every title in it, instead of walking the console again for
 /// each one. A batch adding N new games to a library of M named parents costs
-/// `M` extra `LIST`s total instead of up to `N * M`.
+/// `M` extra listings total instead of up to `N * M`.
 pub struct GodDirIndex {
     god_dir: String,
     /// TitleID (uppercase) -> the directory holding its folder.
@@ -109,7 +109,7 @@ pub struct GodDirIndex {
 impl GodDirIndex {
     /// Builds the index by listing `god_dir` and every named (non-TitleID)
     /// parent directly under it.
-    pub fn build_ftp(session: &mut FtpSession, god_dir: &str) -> Self {
+    pub fn build_remote(session: &mut dyn RemoteFs, god_dir: &str) -> Self {
         let god_dir = god_dir.trim_end_matches('/').to_string();
         let mut by_title = HashMap::new();
         let children = session.list_dir(&god_dir);
@@ -137,9 +137,9 @@ impl GodDirIndex {
 }
 
 /// Remote counterpart of [`local_title_parent`]. `god_dir` and the result are
-/// absolute FTP paths (`/Hdd1/Content/0000000000000000`). `index` must be
+/// absolute console paths (`/Hdd1/Content/0000000000000000`). `index` must be
 /// built from the same `god_dir`.
-pub fn ftp_title_parent(
+pub fn remote_title_parent(
     index: &GodDirIndex,
     title_id: &str,
     name: Option<&str>,

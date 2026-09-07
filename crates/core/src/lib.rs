@@ -12,14 +12,19 @@ pub mod data_dir;
 pub mod drive_info;
 pub mod drives;
 pub mod extract;
+pub mod fatx;
+pub mod fatx_dev;
 pub mod ftp;
 pub mod game;
 pub mod game_details;
 pub mod god;
 pub mod god_dirs;
+pub mod hash_cache;
+pub mod instance;
 pub mod iso_info;
 pub mod job_queue;
 pub mod mobcat;
+pub mod remote_fs;
 pub mod scan;
 pub mod stfs;
 pub mod target;
@@ -29,6 +34,7 @@ pub mod unity_mirror;
 pub mod updates;
 pub mod util;
 pub mod xbe;
+pub mod xdvd;
 pub mod xex;
 
 /// Standard folder of GOD / official content on the console.
