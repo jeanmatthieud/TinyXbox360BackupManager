@@ -90,7 +90,7 @@ Inspired by [TinyWiiBackupManager](https://github.com/mq1/TinyWiiBackupManager).
 - **Multi-disc games with an install disc** (e.g. GTA V) and **Expansion Installer discs** (e.g. GTA IV: The Complete Edition) are handled — just provide both ISOs; DLC and title updates get installed to the right place so unlocks work out of the box.
 - **Covers** from [XboxUnity](https://www.xboxunity.net) and [MobCats](https://github.com/MobCat/MobCats-original-xbox-game-list) (with a local cache).
 - **Cross-platform**, native, no dependencies to install:
-  - :window: Windows 7+ | x86 (32-bit), x64 (64-bit), arm64 (Qualcomm Snapdragon etc.)
+  - :window: Windows 10+ | x86 (32-bit), x64 (64-bit), arm64 (Qualcomm Snapdragon etc.)
   - :apple: macOS 10.14+ | x86_64 (Intel), arm64 (Apple Silicon/M1+)
   - :penguin: Linux (glibc 2.31+) | x86 (32-bit), x86_64 (64-bit), arm64 (Raspberry Pis etc.)
 

@@ -191,9 +191,9 @@ jobs:
           - arch: arm64
             target: aarch64-pc-windows-msvc
           - arch: x64
-            target: x86_64-win7-windows-msvc
+            target: x86_64-pc-windows-msvc
           - arch: x86
-            target: i686-win7-windows-msvc
+            target: i686-pc-windows-msvc
 
     steps:
       - name: Checkout
@@ -231,17 +231,17 @@ jobs:
           RUSTC_BOOTSTRAP: 1
           CC: clang-cl
           AR: llvm-lib
-          CFLAGS_x86_64_win7_windows_msvc: /clang:-O3 /clang:-flto /clang:-fuse-ld=lld-link
-          CFLAGS_i686_win7_windows_msvc: /clang:-O3 /clang:-flto /clang:-fuse-ld=lld-link
+          CFLAGS_x86_64_pc_windows_msvc: /clang:-O3 /clang:-flto /clang:-fuse-ld=lld-link
+          CFLAGS_i686_pc_windows_msvc: /clang:-O3 /clang:-flto /clang:-fuse-ld=lld-link
           CFLAGS_aarch64_pc_windows_msvc: -O3 -flto=thin -fuse-ld=lld-link
           # /STACK:8000000 must be repeated here: these env vars fully override the
           # `rustflags` from .cargo/config.toml, they are not merged with it.
-          CARGO_TARGET_X86_64_WIN7_WINDOWS_MSVC_RUSTFLAGS: -C target-feature=+crt-static -C linker-plugin-lto -C link-arg=/FORCE:MULTIPLE -C link-arg=/STACK:8000000 -l dylib=ole32
-          CARGO_TARGET_I686_WIN7_WINDOWS_MSVC_RUSTFLAGS: -C target-feature=+crt-static -C linker-plugin-lto -C link-arg=/FORCE:MULTIPLE -C link-arg=/STACK:8000000 -l dylib=ole32
+          CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS: -C target-feature=+crt-static -C linker-plugin-lto -C link-arg=/FORCE:MULTIPLE -C link-arg=/STACK:8000000 -l dylib=ole32
+          CARGO_TARGET_I686_PC_WINDOWS_MSVC_RUSTFLAGS: -C target-feature=+crt-static -C linker-plugin-lto -C link-arg=/FORCE:MULTIPLE -C link-arg=/STACK:8000000 -l dylib=ole32
           CARGO_TARGET_AARCH64_PC_WINDOWS_MSVC_RUSTFLAGS: -C target-feature=+crt-static -C linker-plugin-lto -C link-arg=/STACK:8000000
-          CARGO_TARGET_X86_64_WIN7_WINDOWS_MSVC_LINKER: lld-link
+          CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER: lld-link
           CARGO_TARGET_AARCH64_PC_WINDOWS_MSVC_LINKER: lld-link
-          CARGO_TARGET_I686_WIN7_WINDOWS_MSVC_LINKER: lld-link
+          CARGO_TARGET_I686_PC_WINDOWS_MSVC_LINKER: lld-link
 
       - name: Resolve version name
         id: name
