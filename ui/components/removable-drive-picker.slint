@@ -2,6 +2,7 @@
 
 import { IconButton } from "icon-button.slint";
 import { TooltipArea } from "tooltip-area.slint";
+import { Link } from "link.slint";
 import { Icon, IconSet, IconDisplay } from "@lucide";
 import { MyPalette } from "../styling.slint";
 import { UiState } from "../ui-state.slint";
@@ -195,6 +196,21 @@ export component FatxDrivePicker inherits VerticalLayout {
         disabled: !drive.usable;
         clicked => {
             root.selected-drive = i;
+        }
+    }
+
+    // Missing privileges is the one failure the user can fix, and the fix is
+    // platform-specific, so point at the README section for this build's OS
+    // (see `config::fatx_privileges_help_url`). Also offered when nothing was
+    // found at all: an unreadable disk can be missing from the list entirely.
+    if !UiState.scanning-fatx-drives
+        && (UiState.fatx-access-denied || UiState.fatx-drives.length == 0): VerticalLayout {
+        padding-top: 4px;
+
+        Link {
+            label: "How do I get the required privileges?";
+            uri: UiState.fatx-privileges-help-url;
+            icon: IconSet.ShieldQuestionMark;
         }
     }
 }
