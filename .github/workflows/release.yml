@@ -72,8 +72,14 @@ jobs:
     needs: version
     if: github.event_name == 'pull_request' || needs.version.outputs.published == 'true'
     runs-on: ${{ matrix.runner }}
+    # The released binary links dynamically against the build host's glibc, so the
+    # container -- not the runner -- sets the minimum glibc our AppImage requires.
+    # Ubuntu 22.04 (glibc 2.35) is the oldest base still receiving updates; Debian 11
+    # (glibc 2.31) was used until it went EOL on 2026-08-31 and its security pool
+    # started being purged. Don't bump this without accepting a higher glibc floor for
+    # end users. The runner itself only hosts the container, so it can stay current.
     container:
-      image: rust:1.97-bullseye
+      image: ubuntu:22.04
     defaults:
       run:
         shell: bash
@@ -81,38 +87,43 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - runner: ubuntu-22.04
+          - runner: ubuntu-24.04
             arch: x86_64
             target: x86_64-unknown-linux-gnu
-          - runner: ubuntu-22.04-arm
+          - runner: ubuntu-24.04-arm
             arch: aarch64
             target: aarch64-unknown-linux-gnu
-          - runner: ubuntu-22.04
-            arch: i686
-            target: i686-unknown-linux-gnu
 
     steps:
+      # Runs before the checkout so actions/checkout finds a git binary.
+      - name: Install build dependencies
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            ca-certificates curl wget gnupg git build-essential \
+            pkg-config libfontconfig1-dev file
+
       - name: Checkout
         uses: actions/checkout@v6
         with:
           fetch-depth: 1
 
       - name: Install LLVM
+        env:
+          DEBIAN_FRONTEND: noninteractive
         run: |
           wget -O /etc/apt/trusted.gpg.d/apt.llvm.org.asc https://apt.llvm.org/llvm-snapshot.gpg.key
-          echo "deb http://apt.llvm.org/bullseye/ llvm-toolchain-bullseye-22 main" > /etc/apt/sources.list.d/llvm.list
+          echo "deb http://apt.llvm.org/jammy/ llvm-toolchain-jammy-22 main" > /etc/apt/sources.list.d/llvm.list
           apt-get update
-          apt-get install -y clang-22 lld-22
+          # llvm-22 is what ships llvm-ar-22 (used as AR below); clang-22 alone does not.
+          apt-get install -y --no-install-recommends clang-22 lld-22 llvm-22
 
-      - name: Install i686 dependencies
-        if: matrix.arch == 'i686'
-        run: |
-          dpkg --add-architecture i386
-          apt-get update
-          apt-get install -y gcc-multilib pkg-config:i386 libfontconfig1-dev:i386
-
-      - name: Install rust-src
-        run: rustup component add rust-src
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@1.97
+        with:
+          components: rust-src
 
       - name: Download appimagetool
         run: |
@@ -124,7 +135,6 @@ jobs:
           case "${{ matrix.arch }}" in
             x86_64) YQ_ARCH=amd64 ;;
             aarch64) YQ_ARCH=arm64 ;;
-            i686) YQ_ARCH=386 ;;
           esac
           wget -O /usr/local/bin/yq "https://github.com/mikefarah/yq/releases/latest/download/yq_linux_${YQ_ARCH}"
           chmod +x /usr/local/bin/yq
@@ -154,8 +164,6 @@ jobs:
           RUSTFLAGS: -C linker-plugin-lto -C link-arg=-fuse-ld=lld-22
           CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER: clang-22
           CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: clang-22
-          CARGO_TARGET_I686_UNKNOWN_LINUX_GNU_LINKER: clang-22
-          PKG_CONFIG_i686_unknown_linux_gnu: i686-pc-linux-gnu-pkg-config
 
       - name: Package AppImage
         run: |
@@ -191,9 +199,9 @@ jobs:
           - arch: arm64
             target: aarch64-pc-windows-msvc
           - arch: x64
-            target: x86_64-win7-windows-msvc
+            target: x86_64-pc-windows-msvc
           - arch: x86
-            target: i686-win7-windows-msvc
+            target: i686-pc-windows-msvc
 
     steps:
       - name: Checkout
@@ -231,17 +239,17 @@ jobs:
           RUSTC_BOOTSTRAP: 1
           CC: clang-cl
           AR: llvm-lib
-          CFLAGS_x86_64_win7_windows_msvc: /clang:-O3 /clang:-flto /clang:-fuse-ld=lld-link
-          CFLAGS_i686_win7_windows_msvc: /clang:-O3 /clang:-flto /clang:-fuse-ld=lld-link
+          CFLAGS_x86_64_pc_windows_msvc: /clang:-O3 /clang:-flto /clang:-fuse-ld=lld-link
+          CFLAGS_i686_pc_windows_msvc: /clang:-O3 /clang:-flto /clang:-fuse-ld=lld-link
           CFLAGS_aarch64_pc_windows_msvc: -O3 -flto=thin -fuse-ld=lld-link
           # /STACK:8000000 must be repeated here: these env vars fully override the
           # `rustflags` from .cargo/config.toml, they are not merged with it.
-          CARGO_TARGET_X86_64_WIN7_WINDOWS_MSVC_RUSTFLAGS: -C target-feature=+crt-static -C linker-plugin-lto -C link-arg=/FORCE:MULTIPLE -C link-arg=/STACK:8000000 -l dylib=ole32
-          CARGO_TARGET_I686_WIN7_WINDOWS_MSVC_RUSTFLAGS: -C target-feature=+crt-static -C linker-plugin-lto -C link-arg=/FORCE:MULTIPLE -C link-arg=/STACK:8000000 -l dylib=ole32
+          CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS: -C target-feature=+crt-static -C linker-plugin-lto -C link-arg=/FORCE:MULTIPLE -C link-arg=/STACK:8000000 -l dylib=ole32
+          CARGO_TARGET_I686_PC_WINDOWS_MSVC_RUSTFLAGS: -C target-feature=+crt-static -C linker-plugin-lto -C link-arg=/FORCE:MULTIPLE -C link-arg=/STACK:8000000 -l dylib=ole32
           CARGO_TARGET_AARCH64_PC_WINDOWS_MSVC_RUSTFLAGS: -C target-feature=+crt-static -C linker-plugin-lto -C link-arg=/STACK:8000000
-          CARGO_TARGET_X86_64_WIN7_WINDOWS_MSVC_LINKER: lld-link
+          CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER: lld-link
           CARGO_TARGET_AARCH64_PC_WINDOWS_MSVC_LINKER: lld-link
-          CARGO_TARGET_I686_WIN7_WINDOWS_MSVC_LINKER: lld-link
+          CARGO_TARGET_I686_PC_WINDOWS_MSVC_LINKER: lld-link
 
       - name: Resolve version name
         id: name

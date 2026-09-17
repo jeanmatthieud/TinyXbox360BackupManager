@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 use crate::badavatar::BadAvatarConfig;
+use crate::fatx::FatxConfig;
 use crate::data_dir::DATA_DIR;
 use anyhow::Result;
 use derive_more::{Display, FromStr};
@@ -33,8 +34,14 @@ impl Config {
 
     /// Returns true if the notification should be shown
     pub fn check_mount_point(&mut self) -> bool {
-        let drive = &self.contents.mount_point;
+        let drive = self.contents.mount_point.clone();
+        self.check_known_drive(&drive)
+    }
 
+    /// Whether `drive` is being used for the first time, remembering it for
+    /// next time. Both a mount point and a raw device path go through this:
+    /// each is offered its own one-off notice the first time it is picked.
+    pub fn check_known_drive(&mut self, drive: &std::path::Path) -> bool {
         if drive.as_os_str().is_empty() {
             return false;
         }
@@ -42,7 +49,7 @@ impl Config {
         let new = self.contents.known_drives.iter().all(|p| p != drive);
 
         if new {
-            self.contents.known_drives.push(drive.clone());
+            self.contents.known_drives.push(drive.to_path_buf());
             let _ = self.write();
         }
 
@@ -69,6 +76,9 @@ pub struct ConfigContents {
 
     /// Most-recently-used library locations (most recent first, max 5).
     pub recent_locations: Vec<RecentLocation>,
+
+    /// Xbox 360 hard drive connected to this computer (raw FATX device).
+    pub fatx: FatxConfig,
 
     /// Console (Aurora FTP server)
     pub console_ip: String,
@@ -97,6 +107,7 @@ impl Default for ConfigContents {
             cover_source: CoverSource::default(),
             known_drives: Vec::new(),
             recent_locations: Vec::new(),
+            fatx: FatxConfig::default(),
             console_ip: String::new(),
             ftp_port: "21".to_string(),
             ftp_user: "xboxftp".to_string(),
@@ -126,12 +137,17 @@ impl ConfigContents {
             AutoReconnect::Always => true,
             AutoReconnect::Never => false,
             AutoReconnect::FtpOnly => self.target_kind == TargetKind::Ftp,
-            AutoReconnect::UsbOnly => self.target_kind == TargetKind::Local,
+            // A hard drive on the desk is a local disk from the user's point
+            // of view, whatever the filesystem on it.
+            AutoReconnect::UsbOnly => {
+                matches!(self.target_kind, TargetKind::Local | TargetKind::Fatx)
+            }
         };
 
         if !keep {
             self.target_kind = TargetKind::Local;
             self.mount_point = PathBuf::new();
+            self.fatx = FatxConfig::default();
         }
     }
 
@@ -146,7 +162,23 @@ impl ConfigContents {
                 }
                 RecentLocation {
                     kind: TargetKind::Local,
+                    fatx: FatxConfig::default(),
                     mount_point: self.mount_point.clone(),
+                    console_ip: String::new(),
+                    ftp_port: String::new(),
+                    ftp_user: String::new(),
+                    ftp_password: String::new(),
+                    last_used: now_secs(),
+                }
+            }
+            TargetKind::Fatx => {
+                if self.fatx.device.as_os_str().is_empty() {
+                    return;
+                }
+                RecentLocation {
+                    kind: TargetKind::Fatx,
+                    fatx: self.fatx.clone(),
+                    mount_point: PathBuf::new(),
                     console_ip: String::new(),
                     ftp_port: String::new(),
                     ftp_user: String::new(),
@@ -160,6 +192,7 @@ impl ConfigContents {
                 }
                 RecentLocation {
                     kind: TargetKind::Ftp,
+                    fatx: FatxConfig::default(),
                     mount_point: PathBuf::new(),
                     console_ip: self.console_ip.clone(),
                     ftp_port: self.ftp_port.clone(),
@@ -177,14 +210,18 @@ impl ConfigContents {
     }
 }
 
-/// One previously-used library location (local drive or console over FTP),
-/// remembered so the user can reconnect from the target-selection modal.
+/// One previously-used library location (local drive, console over FTP, or a
+/// console hard drive on this computer), remembered so the user can reconnect
+/// from the target-selection modal.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RecentLocation {
     pub kind: TargetKind,
-    /// Local target only; empty for FTP.
+    /// Local target only; empty for the others.
     #[serde(default)]
     pub mount_point: PathBuf,
+    /// FATX target only; its device path is empty for the others.
+    #[serde(default)]
+    pub fatx: FatxConfig,
     /// FTP target only; empty for local.
     #[serde(default)]
     pub console_ip: String,
@@ -212,6 +249,7 @@ impl RecentLocation {
                         && self.ftp_port.trim() == other.ftp_port.trim()
                         && self.ftp_user.trim() == other.ftp_user.trim()
                 }
+                TargetKind::Fatx => self.fatx.device == other.fatx.device,
             }
     }
 
@@ -226,6 +264,7 @@ impl RecentLocation {
                 .filter(|n| !n.is_empty())
                 .unwrap_or_else(|| self.mount_point.to_string_lossy().to_string()),
             TargetKind::Ftp => self.console_ip.trim().to_string(),
+            TargetKind::Fatx => self.fatx.device.to_string_lossy().to_string(),
         }
     }
 }
@@ -243,6 +282,9 @@ pub enum TargetKind {
     #[default]
     Local,
     Ftp,
+    /// The console's hard drive, plugged straight into this computer and read
+    /// through its FATX filesystem.
+    Fatx,
 }
 
 /// Storage format used when importing an Xbox 360 game: converted to a GOD

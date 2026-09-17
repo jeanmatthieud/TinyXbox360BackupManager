@@ -33,6 +33,9 @@ export struct DisplayedJob {
 export enum TargetKind {
     Local,
     Ftp,
+    // The console's own hard drive, connected to this computer and read
+    // through its FATX filesystem.
+    Fatx,
 }
 
 // How <TitleID> folders are arranged inside the GOD storage directory.
@@ -96,9 +99,25 @@ export struct DisplayedBadAvatarConfig {
 }
 
 export struct DisplayedRecentLocation {
-    // Folder name (local drive) or IP (console over FTP).
+    // Folder name (local drive), IP (console over FTP) or device path (a
+    // console hard drive connected here).
     name: string,
-    is-ftp: bool,
+    kind: TargetKind,
+}
+
+// A raw disk offered in the FATX target picker. See `txbm_core::fatx_dev`.
+export struct DisplayedFatxDrive {
+    // Model / device name.
+    name: string,
+    // Raw device path, dispatched on selection.
+    path: string,
+    // Preformatted size, empty when unknown.
+    size-text: string,
+    // What probing the disk found ("Xbox 360 hard drive", "access denied…").
+    detail: string,
+    // True when the disk really holds an Xbox 360 filesystem; the others are
+    // shown but disabled, so the user can see why they are not offered.
+    usable: bool,
 }
 
 // A local drive offered in the target-selection modal: a removable device or
@@ -144,6 +163,11 @@ export struct DisplayedGame {
     // True when only DLC and/or a title update are installed, with no
     // actual game package (base install removed or never completed).
     incomplete: bool,
+    // True while the running job writes into this game's folder — a second
+    // disc or a DLC being added under its TitleID, or its own deletion. Its
+    // size and contents are in flux, so the card is veiled and neither opens
+    // its details nor offers a deletion of its own.
+    busy: bool,
 }
 
 // Status of one stored component (disc / DLC / title update) shown in the

@@ -21,7 +21,12 @@ fn main() -> anyhow::Result<()> {
     txbm_core::mobcat::ensure_db();
     println!("database: {}", txbm_core::mobcat::db_path().display());
 
-    let downloaded = txbm_core::covers::download_cover(&dest, &title_id, false)?;
+    let downloaded = txbm_core::covers::download_cover(
+        &dest,
+        &title_id,
+        false,
+        txbm_core::config::CoverSource::default(),
+    )?;
     println!(
         "cover: {:?} (downloaded: {downloaded})",
         txbm_core::covers::cached_cover(&dest, &title_id)

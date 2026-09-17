@@ -27,7 +27,7 @@ use crate::{file_drop::FileDropHandler, state::State};
 use anyhow::{Result, bail};
 use slint::{BackendSelector, ComponentHandle, ModelRc, SharedString, ToSharedString};
 use std::{collections::VecDeque, process::Command};
-use txbm_core::data_dir::DATA_DIR;
+use txbm_core::data_dir::{DATA_DIR, sweep_retired};
 
 slint::include_modules!();
 
@@ -44,6 +44,26 @@ fn main() -> Result<()> {
     if DATA_DIR.as_os_str().is_empty() {
         bail!("Failed to get data dir");
     }
+
+    // Only one copy of the app may run: a second one moves the scratch folders
+    // the first is converting into aside as debris and deletes them, and both
+    // would write to the same console at once. Taken before anything else
+    // touches those folders, and held for the whole process.
+    let _instance = match txbm_core::instance::lock() {
+        txbm_core::instance::InstanceGuard::Acquired(lock) => Some(lock),
+        txbm_core::instance::InstanceGuard::AlreadyRunning => {
+            let message = "TinyXbox360BackupManager is already running.";
+            eprintln!("{message}");
+            rfd::MessageDialog::new()
+                .set_level(rfd::MessageLevel::Info)
+                .set_title("TinyXbox360BackupManager")
+                .set_description(message)
+                .show();
+            return Ok(());
+        }
+        // No usable lock file: carry on rather than refuse to start.
+        txbm_core::instance::InstanceGuard::Unavailable => None,
+    };
 
     let (file_drop_handler, file_drop_dispatcher) = FileDropHandler::new();
 
@@ -115,6 +135,34 @@ fn main() -> Result<()> {
         }
     });
 
+    // Drop whatever a previous run left in the scratch folders, and say so:
+    // a killed import strands the whole game it was extracting, and a user
+    // whose disk quietly lost 8 GB has no way of connecting the two.
+    //
+    // The debris is moved aside right here, synchronously — this run must not
+    // start writing in those folders (the first scan already stages Aurora's
+    // databases in them) while a deletion is still walking them. That rename
+    // is instant; the deletion itself then runs on a thread, on folders
+    // nothing else will ever touch again.
+    {
+        let retired = txbm_core::data_dir::retire_work_dirs();
+        let weak = app.as_weak();
+        std::thread::spawn(move || {
+            let reclaimed = sweep_retired(retired);
+            if reclaimed == 0 {
+                return;
+            }
+            let _ = weak.upgrade_in_event_loop(move |app| {
+                let text = slint::format!(
+                    "Reclaimed {} of temporary files left by an interrupted run",
+                    txbm_core::util::human_size(reclaimed)
+                );
+                app.global::<Dispatcher<'_>>()
+                    .invoke_dispatch(Message::NotifyInfo, text);
+            });
+        });
+    }
+
     // Initialize
     dispatcher.invoke_dispatch(Message::RefreshAll, SharedString::new());
 
@@ -123,6 +171,10 @@ fn main() -> Result<()> {
             bail!(e);
         }
 
+        // Release the single-instance lock first: the replacement process
+        // starts before this one exits and would otherwise find itself locked
+        // out by its own parent.
+        drop(_instance);
         return restart_with_sw_rendering();
     }
 

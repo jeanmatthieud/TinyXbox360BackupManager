@@ -1,9 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
+import { ScrollView } from "std-widgets.slint";
 import { Modal } from "modal.slint";
 import { HorizontalLine } from "horizontal-line.slint";
 import { IconButton, IconButtonKind } from "icon-button.slint";
-import { SelectableCard, RemovableDrivePicker } from "removable-drive-picker.slint";
+import {
+    SelectableCard,
+    RemovableDrivePicker,
+    FatxDrivePicker,
+} from "removable-drive-picker.slint";
+import { TargetKind } from "../types.slint";
 import { IconSet, IconDisplay } from "@lucide";
 import { MyPalette } from "../styling.slint";
 import { UiState } from "../ui-state.slint";
@@ -14,6 +20,7 @@ enum TargetChoice {
     none,
     usb,
     network,
+    fatx,
     history,
 }
 
@@ -49,12 +56,25 @@ component OutlineDeleteButton inherits Rectangle {
 }
 
 export component SelectTargetModal inherits Modal {
-    max-h: 600px;
+    // Both card texts use `overflow: elide`, which lets Slint shrink their
+    // preferred width instead of growing the modal to fit — that's the whole
+    // point of elide, so it no longer pulls the modal wide enough on its own.
+    // Pin a min-w wide enough for the longest card title ("Remote Xbox 360
+    // over Network (WiFi / Ethernet)") to always render in full.
+    min-w: 480px;
+    // No min height: the modal shrinks to its content.
+    min-h: 0px;
+    // Grow with the window instead of stopping at an arbitrary cap: leave
+    // some margin around the modal, but let it use the room that's there.
+    max-h: min(620px, root.height - 75px);
 
-    // Transient sub-view: false shows the target choices, true shows the
-    // detected removable drives. Reset for free because the modal component is
-    // recreated each time it opens.
+    // Transient sub-views: the target choices, then either the detected
+    // removable drives or the detected Xbox 360 hard drives. Reset for free
+    // because the modal component is recreated each time it opens.
     property <bool> picking-drives: false;
+    property <bool> picking-fatx: false;
+    // True on either step 2, which share the Previous/Next footer.
+    property <bool> picking: picking-drives || picking-fatx;
     // Current selection on the first step, and the picked history index.
     property <TargetChoice> choice: TargetChoice.none;
     property <int> history-index: -1;
@@ -67,97 +87,141 @@ export component SelectTargetModal inherits Modal {
         spacing: 15px;
 
         // ---- Step 1: pick a storage type or a history entry ----------------
-        if !picking-drives: VerticalLayout {
+        if !picking: VerticalLayout {
             spacing: 10px;
 
-            Text {
-                text: "Where is your game library?";
-                font-size: 18px;
-            }
+            // Fixed part: title + the 3 storage-kind cards. Named so the
+            // history scroll view below can size itself around it.
+            choices := VerticalLayout {
+                spacing: 10px;
 
-            Rectangle { } // Spacing
-
-            SelectableCard {
-                icon: IconSet.Usb;
-                title: "Local Removable USB Drive";
-                subtitle: "Plug in your storage to scan games.";
-                selected: choice == TargetChoice.usb;
-                // Hidden debug escape hatch: browse to any folder (e.g. an
-                // internal path) instead of a removable device.
-                long-press-duration: 1500ms;
-                clicked => {
-                    choice = TargetChoice.usb;
+                Text {
+                    text: "Where is your game library?";
+                    font-size: 18px;
                 }
-                long-pressed => {
-                    UiState.selecting-target = false;
-                    Dispatcher.dispatch(Message.PickMountPoint, "");
-                }
-            }
 
-            SelectableCard {
-                icon: IconSet.Network;
-                title: "Remote Xbox 360 over Network (WiFi / Ethernet)";
-                subtitle: "Access shared folders or FTP on your console.";
-                selected: choice == TargetChoice.network;
-                clicked => {
-                    choice = TargetChoice.network;
-                }
-            }
+                Rectangle { } // Spacing
 
-            if UiState.recent-locations.length > 0: Text {
-                text: "Your history:";
-                color: MyPalette.foreground.transparentize(0.3);
-                font-size: 13px;
-            }
-
-            for loc[i] in UiState.recent-locations: Rectangle {
-                property <bool> selected: choice == TargetChoice.history && history-index == i;
-
-                height: 40px;
-                border-radius: 8px;
-                border-width: selected ? 2px : 1px;
-                border-color: selected ? MyPalette.accent-background : MyPalette.border;
-                background: selected ? MyPalette.selection-background
-                    : (row-ta.has-hover ? MyPalette.alternate-background : transparent);
-
-                // Declared before the content so the delete button (on top)
-                // still receives its own clicks, while clicks on the icon/name
-                // fall through to here and select the row.
-                row-ta := TouchArea {
+                SelectableCard {
+                    icon: IconSet.Usb;
+                    title: "Local Removable USB Drive";
+                    subtitle: "Plug in your storage to scan games.";
+                    selected: choice == TargetChoice.usb;
+                    // Hidden debug escape hatch: browse to any folder (e.g. an
+                    // internal path) instead of a removable device.
+                    long-press-duration: 1500ms;
                     clicked => {
-                        choice = TargetChoice.history;
-                        history-index = i;
+                        choice = TargetChoice.usb;
+                    }
+                    long-pressed => {
+                        UiState.selecting-target = false;
+                        Dispatcher.dispatch(Message.PickMountPoint, "");
                     }
                 }
 
-                HorizontalLayout {
-                    padding-left: 10px;
-                    padding-right: 8px;
-                    spacing: 10px;
-
-                    VerticalLayout {
-                        alignment: center;
-                        IconDisplay {
-                            icon: loc.is-ftp ? IconSet.Network : IconSet.Usb;
-                            stroke: MyPalette.foreground;
-                            size: 18px;
-                        }
+                SelectableCard {
+                    icon: IconSet.Network;
+                    title: "Remote Xbox 360 over Network (WiFi / Ethernet)";
+                    subtitle: "Access shared folders or FTP on your console.";
+                    selected: choice == TargetChoice.network;
+                    clicked => {
+                        choice = TargetChoice.network;
                     }
+                }
 
-                    VerticalLayout {
-                        alignment: center;
-                        horizontal-stretch: 1;
-                        Text {
-                            text: loc.name;
-                            overflow: elide;
-                        }
+                SelectableCard {
+                    icon: IconSet.HardDrive;
+                    title: "Xbox 360 Internal Hard Drive (FATX)";
+                    subtitle: "Connect the console's own drive to this computer.";
+                    selected: choice == TargetChoice.fatx;
+                    // Hidden debug escape hatch: open a raw disk image instead of a
+                    // physical drive.
+                    long-press-duration: 1500ms;
+                    clicked => {
+                        choice = TargetChoice.fatx;
                     }
+                    long-pressed => {
+                        UiState.selecting-target = false;
+                        Dispatcher.dispatch(Message.PickFatxImage, "");
+                    }
+                }
+            }
 
-                    VerticalLayout {
-                        alignment: center;
-                        OutlineDeleteButton {
-                            clicked => {
-                                Dispatcher.dispatch(Message.RemoveRecentLocation, i);
+            // History: only this part scrolls, sized to whatever room is
+            // left under the fixed cards above and the footer below before
+            // the modal would have to grow past max-h.
+            if UiState.recent-locations.length > 0: VerticalLayout {
+                spacing: 10px;
+
+                history-label := Text {
+                    text: "Your history:";
+                    color: MyPalette.foreground.transparentize(0.3);
+                    font-size: 13px;
+                }
+
+                ScrollView {
+                    height: min(history-list.preferred-height, max(0px,
+                        root.max-h - 40px /* step content padding */
+                            - choices.preferred-height - 10px /* spacing */
+                            - history-label.preferred-height - 10px /* spacing */
+                            - footer.preferred-height));
+
+                    history-list := VerticalLayout {
+                        spacing: 10px;
+
+                        for loc[i] in UiState.recent-locations: Rectangle {
+                            property <bool> selected: choice == TargetChoice.history && history-index == i;
+
+                            height: 40px;
+                            border-radius: 8px;
+                            border-width: selected ? 2px : 1px;
+                            border-color: selected ? MyPalette.accent-background : MyPalette.border;
+                            background: selected ? MyPalette.selection-background
+                                : (row-ta.has-hover ? MyPalette.alternate-background : transparent);
+
+                            // Declared before the content so the delete button (on top)
+                            // still receives its own clicks, while clicks on the icon/name
+                            // fall through to here and select the row.
+                            row-ta := TouchArea {
+                                clicked => {
+                                    choice = TargetChoice.history;
+                                    history-index = i;
+                                }
+                            }
+
+                            HorizontalLayout {
+                                padding-left: 10px;
+                                padding-right: 8px;
+                                spacing: 10px;
+
+                                VerticalLayout {
+                                    alignment: center;
+                                    IconDisplay {
+                                        icon: loc.kind == TargetKind.Ftp
+                                            ? IconSet.Network
+                                            : (loc.kind == TargetKind.Fatx ? IconSet.HardDrive : IconSet.Usb);
+                                        stroke: MyPalette.foreground;
+                                        size: 18px;
+                                    }
+                                }
+
+                                VerticalLayout {
+                                    alignment: center;
+                                    horizontal-stretch: 1;
+                                    Text {
+                                        text: loc.name;
+                                        overflow: elide;
+                                    }
+                                }
+
+                                VerticalLayout {
+                                    alignment: center;
+                                    OutlineDeleteButton {
+                                        clicked => {
+                                            Dispatcher.dispatch(Message.RemoveRecentLocation, i);
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -165,13 +229,16 @@ export component SelectTargetModal inherits Modal {
             }
         }
 
-        // ---- Step 2: pick one of the detected removable drives -------------
+        // ---- Step 2: pick one of the detected drives -----------------------
         if picking-drives: RemovableDrivePicker {
+            selected-drive <=> root.selected-drive;
+        }
+        if picking-fatx: FatxDrivePicker {
             selected-drive <=> root.selected-drive;
         }
     }
 
-    VerticalLayout {
+    footer := VerticalLayout {
         height: self.min-height;
 
         HorizontalLine { }
@@ -181,16 +248,17 @@ export component SelectTargetModal inherits Modal {
             spacing: 8px;
 
             // Step 1 dismisses the modal; step 2 goes back to the choices.
-            if !picking-drives: IconButton {
+            if !picking: IconButton {
                 label: "Close";
                 clicked => {
                     UiState.selecting-target = false;
                 }
             }
-            if picking-drives: IconButton {
+            if picking: IconButton {
                 label: "Previous";
                 clicked => {
                     picking-drives = false;
+                    picking-fatx = false;
                 }
             }
 
@@ -199,7 +267,7 @@ export component SelectTargetModal inherits Modal {
             }
 
             // Step 1: act on the current selection.
-            if !picking-drives: IconButton {
+            if !picking: IconButton {
                 label: "Next";
                 kind: IconButtonKind.Primary;
                 disabled: choice == TargetChoice.none;
@@ -208,6 +276,10 @@ export component SelectTargetModal inherits Modal {
                         selected-drive = -1;
                         Dispatcher.dispatch(Message.RefreshRemovableDrives, "");
                         picking-drives = true;
+                    } else if choice == TargetChoice.fatx {
+                        selected-drive = -1;
+                        Dispatcher.dispatch(Message.RefreshFatxDrives, "");
+                        picking-fatx = true;
                     } else if choice == TargetChoice.network {
                         UiState.selecting-target = false;
                         UiState.editing-ftp-target = true;
@@ -226,6 +298,15 @@ export component SelectTargetModal inherits Modal {
                 clicked => {
                     UiState.selecting-target = false;
                     Dispatcher.dispatch(Message.SelectRemovableDrive, UiState.removable-drives[selected-drive].mount-point);
+                }
+            }
+            if picking-fatx: IconButton {
+                label: "Next";
+                kind: IconButtonKind.Primary;
+                disabled: selected-drive < 0;
+                clicked => {
+                    UiState.selecting-target = false;
+                    Dispatcher.dispatch(Message.SelectFatxDrive, UiState.fatx-drives[selected-drive].path);
                 }
             }
         }

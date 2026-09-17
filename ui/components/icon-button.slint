@@ -22,6 +22,13 @@ export component IconButton inherits TooltipArea {
     in property <bool> rounded: false;
     in property <bool> squared: false;
     in property <length> font-size: 14px;
+    // Per-corner overrides, to let a button sitting flush against a rounded
+    // container pick up that container's curve. Default to the shape `rounded`
+    // / `squared` already give.
+    in property <length> radius-top-left: get-radius();
+    in property <length> radius-top-right: get-radius();
+    in property <length> radius-bottom-left: get-radius();
+    in property <length> radius-bottom-right: get-radius();
 
     pure function get-bg() -> brush {
         if kind == IconButtonKind.Primary {
@@ -94,7 +101,10 @@ export component IconButton inherits TooltipArea {
     background: get-bg();
     border-color: get-border-color();
     border-width: get-border-width();
-    border-radius: get-radius();
+    border-top-left-radius: radius-top-left;
+    border-top-right-radius: radius-top-right;
+    border-bottom-left-radius: radius-bottom-left;
+    border-bottom-right-radius: radius-bottom-right;
     height: 27px;
 
     HorizontalLayout {

@@ -125,3 +125,76 @@ export component RemovableDrivePicker inherits VerticalLayout {
         }
     }
 }
+
+// The Xbox 360 hard-drive chooser. Same shape as the removable-drive picker
+// above, over `UiState.fatx-drives`: disks that do not actually hold an
+// Xbox 360 filesystem are listed but disabled, with the reason as their
+// subtitle — a disk missing from the list is far more puzzling than a disk
+// shown greyed out next to "access denied".
+export component FatxDrivePicker inherits VerticalLayout {
+    in property <string> title: "Select an Xbox 360 hard drive";
+    in-out property <int> selected-drive: -1;
+
+    spacing: 10px;
+
+    HorizontalLayout {
+        spacing: 8px;
+        padding-bottom: 10px;
+
+        VerticalLayout {
+            alignment: center;
+            horizontal-stretch: 1;
+
+            Text {
+                text: root.title;
+                font-size: 18px;
+                overflow: elide;
+            }
+        }
+
+        IconButton {
+            icon: IconSet.RefreshCw;
+            tooltip: "Refresh";
+            width: 30px;
+            disabled: UiState.scanning-fatx-drives;
+            clicked => {
+                root.selected-drive = -1;
+                Dispatcher.dispatch(Message.RefreshFatxDrives, "");
+            }
+        }
+    }
+
+    // Probing every disk of the machine is slow enough to be worth saying so.
+    if UiState.scanning-fatx-drives: Text {
+        text: "Looking for Xbox 360 hard drives…";
+        color: MyPalette.foreground.transparentize(0.3);
+    }
+
+    if !UiState.scanning-fatx-drives && UiState.fatx-drives.length == 0: VerticalLayout {
+        spacing: 6px;
+
+        Text {
+            text: "No Xbox 360 hard drive detected.";
+            color: MyPalette.foreground.transparentize(0.3);
+        }
+
+        Text {
+            text: "Connect the console's drive (a SATA or USB adapter), then tap Refresh. "
+                + "Reading a raw disk needs dedicated privileges.";
+            color: MyPalette.foreground.transparentize(0.5);
+            font-size: 12px;
+            wrap: word-wrap;
+        }
+    }
+
+    for drive[i] in UiState.fatx-drives: SelectableCard {
+        icon: IconSet.HardDrive;
+        title: drive.name;
+        subtitle: drive.size-text == "" ? drive.detail : drive.size-text + "  ·  " + drive.detail;
+        selected: root.selected-drive == i;
+        disabled: !drive.usable;
+        clicked => {
+            root.selected-drive = i;
+        }
+    }
+}

@@ -1,11 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
+use crate::xdvd::XdvdImage;
 use anyhow::{Context, Result};
-use iso2god::executable::TitleInfo;
+use iso2god::game_list;
 use iso2god::god::ContentType;
-use iso2god::{game_list, iso};
-use std::fs::File;
-use std::io::BufReader;
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -49,20 +47,15 @@ pub struct IsoInfo {
 
 /// Analyzes an ISO image and determines its type and metadata.
 pub fn inspect(path: &Path) -> Result<IsoInfo> {
-    let file =
-        File::open(path).with_context(|| format!("opening {}", path.display()))?;
-    let mut reader = iso::IsoReader::read(BufReader::new(file))
-        .context("reading image (invalid XDVDFS format?)")?;
+    let mut image = XdvdImage::open(path)?;
 
-    let has_xex = reader.get_entry(&"\\default.xex".into())?.is_some();
-    let has_xbe = reader.get_entry(&"\\default.xbe".into())?.is_some();
+    let has_xex = image.find("/default.xex")?.is_some();
+    let has_xbe = image.find("/default.xbe")?.is_some();
     // Bonus discs bundling DLC/title updates for a different game (e.g. an
     // "ExpansionInstaller" app) carry their own executable *and* a
     // Content/0000000000000000 tree; real games essentially never embed
     // that folder, so its presence takes priority.
-    let has_bundled_content = reader
-        .get_entry(&"\\Content\\0000000000000000".into())?
-        .is_some();
+    let has_bundled_content = image.find("/Content/0000000000000000")?.is_some();
 
     if !has_xex && !has_xbe {
         return Ok(IsoInfo {
@@ -87,8 +80,7 @@ pub fn inspect(path: &Path) -> Result<IsoInfo> {
         });
     }
 
-    let title_info =
-        TitleInfo::from_image(&mut reader).context("reading game executable")?;
+    let title_info = image.title_info().context("reading game executable")?;
     let exe = &title_info.execution_info;
 
     let kind = match title_info.content_type {

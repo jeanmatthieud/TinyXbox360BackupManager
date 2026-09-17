@@ -10,6 +10,7 @@ import { IconSet, IconDisplay } from "@lucide";
 import { MyPalette } from "../styling.slint";
 import { UiState } from "../ui-state.slint";
 import { Message, Dispatcher } from "../messages.slint";
+import { TooltipArea } from "tooltip-area.slint";
 
 export component GameCard inherits Card {
     in property <DisplayedGame> game;
@@ -177,5 +178,18 @@ export component GameCard inherits Card {
                 }
             }
         }
+    }
+
+    // The running job is writing into this game's folder. Declared last, so
+    // the veil covers the content and its touch area swallows the click that
+    // would otherwise open details read off a half-written folder.
+    if game.busy: TooltipArea {
+        x: 2px;
+        y: 2px;
+        width: parent.width - 4px;
+        height: parent.height - 4px;
+        veil-border-radius: parent.border-radius - 2px;
+        disabled: true;
+        tooltip: "Being written to — wait for the transfer to finish";
     }
 }

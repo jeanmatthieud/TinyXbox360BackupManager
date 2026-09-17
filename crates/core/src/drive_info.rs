@@ -13,6 +13,10 @@ pub struct DriveInfo {
     pub total_bytes: u64,
     pub games_bytes: u64,
     pub fs_kind: FsKind,
+    /// Filesystem name shown in the UI. Comes from `fs_kind` for a mounted
+    /// drive, but a target the OS cannot mount (a FATX console drive) names
+    /// itself here.
+    pub fs_label: String,
     pub allocation_granularity: u64,
 }
 
@@ -41,6 +45,7 @@ impl DriveInfo {
             used_bytes,
             total_bytes,
             games_bytes: 0,
+            fs_label: fs_kind.to_string(),
             fs_kind,
             allocation_granularity,
         })
