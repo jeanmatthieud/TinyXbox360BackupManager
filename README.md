@@ -237,6 +237,45 @@ Replace `YOUR_USERNAME`, and check that `setfacl` really lives at that path (`co
 
 If that trade-off bothers you, Option A stays the tightest choice.
 
+## :joystick: Games that need a hand
+
+A handful of retail releases spread one game over two discs in a way that no
+tool can guess from the disc alone. They are listed here so you know what you
+are looking at; a future version could recognise them by their TitleID and
+install them the way they expect.
+
+### Tom Clancy's Splinter Cell: Blacklist — Disc 2
+
+Disc 2 is two things at once. It holds the second half of the campaign as a
+bootable game disc, *and* a 3 GB HD texture pack packaged as downloadable
+content under the game's own TitleID (`555308B6`). The console expects both: the
+disc installed like a game, and the texture pack dropped into
+`Content/0000000000000000/555308B6/00000002`.
+
+The app currently sees the content folder and installs the texture pack, so add
+the second half of the campaign yourself if you want it.
+
+### Watch_Dogs — Discs 1 and 2
+
+Disc 1 is an installation disc: it carries no game of its own, only two
+`installation1` / `installation2` folders whose files belong to the game on
+disc 2. Neither disc is playable on its own, and the pieces are plain folders
+rather than packaged content, so they cannot simply be copied to the console —
+the two discs have to be merged into a single ~10 GB image, which is then
+installed as one game.
+
+### Games that need `fakelive` disabled
+
+Call of Duty: World at War and Ultra Street Fighter IV install normally but
+refuse to start while Dashlaunch's `fakelive` option is on. That is a console
+setting, in *Dashlaunch → Options*, not something an installer can change.
+
+### Found another one?
+
+If a game of yours needs steps that aren't described here, please
+[open an issue](https://github.com/jeanmatthieud/TinyXbox360BackupManager/issues/new)
+with its title, TitleID and what the discs contain — that is how this list grows.
+
 ## :hammer_and_wrench: Compilation
 
 ```sh
