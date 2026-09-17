@@ -3,11 +3,10 @@
 //! extracting it, and inspects any STFS package header found in it:
 //! `cargo run -p txbm-core --example inspect_content_disc -- <iso path>`
 
-use anyhow::{Context, Result, anyhow};
+use anyhow::{Result, anyhow};
 use std::path::PathBuf;
 use txbm_core::stfs;
 use txbm_core::xdvd::XdvdImage;
-use xdvdfs::blockdev::OffsetWrapper;
 
 fn main() -> Result<()> {
     let path = std::env::args()
@@ -19,16 +18,7 @@ fn main() -> Result<()> {
     println!("volume offset: {:#x}", image.root_offset()?);
     println!("used size:     {}", image.max_used_prefix_size()?);
 
-    // The listing needs the raw file tree, which `XdvdImage` does not expose.
-    let file = std::fs::File::open(&path).context("opening ISO")?;
-    let mut dev = OffsetWrapper::new(std::io::BufReader::new(file))
-        .map_err(|e| anyhow!("invalid XDVDFS image: {e}"))?;
-    let volume = xdvdfs::read::read_volume(&mut dev)
-        .map_err(|e| anyhow!("reading XDVDFS volume: {e}"))?;
-    let tree = volume
-        .root_table
-        .file_tree(&mut dev)
-        .map_err(|e| anyhow!("reading file tree: {e}"))?;
+    let tree = image.file_tree()?;
 
     for (dir, node) in &tree {
         if node.node.dirent.is_directory() {

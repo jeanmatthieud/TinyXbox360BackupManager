@@ -18,6 +18,8 @@ pub struct PickedGame {
     ///
     /// - Xbox 360 / Original Xbox ISO → yes, from the disc's executable.
     /// - Arcade STFS package → yes: it is a game in its own right.
+    /// - A "mix" disc → yes. It carries content *and* becomes a game under its
+    ///   own TitleID, so the overwrite is real.
     /// - DLC / title update / content disc / bundled-content disc → `None`.
     ///   They install *beside* a game (under its TitleID, or under the one of
     ///   each package they carry, the disc's own being a placeholder) and
@@ -52,10 +54,13 @@ pub fn should_add_game(path: PathBuf) -> Option<PickedGame> {
         let info = txbm_core::iso_info::inspect(&path).ok()?;
         // A content/bundled disc installs under the TitleID of each package it
         // carries, not under the disc's own (often a placeholder), and merges
-        // rather than replaces: no overwrite to announce.
+        // rather than replaces: no overwrite to announce. A "mix" disc is the
+        // exception — it also becomes a game under its own TitleID.
         let installs_title_id = matches!(
             info.kind,
-            IsoKind::Xbox360Game | IsoKind::XboxOriginal
+            IsoKind::Xbox360Game
+                | IsoKind::XboxOriginal
+                | IsoKind::GameWithBundledContent
         )
         .then_some(info.title_id)
         .flatten();

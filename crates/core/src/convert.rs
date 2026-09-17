@@ -356,69 +356,17 @@ fn convert_into(
     };
 
     match info.kind {
-        IsoKind::Xbox360Game if x360_format == Xbox360Format::Xex => {
-            // Extract the disc to a `default.xex` game folder instead of
-            // converting it to a GOD container. The name resolution mirrors
-            // the GOD branch (image name → XboxUnity → file stem); the
-            // TitleID is embedded in the folder name (` [XXXXXXXX]` suffix) so
-            // later scans can identify the game without reading its XEX.
-            let title = info
-                .name
-                .clone()
-                .or_else(|| {
-                    let tid = info.title_id.as_deref()?;
-                    unity::search_titles(tid)
-                        .ok()?
-                        .into_iter()
-                        .next()
-                        .map(|t| t.name)
-                })
-                .or_else(|| in_path.file_stem().and_then(|s| s.to_str()).map(str::to_owned))
-                .unwrap_or_else(|| "Xbox 360 game".to_string());
-            let name = sanitize_name(&title);
-            let name = match info.title_id.as_deref() {
-                Some(tid) => crate::game::og_folder_name(&name, tid),
-                None => name,
-            };
-            let game_dir = dest.xex_dir.join(&name);
-            // Re-adding a game overwrites it, like GOD re-conversion does: the
-            // extraction writes over the existing files in place (mirroring the
-            // FTP upload, which merges too). The user is warned before the
-            // conversion is queued.
-            let existed = game_dir.exists();
-
-            phase("Extracting the Xbox 360 game (XEX)");
-            let res = extract::extract_iso(in_path, &game_dir, cancel, &mut |done, total| {
-                update_progress((done * 100 / total.max(1)) as u32);
-            });
-            // On cancellation, drop the partially-extracted folder — but only
-            // when we created it: a pre-existing game must survive the abort.
-            if res.is_err() && is_cancelled(cancel) && !existed {
-                cleanup_dir(&game_dir, CLEANUP_PARTIAL, status);
-            }
-            res?;
-        }
         IsoKind::Xbox360Game => {
-            let title = info.name.clone().or_else(|| {
-                let tid = info.title_id.as_deref()?;
-                unity::search_titles(tid)
-                    .ok()?
-                    .into_iter()
-                    .next()
-                    .map(|t| t.name)
-            });
-            // iso2god creates the `<TitleID>` folder itself, so it is handed
-            // the directory that folder must live in.
-            let content_dir = match info.title_id.as_deref() {
-                Some(tid) => dest.title_parent(tid, title.as_deref()),
-                None => dest.god_dir.clone(),
-            };
-            std::fs::create_dir_all(&content_dir)?;
-
-            phase("GOD conversion");
-            god::convert_to_god(in_path, &content_dir, title.as_deref(), cancel, &mut |done, total| {
-                update_progress((done * 100 / total.max(1)) as u32);
-            })?;
+            install_game(
+                in_path,
+                &info,
+                dest,
+                x360_format,
+                cancel,
+                update_progress,
+                status,
+                phase,
+            )?;
         }
         IsoKind::XboxOriginal => {
             let name = sanitize_name(
@@ -492,52 +440,177 @@ fn convert_into(
             result?;
         }
         IsoKind::BundledContent => {
-            let stem = sanitize_name(
-                in_path
-                    .file_stem()
-                    .and_then(|s| s.to_str())
-                    .unwrap_or("disc"),
-            );
-            let tmp = dest.work_dir.join(".txbm-tmp").join(&stem);
-            if tmp.exists() {
-                std::fs::remove_dir_all(&tmp)?;
-            }
-
-            let result = (|| -> Result<()> {
-                // Extraction: 0-80%.
-                phase("Extracting the disc");
-                extract::extract_iso(in_path, &tmp, cancel, &mut |done, total| {
-                    update_progress((done * 80 / total.max(1)) as u32);
-                })?;
-
-                // Scan the whole disc, not just its Content folder: some
-                // bonus discs also carry a loose title update at the root
-                // (e.g. `title_update.bin`). `$SystemUpdate` is excluded:
-                // it holds a generic dashboard update, not game content.
-                // Each found package is installed under its own internal
-                // TitleID, not the installer's own (often a placeholder).
-                let packages = find_installable_packages_excluding(&tmp, &["$SystemUpdate"])?;
-                if packages.is_empty() {
-                    bail!(
-                        "no installable DLC/title-update/Arcade package found \
-                         in this image's bundled content"
-                    );
-                }
-
-                // Installation: 80-100%.
-                phase("Installing the packages");
-                install_packages(&packages, dest, cancel, &|p| {
-                    update_progress(80 + p * 20 / 100)
-                })?;
-                update_progress(100);
-                Ok(())
-            })();
-
-            cleanup_dir(&dest.work_dir.join(".txbm-tmp"), CLEANUP_TEMP, status);
-            result?;
+            install_bundled_content(in_path, dest, cancel, update_progress, status, phase)?;
+        }
+        IsoKind::GameWithBundledContent => {
+            // Iso2God's "Mix" method: this disc is a game in its own right
+            // *and* carries DLC for itself, so it gets both treatments.
+            //
+            // The game goes first, on purpose: it is the half that is lost
+            // today, and a cancellation during the content phase then leaves
+            // a playable install behind — the packages merge on a re-add
+            // rather than replacing anything. The other order would leave
+            // content with no game, which a scan reports as `incomplete`.
+            install_game(
+                in_path,
+                &info,
+                dest,
+                x360_format,
+                cancel,
+                &|p| update_progress(p * 50 / 100),
+                status,
+                phase,
+            )?;
+            install_bundled_content(
+                in_path,
+                dest,
+                cancel,
+                &|p| update_progress(50 + p * 50 / 100),
+                status,
+                phase,
+            )?;
         }
     }
 
+    Ok(())
+}
+
+/// Installs the disc's own game: a GOD container, or an extracted `default.xex`
+/// folder when the target is configured for [`Xbox360Format::Xex`].
+// One argument over the lint's taste, and they are the same ones `convert_into`
+// threads through: destination, format, cancellation and the three reporting
+// closures. Bundling them would only move the list somewhere else.
+#[allow(clippy::too_many_arguments)]
+fn install_game(
+    in_path: &Path,
+    info: &IsoInfo,
+    dest: &ConvertDest,
+    x360_format: Xbox360Format,
+    cancel: &AtomicBool,
+    update_progress: &dyn Fn(u32),
+    status: &dyn Fn(&str),
+    phase: &dyn Fn(&str),
+) -> Result<()> {
+    if x360_format == Xbox360Format::Xex {
+        // Extract the disc to a `default.xex` game folder instead of
+        // converting it to a GOD container. The name resolution mirrors
+        // the GOD branch (image name → XboxUnity → file stem); the
+        // TitleID is embedded in the folder name (` [XXXXXXXX]` suffix) so
+        // later scans can identify the game without reading its XEX.
+        let title = info
+            .name
+            .clone()
+            .or_else(|| {
+                let tid = info.title_id.as_deref()?;
+                unity::search_titles(tid)
+                    .ok()?
+                    .into_iter()
+                    .next()
+                    .map(|t| t.name)
+            })
+            .or_else(|| in_path.file_stem().and_then(|s| s.to_str()).map(str::to_owned))
+            .unwrap_or_else(|| "Xbox 360 game".to_string());
+        let name = sanitize_name(&title);
+        let name = match info.title_id.as_deref() {
+            Some(tid) => crate::game::og_folder_name(&name, tid),
+            None => name,
+        };
+        let game_dir = dest.xex_dir.join(&name);
+        // Re-adding a game overwrites it, like GOD re-conversion does: the
+        // extraction writes over the existing files in place (mirroring the
+        // FTP upload, which merges too). The user is warned before the
+        // conversion is queued.
+        let existed = game_dir.exists();
+
+        phase("Extracting the Xbox 360 game (XEX)");
+        let res = extract::extract_iso(in_path, &game_dir, cancel, &mut |done, total| {
+            update_progress((done * 100 / total.max(1)) as u32);
+        });
+        // On cancellation, drop the partially-extracted folder — but only
+        // when we created it: a pre-existing game must survive the abort.
+        if res.is_err() && is_cancelled(cancel) && !existed {
+            cleanup_dir(&game_dir, CLEANUP_PARTIAL, status);
+        }
+        res?;
+        return Ok(());
+    }
+
+    let title = info.name.clone().or_else(|| {
+        let tid = info.title_id.as_deref()?;
+        unity::search_titles(tid)
+            .ok()?
+            .into_iter()
+            .next()
+            .map(|t| t.name)
+    });
+    // iso2god creates the `<TitleID>` folder itself, so it is handed
+    // the directory that folder must live in.
+    let content_dir = match info.title_id.as_deref() {
+        Some(tid) => dest.title_parent(tid, title.as_deref()),
+        None => dest.god_dir.clone(),
+    };
+    std::fs::create_dir_all(&content_dir)?;
+
+    phase("GOD conversion");
+    god::convert_to_god(in_path, &content_dir, title.as_deref(), cancel, &mut |done, total| {
+        update_progress((done * 100 / total.max(1)) as u32);
+    })?;
+    Ok(())
+}
+
+/// Extracts the disc and files every STFS package it bundles under the TitleID
+/// of that package's own header.
+fn install_bundled_content(
+    in_path: &Path,
+    dest: &ConvertDest,
+    cancel: &AtomicBool,
+    update_progress: &dyn Fn(u32),
+    status: &dyn Fn(&str),
+    phase: &dyn Fn(&str),
+) -> Result<()> {
+    let stem = sanitize_name(
+        in_path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("disc"),
+    );
+    let tmp = dest.work_dir.join(".txbm-tmp").join(&stem);
+    if tmp.exists() {
+        std::fs::remove_dir_all(&tmp)?;
+    }
+
+    let result = (|| -> Result<()> {
+        // Extraction: 0-80%.
+        phase("Extracting the disc");
+        extract::extract_iso(in_path, &tmp, cancel, &mut |done, total| {
+            update_progress((done * 80 / total.max(1)) as u32);
+        })?;
+
+        // Scan the whole disc, not just its Content folder: some
+        // bonus discs also carry a loose title update at the root
+        // (e.g. `title_update.bin`). `$SystemUpdate` is excluded:
+        // it holds a generic dashboard update, not game content.
+        // Each found package is installed under its own internal
+        // TitleID, not the installer's own (often a placeholder).
+        let packages = find_installable_packages_excluding(&tmp, &["$SystemUpdate"])?;
+        if packages.is_empty() {
+            bail!(
+                "no installable DLC/title-update/Arcade package found \
+                 in this image's bundled content"
+            );
+        }
+
+        // Installation: 80-100%.
+        phase("Installing the packages");
+        install_packages(&packages, dest, cancel, &|p| {
+            update_progress(80 + p * 20 / 100)
+        })?;
+        update_progress(100);
+        Ok(())
+    })();
+
+    cleanup_dir(&dest.work_dir.join(".txbm-tmp"), CLEANUP_TEMP, status);
+    result?;
     Ok(())
 }
 
