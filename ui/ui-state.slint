@@ -85,6 +85,13 @@ export global UiState {
     // True while that list is being built: every disk is opened and probed,
     // which a sleeping drive can make take several seconds.
     in-out property <bool> scanning-fatx-drives;
+    // True when the last scan hit at least one disk it could not open for lack
+    // of privileges: the picker then offers a link to the README, which is the
+    // only place that can explain how to grant them per platform.
+    in-out property <bool> fatx-access-denied;
+    // Deep link into the README section covering raw-disk privileges for the
+    // platform this build runs on. Set once at startup.
+    in-out property <string> fatx-privileges-help-url;
 
     in-out property <DisplayedConfig> config;
     in-out property <string> app-version;

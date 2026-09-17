@@ -386,12 +386,18 @@ impl State {
                 let weak = weak.clone();
                 std::thread::spawn(move || {
                     let drives = txbm_core::fatx_dev::list_fatx_drives();
+                    // A disk we could not even open is the one failure the user
+                    // can act on, so the picker points at the README for it.
+                    let access_denied = drives
+                        .iter()
+                        .any(|d| d.probe == txbm_core::fatx_dev::FatxProbe::AccessDenied);
 
                     let _ = weak.upgrade_in_event_loop(move |app| {
                         let ui_state = app.global::<UiState<'_>>();
                         ui_state.set_fatx_drives(ModelRc::from(Rc::new(VecModel::from(
                             crate::config::displayed_fatx_drives(drives),
                         ))));
+                        ui_state.set_fatx_access_denied(access_denied);
                         ui_state.set_scanning_fatx_drives(false);
                     });
                 });

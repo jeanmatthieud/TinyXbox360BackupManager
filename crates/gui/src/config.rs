@@ -117,6 +117,25 @@ pub fn displayed_fatx_drives(
         .collect()
 }
 
+/// Link to the README section explaining how to grant raw-disk access, aimed
+/// straight at the paragraph for the platform this build runs on (the README
+/// has one heading per OS). Shown by the FATX picker when a disk came back
+/// "access denied". Falls back to the section itself on other platforms.
+pub fn fatx_privileges_help_url() -> SharedString {
+    const BASE: &str =
+        "https://github.com/jeanmatthieud/TinyXbox360BackupManager#electric_plug-using-the-consoles-hard-drive";
+    let url = if cfg!(target_os = "linux") {
+        "https://github.com/jeanmatthieud/TinyXbox360BackupManager#penguin-linux"
+    } else if cfg!(target_os = "windows") {
+        "https://github.com/jeanmatthieud/TinyXbox360BackupManager#window-windows"
+    } else if cfg!(target_os = "macos") {
+        "https://github.com/jeanmatthieud/TinyXbox360BackupManager#apple-macos"
+    } else {
+        BASE
+    };
+    SharedString::from(url)
+}
+
 impl From<CoreGodLayout> for GodLayout {
     fn from(layout: CoreGodLayout) -> Self {
         match layout {
