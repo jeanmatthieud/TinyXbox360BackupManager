@@ -23,7 +23,10 @@ pub struct State {
     /// a time. The job at index 0 is the one currently running.
     pub job_queue: VecDeque<QueuedJob>,
     pub displayed_job_queue: Rc<VecModel<DisplayedJob>>,
-    pub games_to_add: VecDeque<PathBuf>,
+    /// Files picked for addition, awaiting the confirmation that queues them.
+    /// The whole pick is kept, not just its path: the TitleID it read is what
+    /// lets the queued job name the installed game it will write over.
+    pub games_to_add: VecDeque<crate::util::PickedGame>,
     pub displayed_games_to_add: Rc<VecModel<DisplayedGameToAdd>>,
     pub notifications: Rc<VecModel<Notification>>,
     pub is_job_running: bool,

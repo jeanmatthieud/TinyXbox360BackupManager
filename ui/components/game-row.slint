@@ -10,6 +10,7 @@ import { MyPalette } from "../styling.slint";
 import { UiState } from "../ui-state.slint";
 import { Message, Dispatcher } from "../messages.slint";
 import { GameTableColumns } from "game-table-columns.slint";
+import { TooltipArea } from "tooltip-area.slint";
 
 export component GameRow inherits Rectangle {
     in property <DisplayedGame> game;
@@ -115,5 +116,13 @@ export component GameRow inherits Rectangle {
                 }
             }
         }
+    }
+
+    // Same veil as the card view: the running job is rewriting this game's
+    // folder, so neither its details nor its deletion are offered. Declared
+    // last so it covers the row and swallows the clicks.
+    if game.busy: TooltipArea {
+        disabled: true;
+        tooltip: "Being written to — wait for the transfer to finish";
     }
 }

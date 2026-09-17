@@ -24,17 +24,6 @@ export component Navbar inherits VerticalLayout {
             }
         }
 
-        // Always available: the Toolbox hosts the BadAvatar USB-key creation,
-        // which is useful even when no target is connected.
-        NavbarButton {
-            active: UiState.current-page == Page.Toolbox;
-            icon: IconSet.ToolCase;
-            tooltip: "Toolbox";
-            clicked => {
-                UiState.current-page = Page.Toolbox;
-            }
-        }
-
         // Storage / health report of the target. Always available: with no
         // target it explains how to connect one.
         NavbarButton {
@@ -45,11 +34,6 @@ export component Navbar inherits VerticalLayout {
                 UiState.current-page = Page.DeviceStatus;
             }
         }
-    }
-
-    VerticalLayout {
-        padding: 10px;
-        spacing: 10px;
 
         // Always reachable (the page explains itself when empty); the icon
         // only spins while a job is actually running.
@@ -63,12 +47,6 @@ export component Navbar inherits VerticalLayout {
             clicked => {
                 UiState.current-page = Page.Jobs;
             }
-        }
-
-        if !UiState.latest-version.is-empty: NavbarButton {
-            icon: IconSet.BellPlus;
-            tooltip: "New TinyXbox360BackupManager version available: \{UiState.latest-version}";
-            clicked => Dispatcher.dispatch(Message.OpenThat, "https://github.com/jeanmatthieud/TinyXbox360BackupManager/releases/latest");
         }
 
         if UiState.config.target.is-empty: NavbarButton {
@@ -85,6 +63,28 @@ export component Navbar inherits VerticalLayout {
             icon: IconSet.Unplug;
             tooltip: "Disconnect from \{UiState.config.target}";
             clicked => Dispatcher.dispatch(Message.RequestDisconnect, "");
+        }
+    }
+
+    VerticalLayout {
+        padding: 10px;
+        spacing: 10px;
+
+        if !UiState.latest-version.is-empty: NavbarButton {
+            icon: IconSet.BellPlus;
+            tooltip: "New TinyXbox360BackupManager version available: \{UiState.latest-version}";
+            clicked => Dispatcher.dispatch(Message.OpenThat, "https://github.com/jeanmatthieud/TinyXbox360BackupManager/releases/latest");
+        }
+
+        // Always available: the Toolbox hosts the BadAvatar USB-key creation,
+        // which is useful even when no target is connected.
+        NavbarButton {
+            active: UiState.current-page == Page.Toolbox;
+            icon: IconSet.ToolCase;
+            tooltip: "Toolbox";
+            clicked => {
+                UiState.current-page = Page.Toolbox;
+            }
         }
 
         NavbarButton {

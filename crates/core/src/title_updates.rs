@@ -14,17 +14,17 @@
 //! The console only tolerates one FTP connection at a time, so every
 //! operation here opens its own short-lived session.
 
-use crate::ftp::FtpSession;
+use crate::hash_cache::HashCache;
+use crate::remote_fs::RemoteFs;
 use crate::game::{FATX_MAX_NAME, Game};
 use crate::target::{self, Target};
-use crate::util::sha1_hex;
 use anyhow::{Context, Result, bail};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// Folder read by the dashboard for a title's active updates.
 const TITLE_UPDATE_DIR: &str = "000B0000";
-/// Aurora's own cache of downloaded title updates.
-const AURORA_CACHE_DIR: &str = "Aurora/Data/TitleUpdates";
+/// Aurora's own cache of downloaded title updates, under its `Data` folder.
+const AURORA_CACHE_SUBDIR: &str = "TitleUpdates";
 
 fn truncate_fatx(name: &str) -> String {
     name.chars().take(FATX_MAX_NAME).collect()
@@ -38,30 +38,42 @@ pub struct InstalledTitleUpdate {
     pub hash: String,
 }
 
-impl Target {
-    /// Lists title updates installed for `game` (its `000B0000` folder).
-    pub fn installed_title_updates(&self, game: &Game) -> Result<Vec<InstalledTitleUpdate>> {
-        match self {
-            Target::Local(_) => Ok(installed_local(game.content_dir())),
-            Target::Ftp(ftp) => {
-                let mut session = FtpSession::connect(ftp)?;
-                let result = installed_ftp(&mut session, game.content_dir());
-                session.quit();
-                result
-            }
-        }
-    }
+/// What the Title Updates window needs to know about one game: the updates
+/// sitting in its `000B0000` folder, and the hashes Aurora already holds in
+/// its own cache (so an update can be activated without downloading it).
+pub struct TitleUpdateState {
+    pub installed: Vec<InstalledTitleUpdate>,
+    pub cached_hashes: Vec<String>,
+}
 
-    /// Hashes of the title updates Aurora has already downloaded into its
-    /// own cache for `title_id`, across every profile folder.
-    pub fn cached_title_update_hashes(&self, title_id: &str) -> Result<Vec<String>> {
+impl Target {
+    /// Both halves of [`TitleUpdateState`], read in **one** session.
+    ///
+    /// They used to be two calls, hence two FTP logins — and, worse, two full
+    /// runs of [`target::find_aurora_data_dir`], whose memoization lives on
+    /// the session and died with the first one.
+    pub fn title_update_state(&self, game: &Game) -> Result<TitleUpdateState> {
         match self {
-            Target::Local(path) => Ok(cached_hashes_local(path, title_id)),
-            Target::Ftp(ftp) => {
-                let mut session = FtpSession::connect(ftp)?;
-                let result = cached_hashes_ftp(&mut session, title_id);
-                session.quit();
-                Ok(result)
+            Target::Local(path) => Ok(TitleUpdateState {
+                installed: installed_local(game.content_dir()),
+                cached_hashes: cached_hashes_local(path, &game.id),
+            }),
+            _ => {
+                let mut session = self.open_remote(false)?;
+                let key = self.remote_key();
+                let result = (|| {
+                    let mut cache = HashCache::load();
+                    let installed =
+                        installed_remote(&mut session, game.content_dir(), &key, &mut cache)?;
+                    cache.save();
+                    let cached_hashes = cached_hashes_remote(&mut session, &game.id);
+                    Ok(TitleUpdateState {
+                        installed,
+                        cached_hashes,
+                    })
+                })();
+                session.quit()?;
+                result
             }
         }
     }
@@ -84,10 +96,10 @@ impl Target {
                 std::fs::write(dest_dir.join(truncate_fatx(&file_name)), bytes)
                     .with_context(|| format!("writing {file_name}"))
             }
-            Target::Ftp(ftp) => {
-                let mut session = FtpSession::connect(ftp)?;
+            _ => {
+                let mut session = self.open_remote(true)?;
                 let result = (|| {
-                    let Some((file_name, bytes)) = find_cached_ftp(&mut session, &game.id, hash)?
+                    let Some((file_name, bytes)) = find_cached_remote(&mut session, &game.id, hash)?
                     else {
                         bail!(
                             "this title update is not in Aurora's cache; \
@@ -100,8 +112,8 @@ impl Target {
                     );
                     session.put_bytes(&remote_dir, &truncate_fatx(&file_name), &bytes)
                 })();
-                session.quit();
-                result
+                let closed = session.quit();
+                result.and(closed)
             }
         }
     }
@@ -114,15 +126,15 @@ impl Target {
                 std::fs::remove_file(&path)
                     .with_context(|| format!("removing {}", path.display()))
             }
-            Target::Ftp(ftp) => {
-                let mut session = FtpSession::connect(ftp)?;
+            _ => {
+                let mut session = self.open_remote(true)?;
                 let remote_dir = format!(
                     "{}/{TITLE_UPDATE_DIR}",
                     game.content_dir().to_string_lossy().replace('\\', "/")
                 );
                 let result = session.remove_file(&remote_dir, file_name);
-                session.quit();
-                result
+                let closed = session.quit();
+                result.and(closed)
             }
         }
     }
@@ -140,16 +152,23 @@ fn installed_local(title_dir: &Path) -> Vec<InstalledTitleUpdate> {
             if !path.is_file() {
                 return None;
             }
-            let bytes = std::fs::read(&path).ok()?;
+            // Streamed: a title update is routinely 100 MB and only its
+            // digest is ever wanted.
+            let hash = crate::util::sha1_hex_file(&path).ok()?;
             Some(InstalledTitleUpdate {
                 file_name: entry.file_name().to_string_lossy().to_string(),
-                hash: sha1_hex(&bytes),
+                hash,
             })
         })
         .collect()
 }
 
-fn installed_ftp(session: &mut FtpSession, title_dir: &Path) -> Result<Vec<InstalledTitleUpdate>> {
+fn installed_remote(
+    session: &mut dyn RemoteFs,
+    title_dir: &Path,
+    cache_key: &str,
+    cache: &mut HashCache,
+) -> Result<Vec<InstalledTitleUpdate>> {
     let remote = format!(
         "{}/{TITLE_UPDATE_DIR}",
         title_dir.to_string_lossy().replace('\\', "/")
@@ -159,23 +178,48 @@ fn installed_ftp(session: &mut FtpSession, title_dir: &Path) -> Result<Vec<Insta
         if entry.is_dir {
             continue;
         }
-        let bytes = session.download_file(&format!("{remote}/{}", entry.name))?;
+        let path = format!("{remote}/{}", entry.name);
+        // Hashing a file on the console means pulling all of it across, so the
+        // digest is remembered between runs: opening this window again, or
+        // re-reading the list after an activation, costs no transfer at all.
+        let hash = match cache.get(cache_key, &path, entry.size) {
+            Some(hash) => hash.clone(),
+            None => {
+                let hash = session.sha1_file(&path)?;
+                cache.insert(cache_key, &path, entry.size, hash.clone());
+                hash
+            }
+        };
         updates.push(InstalledTitleUpdate {
             file_name: entry.name.clone(),
-            hash: sha1_hex(&bytes),
+            hash,
         });
     }
     Ok(updates)
 }
 
+/// Aurora's title-update cache on a mounted drive:
+/// `<aurora>/Data/TitleUpdates`, with `<aurora>` resolved the way every other
+/// local lookup resolves it (a `launch.ini` override, `Dashboard/Aurora`, any
+/// casing) rather than assumed to be `<mount>/Aurora`.
+fn local_cache_root(mount: &Path) -> Option<PathBuf> {
+    let data = target::local_aurora_data_dir(mount)?;
+    crate::util::find_dir_ci(&data, AURORA_CACHE_SUBDIR)
+}
+
 fn cached_hashes_local(mount: &Path, title_id: &str) -> Vec<String> {
-    let root = mount.join(AURORA_CACHE_DIR);
+    let Some(root) = local_cache_root(mount) else {
+        return Vec::new();
+    };
     let Ok(profiles) = std::fs::read_dir(&root) else {
         return Vec::new();
     };
     let mut hashes = Vec::new();
     for profile in profiles.flatten() {
-        let Ok(entries) = std::fs::read_dir(profile.path().join(title_id)) else {
+        let Some(title_dir) = crate::util::find_dir_ci(&profile.path(), title_id) else {
+            continue;
+        };
+        let Ok(entries) = std::fs::read_dir(&title_dir) else {
             continue;
         };
         for entry in entries.flatten() {
@@ -188,18 +232,23 @@ fn cached_hashes_local(mount: &Path, title_id: &str) -> Vec<String> {
 }
 
 /// Looks for `hash`'s cached download under Aurora's own
-/// `<mount>/Aurora/Data/TitleUpdates/<profile>/<TitleID>/<hash>/` cache.
+/// `<aurora>/Data/TitleUpdates/<profile>/<TitleID>/<hash>/` cache.
 fn find_cached_local(
     mount: &Path,
     title_id: &str,
     hash: &str,
 ) -> Result<Option<(String, Vec<u8>)>> {
-    let root = mount.join(AURORA_CACHE_DIR);
+    let Some(root) = local_cache_root(mount) else {
+        return Ok(None);
+    };
     let Ok(profiles) = std::fs::read_dir(&root) else {
         return Ok(None);
     };
     for profile in profiles.flatten() {
-        let Ok(entries) = std::fs::read_dir(profile.path().join(title_id)) else {
+        let Some(title_dir) = crate::util::find_dir_ci(&profile.path(), title_id) else {
+            continue;
+        };
+        let Ok(entries) = std::fs::read_dir(&title_dir) else {
             continue;
         };
         for entry in entries.flatten() {
@@ -221,7 +270,7 @@ fn find_cached_local(
     Ok(None)
 }
 
-fn cached_hashes_ftp(session: &mut FtpSession, title_id: &str) -> Vec<String> {
+fn cached_hashes_remote(session: &mut dyn RemoteFs, title_id: &str) -> Vec<String> {
     let Some(data_dir) = target::find_aurora_data_dir(session) else {
         return Vec::new();
     };
@@ -243,8 +292,8 @@ fn cached_hashes_ftp(session: &mut FtpSession, title_id: &str) -> Vec<String> {
 
 /// Looks for `hash`'s cached download under Aurora's
 /// `Data/TitleUpdates/<profile>/<TitleID>/<hash>/` cache.
-fn find_cached_ftp(
-    session: &mut FtpSession,
+fn find_cached_remote(
+    session: &mut dyn RemoteFs,
     title_id: &str,
     hash: &str,
 ) -> Result<Option<(String, Vec<u8>)>> {

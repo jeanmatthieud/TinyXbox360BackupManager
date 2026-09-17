@@ -145,14 +145,14 @@ component LocationField inherits VerticalLayout {
             height: 34px;
             horizontal-stretch: 1;
             text: value;
-            placeholder-text: UiState.storage-is-ftp ? "/Hdd1/…" : "e.g. Games or a sub-folder";
+            placeholder-text: UiState.storage-is-console ? "/Hdd1/…" : "e.g. Games or a sub-folder";
             edited => {
                 value = self.text;
             }
         }
 
         // Local drives get a system folder picker; consoles use free text.
-        if !UiState.storage-is-ftp: IconButton {
+        if !UiState.storage-is-console: IconButton {
             icon: IconSet.FolderOpen;
             tooltip: "Browse…";
             width: 34px;

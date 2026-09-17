@@ -118,12 +118,19 @@ export component JobQueuePage inherits VerticalLayout {
                                 kind: job.kind;
                                 can-move-up: i > first-pending;
                                 can-move-down: i < UiState.job-queue.length - 1;
+                                // Match the card's inner curve (10px radius
+                                // minus its 1px border) on the two rows that
+                                // touch its rounded corners.
+                                radius-top-right: i == first-pending ? 9px : 0px;
+                                radius-bottom-right: i == UiState.job-queue.length - 1 ? 9px : 0px;
                                 cancel() => Dispatcher.dispatch(Message.CancelJob, i);
                                 move-up() => Dispatcher.dispatch(Message.MoveJobUp, i);
                                 move-down() => Dispatcher.dispatch(Message.MoveJobDown, i);
                             }
 
-                            HorizontalLine { }
+                            // No separator under the last row: it would sit
+                            // across the card's rounded bottom edge.
+                            if i < UiState.job-queue.length - 1: HorizontalLine { }
                         }
                     }
                 }

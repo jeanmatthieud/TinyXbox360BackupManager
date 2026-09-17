@@ -22,7 +22,16 @@ pub enum JobKind {
 pub enum QueuedJob {
     /// ISO added to target: GOD conversion or extraction,
     /// depending on the detected image type.
-    Add(PathBuf),
+    Add {
+        path: PathBuf,
+        /// TitleID this input installs under, when the pick already read it
+        /// (see `PickedGame::installs_title_id` in the GUI crate). Carried so
+        /// the library can mark the game being written to: the second disc of
+        /// an installed game, or a DLC package, lands under its very TitleID.
+        /// `None` for an archive or a content disc, whose TitleID is only
+        /// known once the conversion has unpacked it — those mark nothing.
+        title_id: Option<String>,
+    },
     /// Installed game removed from the target, along with its separate
     /// DLC/title-update folder when it has one.
     Delete(Box<Game>),
@@ -42,7 +51,7 @@ pub enum QueuedJob {
 impl QueuedJob {
     pub fn kind(&self) -> JobKind {
         match self {
-            Self::Add(_) => JobKind::Add,
+            Self::Add { .. } => JobKind::Add,
             Self::Delete(_) => JobKind::Delete,
             Self::DeleteContent { .. } => JobKind::DeleteContent,
         }
@@ -54,10 +63,25 @@ impl QueuedJob {
     /// waiting in the queue.
     pub fn path(&self) -> &Path {
         match self {
-            Self::Add(path) => path,
+            Self::Add { path, .. } => path,
             Self::Delete(game) => &game.path,
             Self::DeleteContent { game, .. } => &game.path,
         }
+    }
+
+    /// TitleID of the installed game this job writes into, when it is known.
+    /// The library greys out the games it names while the job runs: their
+    /// folder is being rewritten, so their size, discs and DLC are in flux
+    /// (and, for a deletion, on their way out).
+    ///
+    /// An empty TitleID — an extracted game added by hand may have none —
+    /// names nothing and is reported as such.
+    pub fn writes_title_id(&self) -> Option<&str> {
+        let id = match self {
+            Self::Add { title_id, .. } => title_id.as_deref()?,
+            Self::Delete(game) | Self::DeleteContent { game, .. } => game.id.as_str(),
+        };
+        (!id.is_empty()).then_some(id)
     }
 
     /// Text shown for this entry in the queue (row and progress card). Rows
@@ -66,7 +90,7 @@ impl QueuedJob {
         match self {
             // File name only: the full path is too long for the row and its
             // directory is the same for a whole batch anyway.
-            Self::Add(path) => path
+            Self::Add { path, .. } => path
                 .file_name()
                 .unwrap_or(path.as_os_str())
                 .to_string_lossy()
@@ -83,7 +107,9 @@ impl QueuedJob {
     /// component, not just on the game.
     pub fn is_same_as(&self, other: &Self) -> bool {
         match (self, other) {
-            (Self::Add(a), Self::Add(b)) => a == b,
+            // The source file identifies the work; the TitleID is only carried
+            // along for display.
+            (Self::Add { path: a, .. }, Self::Add { path: b, .. }) => a == b,
             (Self::Delete(a), Self::Delete(b)) => a.path == b.path,
             (
                 Self::DeleteContent {

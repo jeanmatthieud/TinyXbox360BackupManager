@@ -92,7 +92,11 @@ export component AuroraHelpModal inherits Modal {
                 kind: IconButtonKind.Primary;
                 clicked => {
                     UiState.showing-aurora-help = false;
-                    Dispatcher.dispatch(Message.FetchAuroraPaths, "");
+                    // Same guard as the Toolbox cards: a second lookup while
+                    // one is running buys nothing and doubles the work.
+                    if !UiState.fetching-aurora-paths {
+                        Dispatcher.dispatch(Message.FetchAuroraPaths, "");
+                    }
                 }
             }
         }

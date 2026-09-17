@@ -4,7 +4,7 @@
 //! package found in its content folder (one per disc, sharing the same
 //! TitleID) and one per installed DLC / marketplace package.
 
-use crate::ftp::FtpSession;
+use crate::remote_fs::RemoteFs;
 use crate::game::{Game, GameFormat};
 use crate::stfs::{self, dlc_dir_name};
 use crate::target::{Target, remove_dir_all_with_progress};
@@ -96,10 +96,10 @@ impl Target {
     pub fn game_details(&self, game: &Game) -> Result<GameDetails> {
         match self {
             Target::Local(_) => Ok(inspect_local(game)),
-            Target::Ftp(ftp) => {
-                let mut session = FtpSession::connect(ftp)?;
-                let details = inspect_ftp(&mut session, game);
-                session.quit();
+            _ => {
+                let mut session = self.open_remote(false)?;
+                let details = inspect_remote(&mut session, game);
+                session.quit()?;
                 Ok(details)
             }
         }
@@ -126,12 +126,12 @@ impl Target {
             Target::Local(_) => {
                 delete_content_local(game, kind, file_name, cancel, update_progress)
             }
-            Target::Ftp(ftp) => {
-                let mut session = FtpSession::connect(ftp)?;
+            _ => {
+                let mut session = self.open_remote(true)?;
                 let result =
-                    delete_content_ftp(&mut session, game, kind, file_name, cancel, update_progress);
-                session.quit();
-                result
+                    delete_content_remote(&mut session, game, kind, file_name, cancel, update_progress);
+                let closed = session.quit();
+                result.and(closed)
             }
         }
     }
@@ -176,8 +176,8 @@ fn delete_content_local(
     }
 }
 
-fn delete_content_ftp(
-    session: &mut FtpSession,
+fn delete_content_remote(
+    session: &mut dyn RemoteFs,
     game: &Game,
     kind: ContentKind,
     file_name: &str,
@@ -270,7 +270,7 @@ fn inspect_local(game: &Game) -> GameDetails {
     details
 }
 
-fn inspect_ftp(session: &mut FtpSession, game: &Game) -> GameDetails {
+fn inspect_remote(session: &mut dyn RemoteFs, game: &Game) -> GameDetails {
     let mut details = GameDetails::default();
     let remote = game.path.to_string_lossy().replace('\\', "/");
     let content = game.content_dir().to_string_lossy().replace('\\', "/");
