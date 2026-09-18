@@ -28,6 +28,14 @@ pub trait RemoteFs {
     /// list rather than an error: a failed listing is never fatal to a scan.
     fn list_dir(&mut self, dir: &str) -> Vec<RemoteEntry>;
 
+    /// Lists a directory, reporting one that could not be read.
+    ///
+    /// [`Self::list_dir`] is the right call for a scan, where a directory that
+    /// answers nothing simply contributes nothing. It is the wrong one
+    /// wherever an empty answer and an unreadable directory must not be
+    /// confused — copying a tree that is about to be deleted, above all.
+    fn try_list_dir(&mut self, dir: &str) -> Result<Vec<RemoteEntry>>;
+
     /// Recursive size of a directory, bounded by `max_depth`.
     fn dir_size(&mut self, dir: &str, max_depth: u32) -> u64;
 
@@ -89,6 +97,10 @@ impl RemoteFs for FtpSession {
 
     fn list_dir(&mut self, dir: &str) -> Vec<RemoteEntry> {
         FtpSession::list_dir(self, dir)
+    }
+
+    fn try_list_dir(&mut self, dir: &str) -> Result<Vec<RemoteEntry>> {
+        FtpSession::try_list_dir(self, dir)
     }
 
     fn dir_size(&mut self, dir: &str, max_depth: u32) -> u64 {
@@ -186,6 +198,10 @@ impl RemoteFs for RemoteSession {
 
     fn list_dir(&mut self, dir: &str) -> Vec<RemoteEntry> {
         self.inner().list_dir(dir)
+    }
+
+    fn try_list_dir(&mut self, dir: &str) -> Result<Vec<RemoteEntry>> {
+        self.inner().try_list_dir(dir)
     }
 
     fn dir_size(&mut self, dir: &str, max_depth: u32) -> u64 {

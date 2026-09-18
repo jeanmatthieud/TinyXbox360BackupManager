@@ -10,6 +10,9 @@ import { Icon, IconSet } from "@lucide";
 export component ConfirmationModal inherits Modal {
     in property <bool> destructive: false;
     in property <Icon> btn-icon: IconSet.WifiZero;
+    // "Ok" answers a question ("are you sure you want to…?"); a modal that
+    // instead states what it is about to do wants a verb on its button.
+    in property <string> confirm-label: "Ok";
 
     callback cancelled();
     callback confirmed();
@@ -49,7 +52,7 @@ export component ConfirmationModal inherits Modal {
             }
 
             IconButton {
-                label: "Ok";
+                label: root.confirm-label;
                 kind: destructive ? IconButtonKind.Destructive : IconButtonKind.Primary;
                 icon: btn-icon;
                 clicked => confirmed();

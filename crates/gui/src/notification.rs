@@ -25,6 +25,15 @@ impl Notification {
         Self::new(text, NotificationKind::Info)
     }
 
+    /// Info toast that stays up until the user closes it, for something they
+    /// need to have read rather than merely seen go by.
+    pub fn info_sticky(text: impl Into<SharedString>) -> Self {
+        Self {
+            sticky: true,
+            ..Self::new(text, NotificationKind::Info)
+        }
+    }
+
     pub fn success(text: impl Into<SharedString>) -> Self {
         Self::new(text, NotificationKind::Success)
     }
@@ -40,5 +49,18 @@ impl Notification {
 
     pub fn error(text: impl Into<SharedString>) -> Self {
         Self::new(text, NotificationKind::Error)
+    }
+
+    pub fn warning(text: impl Into<SharedString>) -> Self {
+        Self::new(text, NotificationKind::Warning)
+    }
+
+    /// Warning toast that stays up until the user closes it, for something
+    /// they need to have read rather than merely seen go by.
+    pub fn warning_sticky(text: impl Into<SharedString>) -> Self {
+        Self {
+            sticky: true,
+            ..Self::new(text, NotificationKind::Warning)
+        }
     }
 }

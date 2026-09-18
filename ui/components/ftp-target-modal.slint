@@ -5,6 +5,7 @@ import { Modal } from "modal.slint";
 import { HorizontalLine } from "horizontal-line.slint";
 import { IconButton, IconButtonKind } from "icon-button.slint";
 import { IconSet, IconDisplay } from "@lucide";
+import { FtpPurpose } from "../types.slint";
 import { MyPalette } from "../styling.slint";
 import { UiState } from "../ui-state.slint";
 import { Message, Dispatcher } from "../messages.slint";
@@ -166,7 +167,12 @@ export component FtpTargetModal inherits Modal {
                     clicked => {
                         Dispatcher.dispatch(Message.CancelFtpScan, "");
                         UiState.editing-ftp-target = false;
-                        UiState.selecting-target = true;
+                        // Back to whichever modal handed over to this one.
+                        if UiState.ftp-target-purpose == FtpPurpose.Compat {
+                            UiState.selecting-compat-target = true;
+                        } else {
+                            UiState.selecting-target = true;
+                        }
                     }
                 }
 
@@ -199,7 +205,13 @@ export component FtpTargetModal inherits Modal {
                         clicked => {
                             Dispatcher.dispatch(Message.CancelFtpScan, "");
                             UiState.editing-ftp-target = false;
-                            Dispatcher.dispatch(Message.SetTargetFtp, "");
+                            // A Toolbox tool only wants the console's address:
+                            // it must not become the app's target.
+                            if UiState.ftp-target-purpose == FtpPurpose.Compat {
+                                Dispatcher.dispatch(Message.SelectCompatFtp, "");
+                            } else {
+                                Dispatcher.dispatch(Message.SetTargetFtp, "");
+                            }
                         }
                     }
                 }

@@ -81,7 +81,7 @@ pub fn list_fatx_drives() -> Vec<FatxDrive> {
             // probe to enumerate at all (Windows) keeps its result rather than
             // paying for a second pass over every disk.
             if drive.probe == FatxProbe::Unreadable {
-                drive.probe = probe_device(&drive.path);
+                drive.probe = probe_device_at(&drive.path, partition_offset());
             }
             drive
         })
@@ -103,7 +103,12 @@ pub fn list_fatx_drives() -> Vec<FatxDrive> {
 /// signature there is exactly the check the `fatx` crate performs when
 /// opening, so a disk that probes as [`FatxProbe::Xbox360`] opens.
 fn partition_offset() -> u64 {
-    fatx::PartitionMapEntry::from_x360_name(DEFAULT_PARTITION)
+    offset_of(DEFAULT_PARTITION)
+}
+
+/// Offset of any named Xbox 360 partition, per the `fatx` crate's map.
+fn offset_of(partition: &str) -> u64 {
+    fatx::PartitionMapEntry::from_x360_name(partition)
         .map(|p| p.offset_bytes)
         .unwrap_or(0)
 }
@@ -117,8 +122,8 @@ fn partition_offset() -> u64 {
 /// constraint, and may well stop a few bytes after the signature.
 const PROBE_READ_SIZES: [usize; 3] = [4096, 512, 4];
 
-/// Reads the four signature bytes at the partition offset.
-fn probe_device(path: &Path) -> FatxProbe {
+/// Reads the four signature bytes at the given partition's offset.
+fn probe_device_at(path: &Path, offset: u64) -> FatxProbe {
     let mut file = match std::fs::File::open(path) {
         Ok(file) => file,
         Err(e) => {
@@ -129,7 +134,6 @@ fn probe_device(path: &Path) -> FatxProbe {
         }
     };
 
-    let offset = partition_offset();
     let mut signature = [0u8; 4];
     let mut last_error = None;
     let mut read = false;
@@ -170,7 +174,14 @@ fn probe_device(path: &Path) -> FatxProbe {
 /// A disk picked by hand (a raw image, or a device the enumeration missed),
 /// probed the same way so the caller can report the same diagnostics.
 pub fn probe_path(path: &Path) -> FatxProbe {
-    probe_device(path)
+    probe_partition(path, DEFAULT_PARTITION)
+}
+
+/// Probes one named partition of a disk rather than the user-content one.
+/// The compatibility partition is optional, so a drive can probe as a healthy
+/// [`FatxProbe::Xbox360`] and still answer [`FatxProbe::NoFilesystem`] here.
+pub fn probe_partition(path: &Path, partition: &str) -> FatxProbe {
+    probe_device_at(path, offset_of(partition))
 }
 
 /// Builds a target configuration for a device path.
@@ -301,7 +312,7 @@ fn candidates() -> Vec<FatxDrive> {
                 // Which of the sixteen numbers exist can only be told by
                 // opening them, so the probe happens here — and is kept, so
                 // `list_fatx_drives` does not open every disk a second time.
-                probe: probe_device(&path),
+                probe: probe_device_at(&path, partition_offset()),
                 path,
             }
         })

@@ -19,7 +19,7 @@ anyhow = "1.0"
 # `feat-rust-write` branch of our fork, not on crates.io. The commit is pinned
 # here rather than tracking the branch head, so picking up new work there is a
 # deliberate bump of this `rev`.
-fatx = { git = "https://github.com/jeanmatthieud/fatx", rev = "d1b3870f1514a7b79d57c704d07fd2c20b3a7a08" }
+fatx = { git = "https://github.com/jeanmatthieud/fatx", rev = "9c66972c89127750df6781d8843bb3687fb7c4d9" }
 
 [profile.release]
 opt-level = 3

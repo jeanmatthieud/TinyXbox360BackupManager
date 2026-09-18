@@ -49,11 +49,18 @@ export component Navbar inherits VerticalLayout {
             }
         }
 
+        // No target may be picked while a Toolbox tool is working on a console
+        // of its own: both write outside the job queue, and a job started here
+        // would be a second write in flight (see `crates/core/src/ftp.rs`).
         if UiState.config.target.is-empty: NavbarButton {
             icon: IconSet.Zap;
-            ping: !UiState.creating-badavatar;
-            disabled: UiState.creating-badavatar;
-            tooltip: UiState.creating-badavatar ? "BadAvatar USB key creation in progress" : "Select a target";
+            ping: !UiState.creating-badavatar && !UiState.compat-busy;
+            disabled: UiState.creating-badavatar || UiState.compat-busy;
+            tooltip: UiState.creating-badavatar
+                ? "BadAvatar USB key creation in progress"
+                : UiState.compat-busy
+                    ? "Original Xbox compatibility install in progress"
+                    : "Select a target";
             clicked => {
                 UiState.selecting-target = true;
             }

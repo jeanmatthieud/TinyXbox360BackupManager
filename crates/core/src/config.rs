@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 use crate::badavatar::BadAvatarConfig;
+use crate::ogxbox_compat::OgXboxCompatConfig;
 use crate::fatx::FatxConfig;
 use crate::data_dir::DATA_DIR;
 use anyhow::Result;
@@ -88,6 +89,9 @@ pub struct ConfigContents {
 
     /// BadAvatar USB-key creation settings (Toolbox).
     pub badavatar: BadAvatarConfig,
+
+    /// Original-Xbox compatibility partition settings (Toolbox).
+    pub ogxbox_compat: OgXboxCompatConfig,
 }
 
 impl Default for ConfigContents {
@@ -113,6 +117,7 @@ impl Default for ConfigContents {
             ftp_user: "xboxftp".to_string(),
             ftp_password: "xboxftp".to_string(),
             badavatar: BadAvatarConfig::default(),
+            ogxbox_compat: OgXboxCompatConfig::default(),
         }
     }
 }

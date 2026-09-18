@@ -35,6 +35,23 @@ pub const FATX_VOLUME: &str = "Hdd1";
 /// Xbox 360 partition holding user content (`Hdd1`).
 pub const DEFAULT_PARTITION: &str = "data";
 
+/// Xbox 360 partition holding the original-Xbox emulator, which the console
+/// exposes as `HddX`. It is the one the Toolbox compatibility tool writes; a
+/// drive can be perfectly healthy without it (it is only created when the disk
+/// is formatted at the factory, or by FATXplorer / a homebrew fixer).
+pub const COMPAT_PARTITION: &str = "compat";
+pub const COMPAT_VOLUME: &str = "HddX";
+
+/// Name the console gives a partition at the root of its file tree. Every path
+/// this module takes starts with one, so a session has to know which name it
+/// answers to — `Hdd1` for user content, `HddX` for the emulator partition.
+pub fn volume_for(partition: &str) -> &'static str {
+    match partition.trim() {
+        COMPAT_PARTITION => COMPAT_VOLUME,
+        _ => FATX_VOLUME,
+    }
+}
+
 /// How often a long file copy reports its progress.
 const PROGRESS_DEBOUNCE: std::time::Duration = std::time::Duration::from_millis(200);
 
@@ -74,6 +91,15 @@ impl FatxConfig {
         }
     }
 
+    /// Same device, but pointing at another of its Xbox 360 partitions — used
+    /// by the Toolbox tool that writes [`COMPAT_PARTITION`].
+    pub fn for_partition(device: PathBuf, partition: &str) -> Self {
+        Self {
+            device,
+            partition: partition.to_string(),
+        }
+    }
+
     /// Partition name to open, falling back to the user-content partition for
     /// a config written before the field existed (or emptied by hand).
     fn partition_name(&self) -> &str {
@@ -90,6 +116,9 @@ impl FatxConfig {
 pub struct FatxSession {
     fs: FatxFsHandle,
     writable: bool,
+    /// Device name this session answers to, derived from the partition it
+    /// opened (see [`volume_for`]).
+    volume: &'static str,
     aurora_data_dir_cache: Option<Option<String>>,
 }
 
@@ -115,6 +144,7 @@ impl FatxSession {
         Ok(Self {
             fs,
             writable,
+            volume: volume_for(config.partition_name()),
             aurora_data_dir_cache: None,
         })
     }
@@ -142,7 +172,8 @@ impl FatxSession {
         self.sync()
     }
 
-    /// Maps a console path (`/Hdd1/Content/…`) to a path inside the open
+    /// Maps a console path (`/Hdd1/Content/…`, or `/HddX/Compatibility/…` on a
+    /// session opened on the emulator partition) to a path inside the open
     /// partition (`/Content/…`). Returns `None` for a path on another device,
     /// which this session simply does not have.
     fn resolve(&self, path: &str) -> Option<String> {
@@ -155,7 +186,7 @@ impl FatxSession {
             Some((device, rest)) => (device, rest),
             None => (trimmed, ""),
         };
-        if !device.eq_ignore_ascii_case(FATX_VOLUME) {
+        if !device.eq_ignore_ascii_case(self.volume) {
             return None;
         }
         // Collapse the empty segments a caller's `format!("{dir}/{name}")` can
@@ -392,6 +423,18 @@ fn open_error(config: &FatxConfig, writable: bool, error: fatx::Error) -> anyhow
         }
     }
     if matches!(error, fatx::Error::InvalidFilesystemSignature) {
+        // The compatibility partition is genuinely optional: a drive that never
+        // left the factory with one, or that was reformatted, simply has no
+        // filesystem there. Saying "this is not an Xbox 360 drive" would be
+        // wrong and would send the user looking in the wrong place.
+        if config.partition_name() == COMPAT_PARTITION {
+            return anyhow!(
+                "{device} has no original-Xbox compatibility partition ({COMPAT_VOLUME}).\n\n\
+                 It is only created when a drive is formatted at the Microsoft factory. \
+                 Create it first — with the `HDD Compatibility Partition Fixer` homebrew \
+                 run on the console, or with FATXplorer on Windows — then come back here."
+            );
+        }
         return anyhow!(
             "no Xbox 360 filesystem found on {device}: its `{}` partition holds no FATX \
              filesystem. Make sure this really is an Xbox 360 hard drive, and that it is \
@@ -404,7 +447,7 @@ fn open_error(config: &FatxConfig, writable: bool, error: fatx::Error) -> anyhow
 
 impl RemoteFs for FatxSession {
     fn list_root(&mut self) -> Result<Vec<String>> {
-        Ok(vec![FATX_VOLUME.to_string()])
+        Ok(vec![self.volume.to_string()])
     }
 
     fn list_dir(&mut self, dir: &str) -> Vec<RemoteEntry> {
@@ -422,6 +465,22 @@ impl RemoteFs for FatxSession {
                 size: u64::from(e.file_size()),
             })
             .collect()
+    }
+
+    fn try_list_dir(&mut self, dir: &str) -> Result<Vec<RemoteEntry>> {
+        let resolved = self.resolve_or_err(dir)?;
+        let entries = self
+            .fs
+            .read_dir(&resolved)
+            .with_context(|| format!("listing {dir}"))?;
+        Ok(entries
+            .flatten()
+            .map(|e| RemoteEntry {
+                name: e.file_name(),
+                is_dir: e.is_directory(),
+                size: u64::from(e.file_size()),
+            })
+            .collect())
     }
 
     fn dir_size(&mut self, dir: &str, max_depth: u32) -> u64 {

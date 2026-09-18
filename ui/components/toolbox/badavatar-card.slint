@@ -66,10 +66,12 @@ export component BadAvatarCard inherits ToolboxCard {
     // Nothing here is usable while the key is being built, while a target is
     // connected (the key must be prepared standalone)
     // — so veil the whole card rather than just its action row.
-    disabled: UiState.creating-badavatar || target-connected;
+    disabled: UiState.creating-badavatar || UiState.compat-busy || target-connected;
     disabled-tooltip: target-connected
         ? "Disconnect from the current target first — the USB key must be prepared on its own."
-        : "";
+        : UiState.compat-busy
+            ? "Wait for the original Xbox compatibility install to finish."
+            : "";
 
     CardHeader {
         icon: IconSet.Usb;

@@ -26,6 +26,47 @@ pub fn pick_storage_folder(window_handle: &WindowHandle, start_dir: &Path) -> Op
         .pick_folder()
 }
 
+/// Where to write the zip holding a copy of the console's current compatibility
+/// files. A save dialog rather than a folder picker: the user is choosing the
+/// name of one archive, not a place to scatter files into.
+pub fn save_compat_backup(window_handle: &WindowHandle) -> Option<PathBuf> {
+    // No `set_directory`: the app's own data folder would be a poor place to
+    // keep a backup, and the desktop already reopens where the user last saved.
+    let path = FileDialog::new()
+        .set_parent(window_handle)
+        .set_title("Save the current compatibility files")
+        .set_file_name("compatibility-backup.zip")
+        .add_filter("Zip archive", &["zip"])
+        .save_file()?;
+
+    // A filter is a hint, not a rule: some desktops hand back whatever was
+    // typed. The extension matters here, because restoring reads the archive
+    // back by it.
+    if path
+        .extension()
+        .is_some_and(|e| e.eq_ignore_ascii_case("zip"))
+    {
+        return Some(path);
+    }
+
+    // Appended, never substituted: `with_extension` would turn a name the user
+    // typed as `backup.old` into `backup.zip`, and the dialog's overwrite
+    // prompt answered for `backup.old` says nothing about a `backup.zip` that
+    // may already be sitting there from an earlier run.
+    let mut name = path.into_os_string();
+    name.push(".zip");
+    Some(PathBuf::from(name))
+}
+
+/// Picker for a backup this tool wrote earlier, to put back on a console.
+pub fn pick_compat_backup(window_handle: &WindowHandle) -> Option<PathBuf> {
+    FileDialog::new()
+        .set_parent(window_handle)
+        .set_title("Select a compatibility backup")
+        .add_filter("Zip archive", &["zip"])
+        .pick_file()
+}
+
 /// Picker for a raw disk image holding an Xbox 360 filesystem, the hidden
 /// alternative to selecting a physical drive. Handy to work on a dump of a
 /// console drive without touching the drive itself.
