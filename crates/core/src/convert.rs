@@ -7,6 +7,7 @@ use crate::config::{Config, GodLayout, Xbox360Format};
 use crate::data_dir::{STAGING_DIR, TMP_DIR};
 use crate::remote_fs::RemoteFs;
 use crate::iso_info::{self, IsoInfo, IsoKind};
+use crate::quirks::DiscQuirk;
 use crate::stfs::{self, StfsInfo};
 use crate::target::{Target, remote_hdd_root, remote_layout, local_layout};
 use crate::util::sanitize_name;
@@ -355,6 +356,22 @@ fn convert_into(
         InputKind::Iso(info) => info,
     };
 
+    // A quirk knows something about this exact disc that its shape does not
+    // tell, and overrides it.
+    if let Some(quirk) = info.quirk {
+        return apply_quirk(
+            quirk,
+            in_path,
+            &info,
+            dest,
+            x360_format,
+            cancel,
+            update_progress,
+            status,
+            phase,
+        );
+    }
+
     match info.kind {
         IsoKind::Xbox360Game => {
             install_game(
@@ -442,25 +459,61 @@ fn convert_into(
         IsoKind::BundledContent => {
             install_bundled_content(in_path, dest, cancel, update_progress, status, phase)?;
         }
-        IsoKind::GameWithBundledContent => {
-            // Iso2God's "Mix" method: this disc is a game in its own right
-            // *and* carries DLC for itself, so it gets both treatments.
-            //
-            // The game goes first, on purpose: it is the half that is lost
-            // today, and a cancellation during the content phase then leaves
-            // a playable install behind — the packages merge on a re-add
-            // rather than replacing anything. The other order would leave
-            // content with no game, which a scan reports as `incomplete`.
-            install_game(
-                in_path,
-                &info,
-                dest,
-                x360_format,
-                cancel,
-                &|p| update_progress(p * 50 / 100),
-                status,
-                phase,
-            )?;
+    }
+
+    Ok(())
+}
+
+/// Carries out a disc's [`DiscQuirk`].
+#[allow(clippy::too_many_arguments)]
+fn apply_quirk(
+    quirk: DiscQuirk,
+    in_path: &Path,
+    info: &IsoInfo,
+    dest: &ConvertDest,
+    x360_format: Xbox360Format,
+    cancel: &AtomicBool,
+    update_progress: &dyn Fn(u32),
+    status: &dyn Fn(&str),
+    phase: &dyn Fn(&str),
+) -> Result<()> {
+    match quirk {
+        DiscQuirk::GameAndBundledContent => {
+            // The game goes first, on purpose: it is the half that would
+            // otherwise be lost, and a cancellation during the content phase
+            // then leaves a playable install behind — the packages merge on a
+            // re-add rather than replacing anything. The other order would
+            // leave content with no game, which a scan reports as `incomplete`.
+            let game_progress = |p: u32| update_progress(p * 50 / 100);
+            if x360_format == Xbox360Format::Xex {
+                // `install_bundled_content` files the packages at their proper
+                // place right after, so they are kept out of the game folder
+                // here: extracting the whole disc would leave an inert second
+                // copy of them beside the game (3 GiB, on Splinter Cell:
+                // Blacklist disc 2). A GOD container has no such choice — it
+                // always holds the whole used volume.
+                let game_dir = extracted_game_dir(dest, info, in_path);
+                extract_game_into(
+                    in_path,
+                    &game_dir,
+                    &["Content"],
+                    cancel,
+                    &game_progress,
+                    status,
+                    phase,
+                )?;
+            } else {
+                install_game(
+                    in_path,
+                    info,
+                    dest,
+                    x360_format,
+                    cancel,
+                    &game_progress,
+                    status,
+                    phase,
+                )?;
+            }
             install_bundled_content(
                 in_path,
                 dest,
@@ -470,8 +523,158 @@ fn convert_into(
                 phase,
             )?;
         }
+        DiscQuirk::ForceExtractedGame { entry_point } => {
+            // `x360_format` is deliberately ignored: only an extracted folder
+            // can be completed by the other disc of the set.
+            let game_dir = extracted_game_dir(dest, info, in_path);
+            extract_game_into(in_path, &game_dir, &[], cancel, update_progress, status, phase)?;
+            if let Some(entry) = entry_point {
+                swap_entry_point(&game_dir, entry)?;
+            }
+        }
+        DiscQuirk::MergesFolderContents(folders) => {
+            // Lands in the same folder the game disc extracts to, whichever of
+            // the two is added first: the name is built from the TitleID, which
+            // every disc of a set shares. Until the game disc arrives the folder
+            // holds no `default.xex`, so a scan simply does not list it as a
+            // game (see `game::detect_extracted_local`).
+            let game_dir = extracted_game_dir(dest, info, in_path);
+            let existed = game_dir.exists();
+            std::fs::create_dir_all(&game_dir)?;
+
+            phase("Extracting the installation data");
+            let res = extract::extract_iso_subtree_contents(
+                in_path,
+                &game_dir,
+                folders,
+                cancel,
+                &mut |done, total| update_progress((done * 100 / total.max(1)) as u32),
+            );
+            if res.is_err() && is_cancelled(cancel) && !existed {
+                cleanup_dir(&game_dir, CLEANUP_PARTIAL, status);
+            }
+            res?;
+        }
+    }
+    Ok(())
+}
+
+/// Folder an extracted Xbox 360 game lives in, under `dest`'s XEX directory.
+///
+/// Every disc of a set must land in the *same* folder, so an already-installed
+/// disc's folder wins whatever it happens to be called — identified by its
+/// ` [TitleID]` suffix, the way `god_dirs` reuses an existing `<TitleID>` folder
+/// for GOD games. Without that, a title missing from `iso2god`'s embedded list
+/// would fall through to a network lookup (whose answer can differ between two
+/// adds) or to the file stem (which differs per disc: `(Disc 1)` vs `(Disc 2)`),
+/// and the two halves would land apart.
+fn extracted_game_dir(dest: &ConvertDest, info: &IsoInfo, in_path: &Path) -> PathBuf {
+    if let Some(title_id) = info.title_id.as_deref()
+        && let Some(existing) = find_extracted_game_dir(&dest.xex_dir, title_id)
+    {
+        return existing;
     }
 
+    // Name resolution: image name → XboxUnity → file stem. The TitleID is
+    // embedded in the folder name (` [XXXXXXXX]` suffix) so later scans can
+    // identify the game without reading its XEX.
+    let title = info
+        .name
+        .clone()
+        .or_else(|| {
+            let tid = info.title_id.as_deref()?;
+            unity::search_titles(tid)
+                .ok()?
+                .into_iter()
+                .next()
+                .map(|t| t.name)
+        })
+        .or_else(|| in_path.file_stem().and_then(|s| s.to_str()).map(str::to_owned))
+        .unwrap_or_else(|| "Xbox 360 game".to_string());
+    let name = sanitize_name(&title);
+    let name = match info.title_id.as_deref() {
+        Some(tid) => crate::game::og_folder_name(&name, tid),
+        None => name,
+    };
+    dest.xex_dir.join(name)
+}
+
+/// An extracted game folder already holding `title_id`, matched on the
+/// ` [XXXXXXXX]` suffix `game::og_folder_name` writes.
+fn find_extracted_game_dir(xex_dir: &Path, title_id: &str) -> Option<PathBuf> {
+    std::fs::read_dir(xex_dir).ok()?.flatten().find_map(|entry| {
+        let path = entry.path();
+        if !path.is_dir() {
+            return None;
+        }
+        let name = entry.file_name().to_string_lossy().into_owned();
+        let (_, id) = crate::game::split_title_id_suffix(&name);
+        id.filter(|id| id.eq_ignore_ascii_case(title_id)).map(|_| path)
+    })
+}
+
+/// Extracts an Xbox 360 disc into `game_dir`.
+///
+/// Re-adding a game overwrites it, like GOD re-conversion does: the extraction
+/// writes over the existing files in place (mirroring the FTP upload, which
+/// merges too). The user is warned before the conversion is queued.
+fn extract_game_into(
+    in_path: &Path,
+    game_dir: &Path,
+    exclude: &[&str],
+    cancel: &AtomicBool,
+    update_progress: &dyn Fn(u32),
+    status: &dyn Fn(&str),
+    phase: &dyn Fn(&str),
+) -> Result<()> {
+    let existed = game_dir.exists();
+
+    phase("Extracting the Xbox 360 game (XEX)");
+    let res = extract::extract_iso_excluding(
+        in_path,
+        game_dir,
+        exclude,
+        cancel,
+        &mut |done, total| update_progress((done * 100 / total.max(1)) as u32),
+    );
+    // On cancellation, drop the partially-extracted folder — but only when we
+    // created it: a pre-existing game must survive the abort.
+    if res.is_err() && is_cancelled(cancel) && !existed {
+        cleanup_dir(game_dir, CLEANUP_PARTIAL, status);
+    }
+    res
+}
+
+/// Makes `entry` the folder's `default.xex`, which is what both our scanner
+/// (`game::detect_extracted_local`) and Aurora look for.
+///
+/// Some discs hide their real executable behind a launcher at mastering time:
+/// Watch_Dogs ships `starter.exe` as `default.xex` and the game itself — built
+/// as `default.exe` — as `game.xex`. The launcher expects an installation laid
+/// down by the other disc's installer and will not chain from a hard drive, so
+/// the rename simply undoes the swap.
+///
+/// The displaced launcher is kept as `default.original.xex` (inert: the lookups
+/// above match `default.xex` exactly), and only the first swap sets it aside, so
+/// re-adding the disc cannot overwrite the backup with our own copy. `entry` is
+/// copied rather than moved, so nothing referring to it by name can dangle.
+fn swap_entry_point(game_dir: &Path, entry: &str) -> Result<()> {
+    let Some(source) = crate::util::find_file_ci(game_dir, entry) else {
+        // The disc did not carry it after all: leave the folder alone rather
+        // than fail an extraction that is otherwise complete.
+        return Ok(());
+    };
+
+    let backup = game_dir.join("default.original.xex");
+    if !backup.exists()
+        && let Some(current) = crate::util::find_file_ci(game_dir, "default.xex")
+    {
+        std::fs::rename(&current, &backup)
+            .with_context(|| format!("setting {} aside", current.display()))?;
+    }
+
+    std::fs::copy(&source, game_dir.join("default.xex"))
+        .with_context(|| format!("installing {entry} as default.xex"))?;
     Ok(())
 }
 
@@ -493,46 +696,9 @@ fn install_game(
 ) -> Result<()> {
     if x360_format == Xbox360Format::Xex {
         // Extract the disc to a `default.xex` game folder instead of
-        // converting it to a GOD container. The name resolution mirrors
-        // the GOD branch (image name → XboxUnity → file stem); the
-        // TitleID is embedded in the folder name (` [XXXXXXXX]` suffix) so
-        // later scans can identify the game without reading its XEX.
-        let title = info
-            .name
-            .clone()
-            .or_else(|| {
-                let tid = info.title_id.as_deref()?;
-                unity::search_titles(tid)
-                    .ok()?
-                    .into_iter()
-                    .next()
-                    .map(|t| t.name)
-            })
-            .or_else(|| in_path.file_stem().and_then(|s| s.to_str()).map(str::to_owned))
-            .unwrap_or_else(|| "Xbox 360 game".to_string());
-        let name = sanitize_name(&title);
-        let name = match info.title_id.as_deref() {
-            Some(tid) => crate::game::og_folder_name(&name, tid),
-            None => name,
-        };
-        let game_dir = dest.xex_dir.join(&name);
-        // Re-adding a game overwrites it, like GOD re-conversion does: the
-        // extraction writes over the existing files in place (mirroring the
-        // FTP upload, which merges too). The user is warned before the
-        // conversion is queued.
-        let existed = game_dir.exists();
-
-        phase("Extracting the Xbox 360 game (XEX)");
-        let res = extract::extract_iso(in_path, &game_dir, cancel, &mut |done, total| {
-            update_progress((done * 100 / total.max(1)) as u32);
-        });
-        // On cancellation, drop the partially-extracted folder — but only
-        // when we created it: a pre-existing game must survive the abort.
-        if res.is_err() && is_cancelled(cancel) && !existed {
-            cleanup_dir(&game_dir, CLEANUP_PARTIAL, status);
-        }
-        res?;
-        return Ok(());
+        // converting it to a GOD container.
+        let game_dir = extracted_game_dir(dest, info, in_path);
+        return extract_game_into(in_path, &game_dir, &[], cancel, update_progress, status, phase);
     }
 
     let title = info.name.clone().or_else(|| {
@@ -927,6 +1093,31 @@ mod tests {
         buf[0x344..0x348].copy_from_slice(&content_type.to_be_bytes());
         buf[0x360..0x364].copy_from_slice(&title_id.to_be_bytes());
         buf
+    }
+
+    /// Every disc of a set must reuse the folder an earlier disc created, even
+    /// when the name it would compute for itself differs — that is what makes
+    /// the order the two discs are added in irrelevant.
+    #[test]
+    fn an_existing_extracted_game_folder_is_reused_whatever_its_name() {
+        let dir = std::env::temp_dir().join("txbm-extracted-dir-test");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        assert_eq!(find_extracted_game_dir(&dir, "555308B7"), None);
+
+        // A name nothing would recompute, so only the suffix can match it.
+        let installed = dir.join("Some Other Name [555308b7]");
+        std::fs::create_dir_all(&installed).unwrap();
+        assert_eq!(
+            find_extracted_game_dir(&dir, "555308B7").as_deref(),
+            Some(installed.as_path()),
+            "the TitleID suffix must match whatever its case"
+        );
+        // Another game's folder is not a match.
+        assert_eq!(find_extracted_game_dir(&dir, "555308B6"), None);
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

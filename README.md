@@ -237,32 +237,47 @@ Replace `YOUR_USERNAME`, and check that `setfacl` really lives at that path (`co
 
 If that trade-off bothers you, Option A stays the tightest choice.
 
-## :joystick: Games that need a hand
+## :joystick: Games that need special handling
 
-A handful of retail releases spread one game over two discs in a way that no
-tool can guess from the disc alone. They are listed here so you know what you
-are looking at; a future version could recognise them by their TitleID and
-install them the way they expect.
+A handful of retail releases split one game across two discs in a way no tool
+can guess from a disc alone: two images with the same shape need opposite
+treatments, and only the game tells them apart. The app carries a short list of
+these, keyed by TitleID and disc number, and installs them the way the console
+expects — without you having to do anything. They are described here so you know
+what you are looking at.
 
 ### Tom Clancy's Splinter Cell: Blacklist — Disc 2
 
 Disc 2 is two things at once. It holds the second half of the campaign as a
 bootable game disc, *and* a 3 GB HD texture pack packaged as downloadable
-content under the game's own TitleID (`555308B6`). The console expects both: the
-disc installed like a game, and the texture pack dropped into
-`Content/0000000000000000/555308B6/00000002`.
+content under the game's own TitleID (`555308B6`). The console expects both.
 
-The app currently sees the content folder and installs the texture pack, so add
-the second half of the campaign yourself if you want it.
+Add the disc like any other and you get both: the game is installed, and the
+texture pack lands in `Content/0000000000000000/555308B6/00000002`. Disc 1 is an
+ordinary game disc and needs nothing special.
 
 ### Watch_Dogs — Discs 1 and 2
 
-Disc 1 is an installation disc: it carries no game of its own, only two
-`installation1` / `installation2` folders whose files belong to the game on
-disc 2. Neither disc is playable on its own, and the pieces are plain folders
-rather than packaged content, so they cannot simply be copied to the console —
-the two discs have to be merged into a single ~10 GB image, which is then
-installed as one game.
+Neither disc is playable on its own. Disc 1 is an installation disc: its two
+`installation1` / `installation2` folders are a wrapper its installer would have
+unpacked, holding ordinary game data — `common.dat`, `shadersobj.dat`,
+`sound.dat`, `vidx`, `worlds` — that belongs at the root of the game on disc 2.
+Being plain files rather than packaged content, they cannot be dropped into a
+content folder on the console either.
+
+The app installs this pair as an **extracted game folder** rather than a GOD
+container, whatever storage format you have chosen — a folder can be completed
+by the other disc, a GOD container cannot. Disc 1's installation data is unpacked
+straight into that folder, beside the game's own files. Both discs land in the
+same place, so **add them in whichever order you like**: disc 1 on its own
+contributes its data and the game only appears in your library once disc 2 has
+been added too.
+
+One more twist is handled for you: disc 2's `default.xex` is a small launcher
+that looks for an installation left behind by disc 1's installer and refuses to
+start the game from a hard drive. The real game sits beside it as `game.xex`, so
+the app makes that the folder's `default.xex` and keeps the launcher as
+`default.original.xex`.
 
 ### Games that need `fakelive` disabled
 
@@ -300,7 +315,8 @@ Pure Rust, no runtime external dependencies:
 - [suppaftp](https://crates.io/crates/suppaftp) — FTP client
 - [XboxUnity](https://www.xboxunity.net) — Xbox360 covers and title updates
 - [MobCats](https://github.com/MobCat/MobCats-original-xbox-game-list) — Xbox covers
+- [FATX](https://github.com/jeanmatthieud/fatx/tree/feat-rust-write) — FATX library, forked from [mborgerson](https://github.com/mborgerson/fatx), to read and write FATX360 filesystem.
 
 ## :scroll: License
 
-GPL-3.0-only. Based on the work of Manuel Quarneti (TinyWiiBackupManager), iliazeus (iso2god-rs) and antangelo (xdvdfs).
+GPL-3.0-only. Based on the work and ideas of Manuel Quarneti (TinyWiiBackupManager).

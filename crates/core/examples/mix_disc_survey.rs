@@ -308,7 +308,13 @@ fn markers_of(root_entries: &[String], has_placeholder_dir: bool) -> Vec<String>
     }
     if root_entries
         .iter()
-        .any(|n| n.len() == 6 && n[..5].eq_ignore_ascii_case("Disc.") && n.ends_with(|c: char| c.is_ascii_digit()))
+        .any(|n| {
+            // Byte-wise: slicing a `String` at index 5 panics when a multi-byte
+            // character straddles that boundary, and file names come from the
+            // image, not from us.
+            let b = n.as_bytes();
+            b.len() == 6 && b[..5].eq_ignore_ascii_case(b"Disc.") && b[5].is_ascii_digit()
+        })
     {
         // The zero-byte multi-disc marker that breaks iso2god's own reader.
         markers.push("Disc.N".into());
