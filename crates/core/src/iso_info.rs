@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
+use crate::quirks::{self, DiscQuirk};
 use crate::xdvd::XdvdImage;
 use anyhow::{Context, Result};
 use iso2god::game_list;
@@ -38,6 +39,9 @@ impl IsoKind {
 pub struct IsoInfo {
     pub path: PathBuf,
     pub kind: IsoKind,
+    /// Set when this exact disc needs a treatment its shape does not imply.
+    /// It takes precedence over `kind`; see [`crate::quirks`].
+    pub quirk: Option<DiscQuirk>,
     pub title_id: Option<String>,
     pub media_id: Option<String>,
     pub name: Option<String>,
@@ -61,6 +65,8 @@ pub fn inspect(path: &Path) -> Result<IsoInfo> {
         return Ok(IsoInfo {
             path: path.to_owned(),
             kind: IsoKind::ContentDisc,
+            // No executable, so no TitleID to look a quirk up by.
+            quirk: None,
             title_id: None,
             media_id: None,
             name: None,
@@ -68,15 +74,29 @@ pub fn inspect(path: &Path) -> Result<IsoInfo> {
             disc_count: None,
         });
     }
+
     if has_bundled_content {
+        // Reading the executable is best-effort here: a bonus disc's own XEX is
+        // never converted, so one that fails to parse must not fail the whole
+        // install — that used to work and has to keep working. It is read only
+        // to look the disc up in the quirks table, so an unreadable one simply
+        // gets no quirk.
+        //
+        // The identity it yields is reported for information. On a carrier disc
+        // it is the `FFED2000` placeholder the installer declares, which is why
+        // no caller uses it to decide where anything goes: each bundled package
+        // is filed under the TitleID of its own STFS header.
+        let title_info = image.title_info().ok();
+        let exe = title_info.as_ref().map(|info| &info.execution_info);
         return Ok(IsoInfo {
             path: path.to_owned(),
             kind: IsoKind::BundledContent,
-            title_id: None,
-            media_id: None,
-            name: None,
-            disc_number: None,
-            disc_count: None,
+            quirk: exe.and_then(|exe| quirks::lookup(exe.title_id, exe.disc_number)),
+            title_id: exe.map(|exe| format!("{:08X}", exe.title_id)),
+            media_id: exe.map(|exe| format!("{:08X}", exe.media_id)),
+            name: exe.and_then(|exe| game_list::find_title_by_id(exe.title_id)),
+            disc_number: exe.map(|exe| exe.disc_number),
+            disc_count: exe.map(|exe| exe.disc_count),
         });
     }
 
@@ -91,6 +111,7 @@ pub fn inspect(path: &Path) -> Result<IsoInfo> {
     Ok(IsoInfo {
         path: path.to_owned(),
         kind,
+        quirk: quirks::lookup(exe.title_id, exe.disc_number),
         title_id: Some(format!("{:08X}", exe.title_id)),
         media_id: Some(format!("{:08X}", exe.media_id)),
         name: game_list::find_title_by_id(exe.title_id),

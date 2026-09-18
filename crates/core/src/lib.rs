@@ -24,6 +24,7 @@ pub mod instance;
 pub mod iso_info;
 pub mod job_queue;
 pub mod mobcat;
+pub mod quirks;
 pub mod remote_fs;
 pub mod scan;
 pub mod stfs;

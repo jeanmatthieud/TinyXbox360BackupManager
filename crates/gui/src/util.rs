@@ -18,6 +18,10 @@ pub struct PickedGame {
     ///
     /// - Xbox 360 / Original Xbox ISO → yes, from the disc's executable.
     /// - Arcade STFS package → yes: it is a game in its own right.
+    /// - A "mix" disc → yes. It carries content *and* becomes a game under its
+    ///   own TitleID, so the overwrite is real.
+    /// - A disc that only contributes installation data to another disc's game
+    ///   → `None`: it merges into that folder, it does not replace it.
     /// - DLC / title update / content disc / bundled-content disc → `None`.
     ///   They install *beside* a game (under its TitleID, or under the one of
     ///   each package they carry, the disc's own being a placeholder) and
@@ -41,6 +45,7 @@ pub struct PickedGame {
 /// re-adding overwrites the existing data, which is the common intent.
 pub fn should_add_game(path: PathBuf) -> Option<PickedGame> {
     use txbm_core::iso_info::IsoKind;
+    use txbm_core::quirks::DiscQuirk;
 
     let _ = path.file_name()?;
 
@@ -52,13 +57,17 @@ pub fn should_add_game(path: PathBuf) -> Option<PickedGame> {
         let info = txbm_core::iso_info::inspect(&path).ok()?;
         // A content/bundled disc installs under the TitleID of each package it
         // carries, not under the disc's own (often a placeholder), and merges
-        // rather than replaces: no overwrite to announce.
-        let installs_title_id = matches!(
-            info.kind,
-            IsoKind::Xbox360Game | IsoKind::XboxOriginal
-        )
-        .then_some(info.title_id)
-        .flatten();
+        // rather than replaces: no overwrite to announce. A disc's quirk can
+        // flip that both ways, so it has the last word.
+        let installs_title_id = match info.quirk {
+            // Also becomes a game under its own TitleID: the overwrite is real.
+            Some(DiscQuirk::GameAndBundledContent) => info.title_id,
+            // Merges installation data into another disc's game folder.
+            Some(DiscQuirk::MergesFolderContents(_)) => None,
+            _ => matches!(info.kind, IsoKind::Xbox360Game | IsoKind::XboxOriginal)
+                .then_some(info.title_id)
+                .flatten(),
+        };
         return Some(PickedGame {
             path,
             installs_title_id,
