@@ -1578,7 +1578,7 @@ checksum = "9f1f227452a390804cdb637b74a86990f2a7d7ba4b7d5693aac9b4dd6defd8d6"
 [[package]]
 name = "fatx"
 version = "0.2.0-dev"
-source = "git+https://github.com/jeanmatthieud/fatx?rev=d1b3870f1514a7b79d57c704d07fd2c20b3a7a08#d1b3870f1514a7b79d57c704d07fd2c20b3a7a08"
+source = "git+https://github.com/jeanmatthieud/fatx?rev=9c66972c89127750df6781d8843bb3687fb7c4d9#9c66972c89127750df6781d8843bb3687fb7c4d9"
 dependencies = [
  "chrono",
  "env_logger",

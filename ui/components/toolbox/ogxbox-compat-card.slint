@@ -1,0 +1,157 @@
+// SPDX-License-Identifier: GPL-3.0-only
+
+import { IconSet } from "@lucide";
+import { CheckBox, ComboBox, Spinner } from "std-widgets.slint";
+import { ToolboxCard } from "../toolbox-card.slint";
+import { CardHeader } from "../card-header.slint";
+import { CardActionRow } from "../card-action-row.slint";
+import { HorizontalLine } from "../horizontal-line.slint";
+import { IconButton } from "../icon-button.slint";
+import { WarningNote } from "../warning-note.slint";
+import { UiState } from "../../ui-state.slint";
+import { Message, Dispatcher } from "../../messages.slint";
+
+// Card offering to write the original-Xbox emulator onto a console's
+// compatibility partition. Like the BadAvatar card it is a standalone tool: it
+// picks its own console (over the network, or its hard drive on this computer)
+// and is therefore unusable while a target is connected — which is also what
+// keeps it clear of the job queue's single-writer rule.
+export component OgXboxCompatCard inherits ToolboxCard {
+    private property <bool> target-connected: !UiState.config.target.is-empty;
+
+    // The two Toolbox tools exclude each other: they share the status line and
+    // the toolbar's cancel button, so running both at once makes progress and
+    // cancellation unreadable.
+    disabled: UiState.compat-busy || UiState.creating-badavatar || target-connected;
+    disabled-tooltip: target-connected
+        ? "Disconnect from the current target first — this tool picks the console itself."
+        : UiState.creating-badavatar
+            ? "Wait for the BadAvatar USB key to be written."
+            : "";
+
+    CardHeader {
+        icon: IconSet.Gamepad2;
+        title: "Original Xbox compatibility";
+
+        if UiState.installing-compat: Spinner {
+            width: 27px;
+            height: 27px;
+            indeterminate: true;
+        }
+
+        // Puts a backup this tool wrote earlier back on a console, instead of
+        // one of the published packs.
+        if !UiState.installing-compat: IconButton {
+            icon: IconSet.Upload;
+            width: self.height;
+            tooltip: "Restore a compatibility backup (.zip)";
+            clicked => Dispatcher.dispatch(Message.RestoreCompat, "");
+        }
+    }
+
+    HorizontalLine { }
+
+    Text {
+        text: "Installs Xbox emulator files to HddX to expand original Xbox game compatibility.";
+        wrap: word-wrap;
+    }
+
+    // WarningNote {
+    //     text: "Experimental: replaces the partition required to boot original Xbox games.";
+    // }
+
+    picker := HorizontalLayout {
+        spacing: 8px;
+
+        pack-label := VerticalLayout {
+            alignment: center;
+
+            Text {
+                text: "Emulator pack:";
+            }
+        }
+
+        ComboBox {
+            height: 34px;
+            horizontal-stretch: 1;
+            model: UiState.compat.packs;
+            // A ComboBox shows whatever `current-index` points at — assigning
+            // `current-value` does NOT move the selection.
+            current-index: UiState.compat.pack-index;
+            selected => {
+                Dispatcher.dispatch(Message.SetCompatPack, self.current-index);
+            }
+        }
+
+        // Hands the pack's URL to the browser rather than fetching it here:
+        // the point is that the user sees where it comes from, and is left
+        // with a copy of what the tool is about to install.
+        IconButton {
+            icon: IconSet.Download;
+            width: 34px;
+            height: 34px;
+            tooltip: "Download this pack yourself (opens your browser)";
+            clicked => Dispatcher.dispatch(Message.OpenThat, UiState.compat.pack-url);
+        }
+    }
+
+    // Indented to the drop-down's own left edge rather than the card's, so it
+    // reads as a caption of the selection above instead of as a new paragraph.
+    HorizontalLayout {
+        padding-left: pack-label.width + picker.spacing;
+
+        Text {
+            text: UiState.compat.pack-description;
+            font-size: 12px;
+            wrap: word-wrap;
+        }
+    }
+
+    // Indented like the description above it: both belong to the drop-down,
+    // unlike the card-level warning higher up.
+    if UiState.compat.needs-exploit: HorizontalLayout {
+        padding-left: pack-label.width + picker.spacing;
+
+        WarningNote {
+            text: "Requires Aurora + BadUpdate/BadAvatar/RGH to run.";
+        }
+    }
+
+    CheckBox {
+        text: "Backup the current compatibility files first (zip file)";
+        checked: UiState.compat.backup-first;
+        toggled => {
+            Dispatcher.dispatch(Message.ToggleCompatBackup, "");
+        }
+    }
+
+    CheckBox {
+        text: "Update the per-title configs to support more games";
+        checked: UiState.compat.update-configs;
+        toggled => {
+            Dispatcher.dispatch(Message.ToggleCompatConfigs, "");
+        }
+    }
+
+    // Caption of the checkbox above, indented to its label like the pack
+    // description is to the drop-down.
+    if UiState.compat.update-configs: HorizontalLayout {
+        padding-left: 24px;
+
+        Text {
+            text: "Community configs from github.com/Goatman13/xefu, written to Compatibility/Configs.";
+            font-size: 12px;
+            wrap: word-wrap;
+        }
+    }
+
+    HorizontalLine { }
+
+    CardActionRow {
+        icon: IconSet.Hammer;
+        text: !UiState.installing-compat
+            ? "Install the compatibility files"
+            : "Working… see the status bar below.";
+        clicked => Dispatcher.dispatch(Message.InstallCompat, "");
+    }
+}

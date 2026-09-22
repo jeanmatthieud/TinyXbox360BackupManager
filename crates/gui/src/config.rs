@@ -3,14 +3,15 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 use crate::{
-    DisplayedBadAvatarConfig, DisplayedConfig, DisplayedFatxDrive, DisplayedRecentLocation,
-    DisplayedRemovableDrive, GodLayout, TargetKind,
+    DisplayedBadAvatarConfig, DisplayedCompatConfig, DisplayedConfig, DisplayedFatxDrive,
+    DisplayedRecentLocation, DisplayedRemovableDrive, GodLayout, TargetKind,
 };
 use crate::util::GIB;
 use slint::{ModelRc, SharedString, ToSharedString, VecModel};
 use txbm_core::{
     badavatar::UrlField,
     config::{Config, GodLayout as CoreGodLayout},
+    ogxbox_compat::COMPAT_PACKS,
     target::Target,
 };
 
@@ -41,6 +42,31 @@ pub fn displayed_badavatar(config: &Config) -> DisplayedBadAvatarConfig {
             ba.url(UrlField::Abadavatar),
         )
         .map_or(-1, |i| i as i32),
+    }
+}
+
+/// Builds the model backing `UiState.compat` from the config: the pack list in
+/// the drop-down's order, the chosen row, and the URL alongside the pack's own
+/// so the field can offer a reset when the user has overridden it.
+pub fn displayed_compat(config: &Config) -> DisplayedCompatConfig {
+    let cfg = &config.contents.ogxbox_compat;
+    let pack = cfg.pack();
+    DisplayedCompatConfig {
+        packs: ModelRc::new(VecModel::from(
+            COMPAT_PACKS
+                .iter()
+                .map(|p| p.label.to_shared_string())
+                .collect::<Vec<_>>(),
+        )),
+        pack_index: COMPAT_PACKS
+            .iter()
+            .position(|p| p.key == pack.key)
+            .unwrap_or(0) as i32,
+        pack_description: pack.description.to_shared_string(),
+        needs_exploit: pack.needs_exploit,
+        pack_url: pack.url.to_shared_string(),
+        backup_first: cfg.backup_first,
+        update_configs: cfg.update_configs,
     }
 }
 

@@ -43,7 +43,9 @@ export component Toast inherits Rectangle {
 
     property <brush> accent: root.kind == NotificationKind.Error
         ? MyPalette.destructive
-        : (root.kind == NotificationKind.Success ? #3fae5a : MyPalette.accent-background);
+        : (root.kind == NotificationKind.Warning
+            ? MyPalette.warning
+            : (root.kind == NotificationKind.Success ? #3fae5a : MyPalette.accent-background));
 
     // 62px of chrome around the text: paddings (12 + 14), icon badge (26) and
     // the spacing between them (10), plus the 20px the close button takes out
@@ -120,7 +122,10 @@ export component Toast inherits Rectangle {
                     background: root.accent.transparentize(0.85);
 
                     IconDisplay {
-                        icon: root.kind == NotificationKind.Error
+                        // Warning shares the error icon (same shape, different
+                        // colour): both are cautions, just at different
+                        // severities.
+                        icon: root.kind == NotificationKind.Error || root.kind == NotificationKind.Warning
                             ? IconSet.TriangleAlert
                             : (root.kind == NotificationKind.Success ? IconSet.Check : IconSet.Info);
                         size: 14px;

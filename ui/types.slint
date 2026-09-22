@@ -98,6 +98,32 @@ export struct DisplayedBadAvatarConfig {
     abadavatar-version-index: int,
 }
 
+// What the FTP target modal is being opened for: connecting the app to a
+// console, or just picking one for a Toolbox tool that does not change the
+// current target.
+export enum FtpPurpose {
+    Connect,
+    Compat,
+}
+
+export struct DisplayedCompatConfig {
+    // Labels of the available XeFu packs, in the drop-down's own order.
+    packs: [string],
+    // Row of the chosen pack in `packs`.
+    pack-index: int,
+    // One line describing the chosen pack, shown under the drop-down.
+    pack-description: string,
+    // True when the chosen pack only runs on a JTAG/RGH/XDK console.
+    needs-exploit: bool,
+    // Where the chosen pack is downloaded from, opened in the browser by the
+    // card's download button so the user can see its origin.
+    pack-url: string,
+    backup-first: bool,
+    // Also fetch the community per-title configs and write them next to the
+    // emulator.
+    update-configs: bool,
+}
+
 export struct DisplayedRecentLocation {
     // Folder name (local drive), IP (console over FTP) or device path (a
     // console hard drive connected here).
@@ -235,6 +261,7 @@ export enum NotificationKind {
     Info,
     Success,
     Error,
+    Warning,
 }
 
 export struct Notification {
@@ -245,6 +272,6 @@ export struct Notification {
     text: string,
     kind: NotificationKind,
     // Never times out on its own: the user has to close it. Errors are sticky
-    // regardless of this flag.
+    // regardless of this flag; Warning, Info and Success honor it.
     sticky: bool,
 }

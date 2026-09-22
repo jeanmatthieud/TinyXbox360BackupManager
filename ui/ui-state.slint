@@ -4,6 +4,7 @@
 
 import {
     DisplayedBadAvatarConfig,
+    DisplayedCompatConfig,
     DisplayedConfig,
     DisplayedDriveInfo,
     DisplayedFatxDrive,
@@ -15,6 +16,7 @@ import {
     DisplayedRemovableDrive,
     DisplayedStoragePath,
     DisplayedTitleUpdate,
+    FtpPurpose,
     GodLayout,
     JobKind,
     Notification,
@@ -194,4 +196,39 @@ export global UiState {
     // Non-empty while the destination-confirmation modal is shown, holding
     // the path picked for the BadAvatar key.
     in-out property <string> badavatar-pending-path: "";
+
+    // Original-Xbox compatibility partition (Toolbox), independent of the
+    // target: the tool picks its own console, over FTP or on a raw disk.
+    in-out property <DisplayedCompatConfig> compat;
+    // True while the tool's own target-picker modal is shown.
+    in-out property <bool> selecting-compat-target: false;
+    // True while the compatibility files are being installed.
+    in-out property <bool> installing-compat: false;
+    // True while the picked console's partition is being read, before the
+    // confirmation modal can open.
+    in-out property <bool> inspecting-compat: false;
+    // Non-empty while the confirmation modal is shown, holding a readable name
+    // for the picked console (device path, or "ip:port").
+    in-out property <string> compat-pending-target: "";
+    // What that console already has on its compatibility partition, as a short
+    // sentence for the same modal.
+    in-out property <string> compat-pending-summary: "";
+    // What is about to be written: the chosen pack's name, or the file name of
+    // a backup being put back.
+    in-out property <string> compat-pending-source: "";
+    // True when that source is a backup rather than a published pack.
+    in-out property <bool> compat-restoring: false;
+    // True from the moment the compatibility tool picks a console until it is
+    // done with it: the install it is heading for writes outside the job queue,
+    // so no target may be connected (and no second tool started) in between.
+    out property <bool> compat-busy: installing-compat
+        || inspecting-compat
+        || selecting-compat-target
+        // The tool borrows the regular FTP modal to pick a console; while it is
+        // open on that errand the flow is still the compatibility tool's.
+        || (editing-ftp-target && ftp-target-purpose == FtpPurpose.Compat)
+        || compat-pending-target != "";
+    // Why the FTP modal was opened: to connect the app, or to pick a console
+    // for the compatibility tool. Reset by whoever opens it.
+    in-out property <FtpPurpose> ftp-target-purpose: FtpPurpose.Connect;
 }

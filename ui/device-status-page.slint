@@ -34,9 +34,11 @@ export component DeviceStatusPage inherits VerticalLayout {
         title: "No target connected";
         description: "Connect a USB drive or your console to see its filesystem and storage folders";
         action-icon: IconSet.Zap;
-        // Same rule as the navbar: no target picking while a BadAvatar key
-        // is being written.
-        action-label: UiState.creating-badavatar ? "" : "Select a target";
+        // Same rule as the navbar: no target picking while a Toolbox tool is
+        // busy with a console of its own.
+        action-label: UiState.creating-badavatar || UiState.compat-busy
+            ? ""
+            : "Select a target";
         action => {
             UiState.selecting-target = true;
         }

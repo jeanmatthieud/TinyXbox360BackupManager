@@ -11,15 +11,13 @@
 
 use crate::archive;
 use crate::data_dir::TMP_DIR;
+use crate::download::{self, archive_extension, find_entry};
 use crate::drive_info::DriveInfo;
 use anyhow::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
-use std::fs::{self, File};
-use std::io::{Read, Write};
+use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::LazyLock;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::Duration;
+use std::sync::atomic::AtomicBool;
 use which_fs::FsKind;
 
 /// Default download URLs. Each can be overridden by the user in the Toolbox
@@ -152,22 +150,6 @@ impl BadAvatarConfig {
 /// `convert::CONVERSION_CANCELLED`).
 pub const BADAVATAR_CANCELLED: &str = "badavatar creation cancelled";
 
-const DOWNLOAD_LIMIT: u64 = 4 * 1024 * 1024 * 1024;
-
-/// Shared HTTP agent with a browser-like User-Agent. Some hosts (e.g. Aurora's
-/// download server behind Cloudflare) reject requests without one.
-static AGENT: LazyLock<ureq::Agent> = LazyLock::new(|| {
-    ureq::Agent::config_builder()
-        .timeout_connect(Some(Duration::from_secs(15)))
-        .timeout_global(Some(Duration::from_secs(600)))
-        .user_agent(
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 \
-             (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
-        )
-        .build()
-        .into()
-});
-
 /// Creates a BadAvatar USB key at `dest` (the mount point of an already
 /// FAT32-formatted key). `status` receives short human-readable progress lines
 /// for the status bar. `cancel` is polled between phases.
@@ -249,10 +231,7 @@ pub fn create_badavatar(
 }
 
 fn check_cancel(cancel: &AtomicBool) -> Result<()> {
-    if cancel.load(Ordering::Relaxed) {
-        bail!("{BADAVATAR_CANCELLED}");
-    }
-    Ok(())
+    download::check_cancel(cancel, BADAVATAR_CANCELLED)
 }
 
 /// Downloads one component to a file in `work`, returning its path.
@@ -283,63 +262,13 @@ fn download_component(
     let dest = work.join(format!("{}.{ext}", key_of(field)));
 
     status(&format!("Downloading {label}…"));
-    download_to_file(url, &dest, label, cancel, status)
-        .with_context(|| format!("downloading {label}"))?;
+    let res = download::download_to_file(url, &dest, label, cancel, status, BADAVATAR_CANCELLED);
+    // Like the extraction below: a cancelled download is reported with this
+    // module's own marker as the top-level message, since the GUI matches on
+    // `to_string()` (the outermost context) and not on the chain.
+    check_cancel(cancel)?;
+    res.with_context(|| format!("downloading {label}"))?;
     Ok(dest)
-}
-
-/// Streams `url` to `dest`, reporting a coarse percentage in the status line.
-/// Polls `cancel` between chunks so a long transfer can be interrupted.
-fn download_to_file(
-    url: &str,
-    dest: &Path,
-    label: &str,
-    cancel: &AtomicBool,
-    status: &dyn Fn(&str),
-) -> Result<()> {
-    let mut response = AGENT
-        .get(url)
-        .header("Referer", origin_of(url).as_str())
-        .call()
-        .with_context(|| format!("requesting {url}"))?;
-
-    let total = response.body().content_length();
-    let mut reader = response
-        .body_mut()
-        .with_config()
-        .limit(DOWNLOAD_LIMIT)
-        .reader();
-
-    let mut file = File::create(dest).with_context(|| format!("creating {}", dest.display()))?;
-    let mut buf = vec![0u8; 1 << 20];
-    let mut done: u64 = 0;
-    let mut last_report: u64 = 0;
-
-    loop {
-        check_cancel(cancel)?;
-        let n = reader.read(&mut buf).context("reading response body")?;
-        if n == 0 {
-            break;
-        }
-        file.write_all(&buf[..n])?;
-        done += n as u64;
-
-        // Debounce status updates to roughly every 2 MiB.
-        if done - last_report >= 2 * 1024 * 1024 {
-            last_report = done;
-            match total {
-                Some(t) if t > 0 => {
-                    status(&format!("Downloading {label}…  {}%", done * 100 / t));
-                }
-                _ => {
-                    let mib = done as f64 / (1024.0 * 1024.0);
-                    status(&format!("Downloading {label}…  {mib:.1} MiB"));
-                }
-            }
-        }
-    }
-
-    Ok(())
 }
 
 /// Extracts `archive` into `work_subdir` under the same parent and returns the
@@ -488,31 +417,6 @@ fn key_of(field: UrlField) -> &'static str {
     }
 }
 
-/// Returns the archive extension ("7z" or "zip") to save a download under,
-/// inferred from the URL. `None` for an unsupported extension (e.g. `.rar`).
-fn archive_extension(url: &str) -> Option<&'static str> {
-    let path = url.split(['?', '#']).next().unwrap_or(url);
-    let lower = path.to_lowercase();
-    if lower.ends_with(".7z") {
-        Some("7z")
-    } else if lower.ends_with(".zip") {
-        Some("zip")
-    } else {
-        None
-    }
-}
-
-/// `scheme://host/` for a URL, used as a plausible `Referer`. Falls back to the
-/// URL itself if it can't be parsed.
-fn origin_of(url: &str) -> String {
-    if let Some(scheme_end) = url.find("://") {
-        let after = &url[scheme_end + 3..];
-        let host_len = after.find('/').unwrap_or(after.len());
-        return format!("{}{}/", &url[..scheme_end + 3], &after[..host_len]);
-    }
-    url.to_string()
-}
-
 /// Recursively copies `src` into `dst`, merging into any existing directories.
 fn copy_tree(src: &Path, dst: &Path) -> Result<()> {
     if src.is_dir() {
@@ -535,30 +439,4 @@ fn copy_tree(src: &Path, dst: &Path) -> Result<()> {
         fs::copy(src, dst).with_context(|| format!("copying {}", src.display()))?;
     }
     Ok(())
-}
-
-/// Depth-first search under `root` for an entry named `name` (case-insensitive)
-/// that is a directory (`want_dir = true`) or a file (`want_dir = false`).
-fn find_entry(root: &Path, name: &str, want_dir: bool) -> Option<PathBuf> {
-    let mut stack = vec![root.to_path_buf()];
-    while let Some(dir) = stack.pop() {
-        let Ok(read_dir) = fs::read_dir(&dir) else {
-            continue;
-        };
-        for entry in read_dir.flatten() {
-            let path = entry.path();
-            let is_dir = path.is_dir();
-            let matches = path
-                .file_name()
-                .and_then(|n| n.to_str())
-                .is_some_and(|n| n.eq_ignore_ascii_case(name));
-            if matches && is_dir == want_dir {
-                return Some(path);
-            }
-            if is_dir {
-                stack.push(path);
-            }
-        }
-    }
-    None
 }

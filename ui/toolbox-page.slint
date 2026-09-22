@@ -5,6 +5,7 @@
 import { ScrollView } from "std-widgets.slint";
 import { PageHeader } from "components/page-header.slint";
 import { BadAvatarCard } from "components/toolbox/badavatar-card.slint";
+import { OgXboxCompatCard } from "components/toolbox/ogxbox-compat-card.slint";
 
 export component ToolboxPage inherits VerticalLayout {
     PageHeader {
@@ -19,8 +20,12 @@ export component ToolboxPage inherits VerticalLayout {
             spacing: 10px;
             alignment: start;
 
-            // Last: standalone tool, only usable when no target is connected.
+            // Standalone tools, only usable when no target is connected: each
+            // picks the console (or the USB key) it works on by itself.
+            
             BadAvatarCard { }
+
+            OgXboxCompatCard { }
         }
     }
 }

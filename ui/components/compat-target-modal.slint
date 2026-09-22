@@ -1,0 +1,134 @@
+// SPDX-License-Identifier: GPL-3.0-only
+
+import { Modal } from "modal.slint";
+import { HorizontalLine } from "horizontal-line.slint";
+import { IconButton, IconButtonKind } from "icon-button.slint";
+import { SelectableCard, FatxDrivePicker } from "removable-drive-picker.slint";
+import { FtpPurpose } from "../types.slint";
+import { IconSet } from "@lucide";
+import { UiState } from "../ui-state.slint";
+import { Message, Dispatcher } from "../messages.slint";
+
+// Which console the compatibility tool should write to.
+enum CompatChoice {
+    none,
+    fatx,
+    network,
+}
+
+// The compatibility tool's own console chooser. It deliberately does not reuse
+// `SelectTargetModal`: this picks a console for one operation, it never changes
+// the app's target, and a local USB drive is not an option (it has no
+// compatibility partition). The network branch does hand over to the regular
+// FTP modal, which owns the network scan and the credentials — see
+// `UiState.ftp-target-purpose`.
+export component CompatTargetModal inherits Modal {
+    min-w: 480px;
+    min-h: 0px;
+    max-h: min(620px, root.height - 75px);
+
+    // Step 2 shows the detected Xbox 360 hard drives.
+    property <bool> picking-fatx: false;
+    property <CompatChoice> choice: CompatChoice.none;
+    // Index into UiState.fatx-drives, -1 until the user picks one.
+    property <int> selected-drive: -1;
+
+    VerticalLayout {
+        padding: 20px;
+        spacing: 15px;
+
+        if !picking-fatx: VerticalLayout {
+            spacing: 10px;
+
+            Text {
+                text: "Which Xbox 360 should get the compatibility files?";
+                font-size: 18px;
+            }
+
+            Rectangle { } // Spacing
+
+            SelectableCard {
+                icon: IconSet.HardDrive;
+                title: "Xbox 360 Internal Hard Drive (FATX)";
+                subtitle: "Connect the console's own drive to this computer.";
+                selected: choice == CompatChoice.fatx;
+                clicked => {
+                    choice = CompatChoice.fatx;
+                }
+            }
+
+            SelectableCard {
+                icon: IconSet.Network;
+                title: "Remote Xbox 360 over Network (WiFi / Ethernet)";
+                subtitle: "Write over FTP, with the console powered on.";
+                selected: choice == CompatChoice.network;
+                clicked => {
+                    choice = CompatChoice.network;
+                }
+            }
+        }
+
+        if picking-fatx: FatxDrivePicker {
+            selected-drive <=> root.selected-drive;
+        }
+    }
+
+    VerticalLayout {
+        height: self.min-height;
+
+        HorizontalLine { }
+
+        HorizontalLayout {
+            padding: 10px;
+            spacing: 8px;
+
+            if !picking-fatx: IconButton {
+                label: "Close";
+                clicked => {
+                    UiState.selecting-compat-target = false;
+                }
+            }
+            if picking-fatx: IconButton {
+                label: "Previous";
+                clicked => {
+                    picking-fatx = false;
+                }
+            }
+
+            Rectangle {
+                horizontal-stretch: 1;
+            }
+
+            if !picking-fatx: IconButton {
+                label: "Next";
+                kind: IconButtonKind.Primary;
+                disabled: choice == CompatChoice.none;
+                clicked => {
+                    if choice == CompatChoice.fatx {
+                        selected-drive = -1;
+                        Dispatcher.dispatch(Message.RefreshFatxDrives, "");
+                        picking-fatx = true;
+                    } else if choice == CompatChoice.network {
+                        UiState.selecting-compat-target = false;
+                        // Borrow the regular FTP modal: it owns the network
+                        // scan, the credentials and the connection test. The
+                        // purpose tells it to hand the console back here
+                        // instead of connecting the app to it.
+                        UiState.ftp-target-purpose = FtpPurpose.Compat;
+                        UiState.editing-ftp-target = true;
+                    }
+                }
+            }
+
+            if picking-fatx: IconButton {
+                label: "Next";
+                kind: IconButtonKind.Primary;
+                disabled: selected-drive < 0;
+                clicked => {
+                    UiState.selecting-compat-target = false;
+                    Dispatcher.dispatch(Message.SelectCompatDrive, UiState.fatx-drives[selected-drive].path);
+                }
+            }
+        }
+    }
+}

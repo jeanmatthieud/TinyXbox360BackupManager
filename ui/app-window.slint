@@ -25,6 +25,7 @@ import { DeviceStatusPage } from "device-status-page.slint";
 import { JobQueuePage } from "job-queue.slint";
 import { SelectTargetModal } from "components/select-target-modal.slint";
 import { BadAvatarTargetModal } from "components/badavatar-target-modal.slint";
+import { CompatTargetModal } from "components/compat-target-modal.slint";
 import { FtpTargetModal } from "components/ftp-target-modal.slint";
 import { AuroraHelpModal } from "components/aurora-help-modal.slint";
 import { StorageConfigModal } from "components/storage-config-modal.slint";
@@ -114,6 +115,15 @@ export component AppWindow inherits Window {
                         squared: true;
                         clicked => Dispatcher.dispatch(Message.CancelBadAvatar, "");
                     }
+
+                    if UiState.installing-compat: IconButton {
+                        icon: IconSet.X;
+                        tooltip: "Cancel the compatibility install";
+                        height: 24px;
+                        width: 24px;
+                        squared: true;
+                        clicked => Dispatcher.dispatch(Message.CancelCompat, "");
+                    }
                 }
             }
         }
@@ -144,6 +154,7 @@ export component AppWindow inherits Window {
 
     if UiState.selecting-target: SelectTargetModal { }
     if UiState.selecting-badavatar-target: BadAvatarTargetModal { }
+    if UiState.selecting-compat-target: CompatTargetModal { }
     if UiState.editing-ftp-target: FtpTargetModal { }
     if UiState.showing-aurora-help: AuroraHelpModal { }
     if UiState.configuring-storage: StorageConfigModal { }
@@ -206,6 +217,42 @@ export component AppWindow inherits Window {
         btn-icon: IconSet.Hammer;
         cancelled => Dispatcher.dispatch(Message.CancelCreateBadAvatar, "");
         confirmed => Dispatcher.dispatch(Message.ConfirmCreateBadAvatar, "");
+    }
+
+    if UiState.compat-pending-target != "": ConfirmationModal {
+        Text {
+            text: UiState.compat-restoring
+                ? "Restore from backup"
+                : "Install Xbox OG compatibility pack";
+            font-size: 18px;
+        }
+
+        Rectangle { height: 5px; } // Spacing
+
+        Text {
+            text: (UiState.compat-restoring ? "Backup selected: " : "Pack selected: ")
+                + UiState.compat-pending-source;
+            wrap: word-wrap;
+        }
+
+        Text {
+            text: "Target: \{UiState.compat-pending-target}";
+            wrap: word-wrap;
+        }
+
+        // Empty when the partition is bare: there is then nothing to lose, and
+        // no reason to colour the modal red over it.
+        if UiState.compat-pending-summary != "": Text {
+            text: UiState.compat-pending-summary;
+            color: MyPalette.warning;
+            wrap: word-wrap;
+        }
+
+        destructive: UiState.compat-pending-summary != "";
+        btn-icon: IconSet.Hammer;
+        confirm-label: "Confirm";
+        cancelled => Dispatcher.dispatch(Message.CancelInstallCompat, "");
+        confirmed => Dispatcher.dispatch(Message.ConfirmInstallCompat, "");
     }
 
     if UiState.confirming-cancel-all: ConfirmationModal {
