@@ -66,6 +66,7 @@ pub fn displayed_compat(config: &Config) -> DisplayedCompatConfig {
         needs_exploit: pack.needs_exploit,
         pack_url: pack.url.to_shared_string(),
         backup_first: cfg.backup_first,
+        update_configs: cfg.update_configs,
     }
 }
 

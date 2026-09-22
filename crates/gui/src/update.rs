@@ -2076,6 +2076,11 @@ impl State {
                 *flag = !*flag;
                 message_queue.push_back((Message::SyncConfig, SharedString::new()));
             }
+            Message::ToggleCompatConfigs => {
+                let flag = &mut self.config.contents.ogxbox_compat.update_configs;
+                *flag = !*flag;
+                message_queue.push_back((Message::SyncConfig, SharedString::new()));
+            }
             Message::InstallCompat => {
                 // One tool at a time: the two Toolbox tools share the status
                 // line and the toolbar's cancel button, so running both at once
@@ -2304,6 +2309,18 @@ impl State {
                                         "No backup was written — the console's compatibility \
                                          partition held no file to save."
                                             .to_shared_string(),
+                                    );
+                                }
+                                // The emulator is in place; only the extra
+                                // per-title configs are missing. Said plainly,
+                                // and without calling the install failed.
+                                if let Some(why) = outcome.configs_failed {
+                                    dispatcher.invoke_dispatch(
+                                        Message::NotifyInfoSticky,
+                                        slint::format!(
+                                            "The emulator was installed, but the per-title \
+                                             configs were not updated: {why}"
+                                        ),
                                     );
                                 }
                                 // The write takes minutes, so the user is

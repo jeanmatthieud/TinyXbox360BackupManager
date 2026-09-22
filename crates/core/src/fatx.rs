@@ -408,11 +408,7 @@ fn open_error(config: &FatxConfig, writable: bool, error: fatx::Error) -> anyhow
         match io.kind() {
             std::io::ErrorKind::PermissionDenied => {
                 return anyhow!(
-                    "no permission to open {device}{}.\n\n\
-                     Raw disk access is reserved to the administrator. On Linux, add \
-                     yourself to the `disk` group (`sudo usermod -aG disk $USER`, then log \
-                     out and back in) or start the application with `sudo`. On Windows, run \
-                     it as administrator.",
+                    "no permission to open {device}{}.\nRaw disk access is reserved to the administrator.",
                     if writable { " for writing" } else { "" }
                 );
             }

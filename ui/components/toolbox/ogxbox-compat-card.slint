@@ -125,6 +125,26 @@ export component OgXboxCompatCard inherits ToolboxCard {
         }
     }
 
+    CheckBox {
+        text: "Update the per-title configs to support more games";
+        checked: UiState.compat.update-configs;
+        toggled => {
+            Dispatcher.dispatch(Message.ToggleCompatConfigs, "");
+        }
+    }
+
+    // Caption of the checkbox above, indented to its label like the pack
+    // description is to the drop-down.
+    if UiState.compat.update-configs: HorizontalLayout {
+        padding-left: 24px;
+
+        Text {
+            text: "Community configs from github.com/Goatman13/xefu, written to Compatibility/Configs.";
+            font-size: 12px;
+            wrap: word-wrap;
+        }
+    }
+
     HorizontalLine { }
 
     CardActionRow {

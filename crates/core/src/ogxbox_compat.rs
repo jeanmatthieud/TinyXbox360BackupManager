@@ -65,6 +65,23 @@ pub const COMPAT_DIR: &str = "Compatibility";
 /// Full path of that folder, as both backends spell it.
 pub const COMPAT_PATH: &str = "/HddX/Compatibility";
 
+/// Folder the config loader reads per-title emulator settings from, under
+/// [`COMPAT_DIR`].
+pub const CONFIGS_DIR: &str = "Configs";
+
+/// Full path of that folder on the console.
+pub const CONFIGS_PATH: &str = "/HddX/Compatibility/Configs";
+
+/// Community per-title emulator configs, as a zip of the repository's `main`
+/// branch — GitHub builds it on demand, so no git client is needed here.
+///
+/// Deliberately *not* pinned, unlike the pack URLs: the point of this option
+/// is to pick up configs added since the app was built. The repository is
+/// small (a few hundred kilobytes), so fetching the whole of it to keep one
+/// folder costs nothing worth optimising away.
+pub const XEFU_CONFIGS_URL: &str =
+    "https://github.com/Goatman13/xefu/archive/refs/heads/main.zip";
+
 /// Sub-directory of the app's temp area used to download and unpack a pack.
 /// Recreated from scratch on every run, so a half-finished previous attempt is
 /// never mistaken for this one's payload.
@@ -130,7 +147,7 @@ pub fn pack_by_key(key: &str) -> &'static CompatPack {
 }
 
 /// Persisted settings for the compatibility tool.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 // A config written before a field existed still loads, with that field at its
 // default — the app must never refuse to start over its own settings file.
 #[serde(default)]
@@ -139,6 +156,23 @@ pub struct OgXboxCompatConfig {
     pub pack: String,
     /// Copy the existing `Compatibility` folder to a local directory first.
     pub backup_first: bool,
+    /// Also write the community per-title configs from [`XEFU_CONFIGS_URL`]
+    /// into `Compatibility/Configs`. On by default: they only add titles the
+    /// emulator can start, and a config with no matching game is never read.
+    pub update_configs: bool,
+}
+
+// Written by hand rather than derived, for `update_configs`: the struct's
+// `Default` is also what `#[serde(default)]` fills a missing field with, so a
+// settings file written before the option existed gets it on too.
+impl Default for OgXboxCompatConfig {
+    fn default() -> Self {
+        Self {
+            pack: String::new(),
+            backup_first: false,
+            update_configs: true,
+        }
+    }
 }
 
 impl OgXboxCompatConfig {
@@ -541,4 +575,100 @@ pub fn install_remote(
     let res = fs.upload_dir(staged, COMPAT_PATH, cancel, progress);
     check_cancel(cancel)?;
     res.context("writing the compatibility files")
+}
+
+/// Downloads the community config repository and unpacks it, returning the
+/// local `Configs` folder ready to be copied. Touches no console storage.
+///
+/// Shares the working directory with [`stage_pack`] without emptying it: both
+/// are staged before anything on the console is touched, and the pack is
+/// staged first.
+pub fn stage_configs(cancel: &AtomicBool, status: &dyn Fn(&str)) -> Result<PathBuf> {
+    let work = TMP_DIR.join(WORK_SUBDIR);
+    fs::create_dir_all(&work).with_context(|| format!("creating {}", work.display()))?;
+
+    check_cancel(cancel)?;
+    let archive_path = work.join("configs.zip");
+    let label = "the compatibility configs";
+    status("Downloading the compatibility configs…");
+    let res = download::download_to_file(
+        XEFU_CONFIGS_URL,
+        &archive_path,
+        label,
+        cancel,
+        status,
+        COMPAT_CANCELLED,
+    );
+    // Same rule as in `stage_pack`: the cancellation marker has to stay the
+    // error's top-level message for the GUI to recognise it.
+    check_cancel(cancel)?;
+    res.with_context(|| format!("downloading {label}"))?;
+
+    check_cancel(cancel)?;
+    status("Extracting the compatibility configs…");
+    // Unpacked beside the pack rather than into it, so the `Configs` folder is
+    // looked for in the repository only.
+    let extracted = work.join("configs");
+    let _ = fs::remove_dir_all(&extracted);
+    let res = archive::extract_to(&archive_path, &extracted, cancel, &mut |_done, _total| {});
+    check_cancel(cancel)?;
+    res.with_context(|| format!("extracting {label}"))?;
+
+    // GitHub wraps the tree in a `<repo>-<branch>` folder, so the payload is
+    // one level down — but deliberately *not* searched for at any depth the way
+    // a pack's is: the URL tracks a moving branch, and a repository that grew a
+    // second `Configs` folder somewhere would otherwise have one picked by
+    // directory order and written to the console unnoticed.
+    configs_at_repo_root(&extracted).with_context(|| {
+        format!("no `{CONFIGS_DIR}` folder at the root of the config repository — has its layout changed?")
+    })
+}
+
+/// The repository's own `Configs` folder: either directly under `root`, or
+/// under the single folder GitHub wraps a branch archive in. Nothing deeper.
+fn configs_at_repo_root(root: &Path) -> Option<PathBuf> {
+    let direct = root.join(CONFIGS_DIR);
+    if direct.is_dir() {
+        return Some(direct);
+    }
+    let mut dirs = fs::read_dir(root)
+        .ok()?
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p.is_dir());
+    // Exactly one wrapper, or this is not the archive we think it is.
+    let wrapper = dirs.next()?;
+    if dirs.next().is_some() {
+        return None;
+    }
+    let inside = wrapper.join(CONFIGS_DIR);
+    inside.is_dir().then_some(inside)
+}
+
+/// Writes the staged `Configs` folder into the console's `Compatibility`
+/// folder, overwriting files of the same name and leaving any other file in
+/// place.
+///
+/// Written over rather than replaced, unlike the emulator: these are per-title
+/// settings, each read only for the title whose ID names it, so a leftover
+/// shadows nothing — which is precisely what makes [`install_remote`] delete
+/// first and this one not.
+///
+/// Note what that does *not* promise in the app: this runs after
+/// [`install_remote`], which has just removed the whole `Compatibility` folder,
+/// so a config the user had written by hand is already gone by then — its copy
+/// is in the backup, if one was asked for. The merge matters for a partition
+/// this function is pointed at on its own.
+///
+/// `fs` must be open for writing, and must be the only session doing so.
+pub fn install_configs_remote(
+    fs: &mut dyn RemoteFs,
+    staged: &Path,
+    cancel: &AtomicBool,
+    progress: &mut dyn FnMut(u64, u64, Option<f64>),
+) -> Result<()> {
+    check_cancel(cancel)?;
+    let res = fs.upload_dir(staged, CONFIGS_PATH, cancel, progress);
+    check_cancel(cancel)?;
+    res.context("writing the compatibility configs")
 }

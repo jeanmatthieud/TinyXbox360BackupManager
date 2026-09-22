@@ -10,15 +10,16 @@
 //! Sparse means the 4.5 GiB of nothing in front of the partition costs no disk
 //! space.
 //!
-//! What it does not cover: downloading a pack. `stage_pack` is exercised by
-//! hand (it needs the network), so the check starts from a local folder shaped
-//! like the one an unpacked pack yields.
+//! What it does not cover: downloading a pack or the community configs.
+//! `stage_pack` and `stage_configs` are exercised by hand (they need the
+//! network), so the check starts from local folders shaped like the ones they
+//! unpack.
 
 use std::io::{Seek, SeekFrom, Write};
 use std::path::Path;
 use std::sync::atomic::AtomicBool;
 use txbm_core::fatx::{COMPAT_PARTITION, FatxConfig, FatxSession};
-use txbm_core::ogxbox_compat::{self, COMPAT_PATH};
+use txbm_core::ogxbox_compat::{self, COMPAT_PATH, CONFIGS_PATH};
 use txbm_core::remote_fs::RemoteFs;
 
 static NO_CANCEL: AtomicBool = AtomicBool::new(false);
@@ -167,6 +168,42 @@ fn main() -> anyhow::Result<()> {
     assert_eq!(installed.len(), 4, "unexpected file count");
     session.quit()?;
 
+    // ── Per-title configs ────────────────────────────────────────────────
+    // Unlike the emulator, these are written *over* what is there: a file of
+    // another name must survive, one of the same name must not. (In the app an
+    // install wipes the folder first, so this only shows up on a partition the
+    // configs are written to on their own.)
+    let mine = fake_configs(&work.join("mine"), &[("41560003.bin", 64), ("mine.bin", 64)])?;
+    let fetched = fake_configs(
+        &work.join("fetched"),
+        &[("41560003.bin", 136), ("45410042.bin", 136)],
+    )?;
+
+    let mut session = open(&image, true)?;
+    ogxbox_compat::install_configs_remote(&mut session, &mine, &NO_CANCEL, &mut |_s, _t, _p| {})?;
+    ogxbox_compat::install_configs_remote(&mut session, &fetched, &NO_CANCEL, &mut |_s, _t, _p| {})?;
+    session.quit()?;
+
+    let mut session = open(&image, false)?;
+    let configs = list_remote(&mut session, CONFIGS_PATH);
+    println!("configs: {configs:?}");
+    assert_eq!(
+        configs,
+        vec![
+            "41560003.bin".to_string(),
+            "45410042.bin".to_string(),
+            "mine.bin".to_string(),
+        ],
+        "the update did not merge into the existing configs"
+    );
+    let overwritten = session.download_file(&format!("{CONFIGS_PATH}/41560003.bin"))?;
+    assert_eq!(
+        overwritten.len(),
+        136,
+        "a config of the same name was not overwritten"
+    );
+    session.quit()?;
+
     let _ = std::fs::remove_dir_all(&work);
     let _ = std::fs::remove_file(&image);
     println!("\nok");
@@ -244,6 +281,17 @@ fn fake_pack(dir: &Path, files: &[&str]) -> anyhow::Result<std::path::PathBuf> {
     }
     std::fs::write(root.join("dash/xboxdash.xbe"), b"stub")?;
     std::fs::write(root.join("dash/xodash/xonlinedash.xbe"), b"stub")?;
+    Ok(root)
+}
+
+/// Builds a local folder shaped like the `Configs` folder of the community
+/// repository: flat, one file per title ID.
+fn fake_configs(dir: &Path, files: &[(&str, usize)]) -> anyhow::Result<std::path::PathBuf> {
+    let root = dir.join("Configs");
+    std::fs::create_dir_all(&root)?;
+    for (name, size) in files {
+        std::fs::write(root.join(name), vec![b'c'; *size])?;
+    }
     Ok(root)
 }
 

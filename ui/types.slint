@@ -119,6 +119,9 @@ export struct DisplayedCompatConfig {
     // card's download button so the user can see its origin.
     pack-url: string,
     backup-first: bool,
+    // Also fetch the community per-title configs and write them next to the
+    // emulator.
+    update-configs: bool,
 }
 
 export struct DisplayedRecentLocation {
