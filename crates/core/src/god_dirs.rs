@@ -13,11 +13,18 @@
 //!    already sits, and only a brand-new game follows the configured
 //!    [`GodLayout`]. Re-adding a game therefore overwrites it in place instead
 //!    of creating a flat duplicate next to the nested original.
+//!
+//! A title folder named by hand (`<Game name>/00007000`, no `<TitleID>` level)
+//! is listed by the scanners but not reused here: re-adding that game installs
+//! a second copy. That copy must never go *inside* the hand-named folder —
+//! the scan would not see it (the folder is handled as a game, not descended
+//! into) and deleting the listed game would wipe both — so a layout parent
+//! that turns out to be such a folder falls back to the flat `god_dir`.
 
 use crate::config::GodLayout;
 use crate::remote_fs::RemoteFs;
-use crate::game::is_title_id;
-use std::collections::HashMap;
+use crate::game::{is_installed_content_type_dir, is_title_id};
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 /// Display name used to build a parent folder, when the caller has none: the
@@ -46,9 +53,19 @@ pub fn local_title_parent(
         return parent;
     }
     match layout.parent_folder(title_id, &display_name(title_id, name)) {
-        Some(folder) => god_dir.join(folder),
-        None => god_dir.to_path_buf(),
+        Some(folder) if !is_local_title_folder(&god_dir.join(&folder)) => god_dir.join(folder),
+        _ => god_dir.to_path_buf(),
     }
+}
+
+/// True when `dir` is a title folder named by hand: it directly holds the
+/// content-type folder of an installed package (see the module docs).
+fn is_local_title_folder(dir: &Path) -> bool {
+    std::fs::read_dir(dir).is_ok_and(|entries| {
+        entries.flatten().any(|e| {
+            is_installed_content_type_dir(&e.file_name().to_string_lossy()) && e.path().is_dir()
+        })
+    })
 }
 
 /// Local directory holding the `<TitleID>` folder of an already-installed
@@ -104,6 +121,9 @@ pub struct GodDirIndex {
     god_dir: String,
     /// TitleID (uppercase) -> the directory holding its folder.
     by_title: HashMap<String, String>,
+    /// Lowercased names of the folders directly under `god_dir` that are
+    /// title folders named by hand (see the module docs).
+    title_folders: HashSet<String>,
 }
 
 impl GodDirIndex {
@@ -112,6 +132,7 @@ impl GodDirIndex {
     pub fn build_remote(session: &mut dyn RemoteFs, god_dir: &str) -> Self {
         let god_dir = god_dir.trim_end_matches('/').to_string();
         let mut by_title = HashMap::new();
+        let mut title_folders = HashSet::new();
         let children = session.list_dir(&god_dir);
         for entry in &children {
             if !entry.is_dir {
@@ -126,9 +147,13 @@ impl GodDirIndex {
                 if sub.is_dir && is_title_id(&sub.name) {
                     by_title.insert(sub.name.to_uppercase(), path.clone());
                 }
+                // Free to spot: this listing is already made for the lookup above.
+                if sub.is_dir && is_installed_content_type_dir(&sub.name) {
+                    title_folders.insert(entry.name.to_lowercase());
+                }
             }
         }
-        Self { god_dir, by_title }
+        Self { god_dir, by_title, title_folders }
     }
 
     fn parent_of(&self, title_id: &str) -> Option<&str> {
@@ -149,8 +174,11 @@ pub fn remote_title_parent(
         return parent.to_string();
     }
     match layout.parent_folder(title_id, &display_name(title_id, name)) {
-        Some(folder) => format!("{}/{folder}", index.god_dir),
-        None => index.god_dir.clone(),
+        // FATX ignores case, so does the match against a hand-named folder.
+        Some(folder) if !index.title_folders.contains(&folder.to_lowercase()) => {
+            format!("{}/{folder}", index.god_dir)
+        }
+        _ => index.god_dir.clone(),
     }
 }
 
@@ -178,6 +206,28 @@ mod tests {
         assert_eq!(
             local_title_parent(&god, "4D5308AB", Some("Halo 3"), GodLayout::TitleId),
             god
+        );
+
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn never_nests_inside_a_hand_named_title_folder() {
+        let dir = std::env::temp_dir().join("txbm-god-dirs-misnamed");
+        let _ = std::fs::remove_dir_all(&dir);
+        let god = dir.join("Content/0000000000000000");
+        // Installed by hand under its name, with no `<TitleID>` level.
+        std::fs::create_dir_all(god.join("Halo 3/00007000")).unwrap();
+
+        assert_eq!(
+            local_title_parent(&god, "4D5307E6", Some("Halo 3"), GodLayout::NameSlashTitleId),
+            god
+        );
+        // A named parent holding only DLC is not a title folder.
+        std::fs::create_dir_all(god.join("Gears of War/00000002")).unwrap();
+        assert_eq!(
+            local_title_parent(&god, "4D5307D5", Some("Gears of War"), GodLayout::NameSlashTitleId),
+            god.join("Gears of War")
         );
 
         std::fs::remove_dir_all(&dir).unwrap();

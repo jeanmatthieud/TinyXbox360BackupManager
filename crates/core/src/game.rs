@@ -128,6 +128,15 @@ pub const INSTALLED_CONTENT_TYPES: [(&str, GameFormat, bool); 3] = [
     ("000D0000", GameFormat::Arcade, true),
 ];
 
+/// True when `name` is the content-type folder of an installed game package
+/// (see [`INSTALLED_CONTENT_TYPES`]). A folder directly holding one is a title
+/// folder, whatever its own name.
+pub(crate) fn is_installed_content_type_dir(name: &str) -> bool {
+    INSTALLED_CONTENT_TYPES
+        .iter()
+        .any(|(t, _, _)| name.eq_ignore_ascii_case(t))
+}
+
 /// FATX limits file names to 42 characters.
 pub const FATX_MAX_NAME: usize = 42;
 
@@ -144,8 +153,22 @@ pub fn og_folder_name(title: &str, title_id: &str) -> String {
 
 /// True when `name` is an 8-hex-character TitleID folder (e.g. `58410889`),
 /// as found directly under a `Content/0000000000000000` directory.
+///
+/// The STFS content-type folders found *inside* a TitleID folder (`00007000`,
+/// `00000002`, …) share that shape but are never TitleIDs — a real one carries
+/// a publisher ID in its high 16 bits. Taking them for one made a title folder
+/// set up by hand under another name (`<Game name>/00007000`) vanish from the
+/// scan: its `00007000` was probed as a `<TitleID>` holding no package.
 pub(crate) fn is_title_id(name: &str) -> bool {
-    name.len() == 8 && name.chars().all(|c| c.is_ascii_hexdigit())
+    name.len() == 8 && name.chars().all(|c| c.is_ascii_hexdigit()) && !is_content_type_dir(name)
+}
+
+/// True when `name` is one of the STFS content-type folders a `<TitleID>`
+/// folder holds: an installed package, DLC or a title update.
+fn is_content_type_dir(name: &str) -> bool {
+    is_installed_content_type_dir(name)
+        || name.eq_ignore_ascii_case(&crate::stfs::dlc_dir_name())
+        || name.eq_ignore_ascii_case(&crate::stfs::title_update_dir_name())
 }
 
 /// Splits a folder name into (title, TitleID) if it carries
@@ -203,6 +226,15 @@ impl crate::scan::DirScanner for LocalScanner {
             return Ok(ChildAction::Handled);
         }
 
+        // GOD / Arcade in a title folder named by hand (`<Game name>/00007000`):
+        // Aurora reads the STFS header rather than the path, so the game runs
+        // on the console, and its TitleID is taken from that same header.
+        if let Some(info) = misnamed_title_package_local(path)
+            && push_god_games_local(path, &info.title_id, &mut self.games)
+        {
+            return Ok(ChildAction::Handled);
+        }
+
         // Extracted game: a folder directly holding default.xex / default.xbe.
         if let Some(format) = detect_extracted_local(path) {
             push_extracted_local(path, name, format, &mut self.games);
@@ -215,8 +247,19 @@ impl crate::scan::DirScanner for LocalScanner {
     }
 }
 
-/// Handles a GOD/Arcade `<TitleID>` folder locally. Returns true when a game
-/// (or an incomplete DLC/title-update-only entry) was pushed.
+/// Header of the first installed package of a title folder that is not named
+/// after its TitleID, i.e. one directly holding a content-type folder.
+fn misnamed_title_package_local(title_dir: &Path) -> Option<crate::stfs::StfsInfo> {
+    INSTALLED_CONTENT_TYPES
+        .iter()
+        .map(|(content_type, _, _)| title_dir.join(content_type))
+        .filter(|type_dir| type_dir.is_dir())
+        .find_map(|type_dir| crate::stfs::package_in_dir(&type_dir))
+}
+
+/// Handles a GOD/Arcade title folder locally — named `<TitleID>`, or under
+/// another name, `title_id_raw` then coming from a package header. Returns
+/// true when a game (or an incomplete DLC/title-update-only entry) was pushed.
 fn push_god_games_local(title_dir: &Path, title_id_raw: &str, games: &mut Vec<Game>) -> bool {
     let title_id = title_id_raw.to_uppercase();
     let mut found_package = false;

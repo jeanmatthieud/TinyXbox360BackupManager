@@ -96,6 +96,17 @@ fn main() -> anyhow::Result<()> {
             "0000000000000000000000000000",
             &vec![0u8; 3 * 1024 * 1024],
         )?;
+
+        // And one whose title folder was named by hand rather than after its
+        // TitleID: Aurora reads the package header, so the scan must too.
+        let misnamed_dir = format!("{}/Mon Jeu", storage.god_dir);
+        session.ensure_dir(&format!("{misnamed_dir}/00007000"))?;
+        session.ensure_dir(&format!("{misnamed_dir}/000B0000"))?;
+        session.put_bytes(
+            &format!("{misnamed_dir}/00007000"),
+            "0000000000000000000000000001",
+            &stfs_header(0x0000_7000, 0x4D53_0919, "Mon Jeu Test"),
+        )?;
         session.quit()?;
     }
 
@@ -118,7 +129,13 @@ fn main() -> anyhow::Result<()> {
             game.path.display()
         );
     }
-    assert_eq!(games.len(), 1, "the planted game was not found");
+    assert_eq!(games.len(), 2, "a planted game was not found");
+    let misnamed = games
+        .iter()
+        .find(|g| g.path.ends_with("Mon Jeu"))
+        .expect("the misnamed title folder was not listed");
+    assert_eq!(misnamed.id, "4D530919", "the TitleID was not read from the header");
+    assert_eq!(misnamed.title, "Mon Jeu Test", "the title was not read from the header");
     assert!(info.total_bytes > 0, "free space was not reported");
 
     // The install path: the same tree copy `convert::perform` runs once a
@@ -187,6 +204,19 @@ fn main() -> anyhow::Result<()> {
 
     println!("OK");
     Ok(())
+}
+
+/// A minimal STFS package header: the magic, content type, TitleID and title
+/// name, which is all a scan reads from it.
+fn stfs_header(content_type: u32, title_id: u32, title: &str) -> Vec<u8> {
+    let mut buf = vec![0u8; txbm_core::stfs::HEADER_SIZE];
+    buf[..4].copy_from_slice(b"CON ");
+    buf[0x344..0x348].copy_from_slice(&content_type.to_be_bytes());
+    buf[0x360..0x364].copy_from_slice(&title_id.to_be_bytes());
+    for (i, unit) in title.encode_utf16().enumerate() {
+        buf[0x1691 + 2 * i..0x1691 + 2 * i + 2].copy_from_slice(&unit.to_be_bytes());
+    }
+    buf
 }
 
 /// Writes a blank Xbox 360 filesystem at `offset` in a sparse image: a

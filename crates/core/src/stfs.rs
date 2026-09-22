@@ -140,6 +140,19 @@ fn read_utf16_be<R: Read + Seek>(reader: &mut R, offset: u64) -> Option<String> 
     (!s.is_empty()).then_some(s)
 }
 
+/// Reads the header of the first STFS package found in a content-type folder
+/// (e.g. .../<TitleID>/00007000 or .../000D0000).
+pub fn package_in_dir(type_dir: &Path) -> Option<StfsInfo> {
+    std::fs::read_dir(type_dir)
+        .ok()?
+        .flatten()
+        .map(|entry| entry.path())
+        // GOD data folders (".data") are skipped here, anything else that is
+        // not a package by the magic check.
+        .filter(|path| path.is_file())
+        .find_map(|path| inspect(&path).ok().flatten())
+}
+
 /// Reads the game name from the header of the first STFS package found in a
 /// content-type folder (e.g. .../<TitleID>/00007000 or .../000D0000).
 pub fn title_from_dir(type_dir: &Path) -> Option<String> {
