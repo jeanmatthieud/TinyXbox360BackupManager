@@ -52,7 +52,7 @@ fn local_ipv4() -> Option<Ipv4Addr> {
 /// Their presence distinguishes a real console from any other FTP server that
 /// happens to accept the same credentials.
 const CONSOLE_VOLUMES: &[&str] = &[
-    "Hdd1", "Usb0", "Usb1", "Usb2", "Flash", "Nand", "Ram", "Uda", "SysExt",
+    "Hdd1", "HddX", "Usb0", "Usb1", "Usb2", "Flash", "Nand", "Ram", "Uda", "SysExt",
 ];
 
 /// True if a root `LIST` looks like a 360 console: at least one entry's name
@@ -290,12 +290,19 @@ impl FtpSession {
         Ok(())
     }
 
-    /// Lists the current directory.
-    fn list_cwd(&mut self) -> Vec<RemoteEntry> {
-        let Ok(lines) = self.stream.list(None) else {
-            return Vec::new();
-        };
+    /// Lists the current directory, reporting a failed `LIST`.
+    fn try_list_cwd(&mut self) -> Result<Vec<RemoteEntry>> {
+        let lines = self.stream.list(None).context("LIST")?;
+        Ok(Self::parse_list(&lines))
+    }
 
+    /// Lists the current directory, an unreadable one coming back empty.
+    fn list_cwd(&mut self) -> Vec<RemoteEntry> {
+        self.try_list_cwd().unwrap_or_default()
+    }
+
+    /// Turns raw `LIST` lines into entries, dropping what cannot be parsed.
+    fn parse_list(lines: &[String]) -> Vec<RemoteEntry> {
         lines
             .iter()
             .filter_map(|line| {
@@ -328,6 +335,15 @@ impl FtpSession {
             return Vec::new();
         }
         self.list_cwd()
+    }
+
+    /// Like [`Self::list_dir`], but reports a directory that could not be read
+    /// instead of passing it off as empty.
+    pub fn try_list_dir(&mut self, remote_dir: &str) -> Result<Vec<RemoteEntry>> {
+        self.cwd(remote_dir)
+            .with_context(|| format!("opening {remote_dir}"))?;
+        self.try_list_cwd()
+            .with_context(|| format!("listing {remote_dir}"))
     }
 
     /// Recursive size of a remote directory, with bounded depth.

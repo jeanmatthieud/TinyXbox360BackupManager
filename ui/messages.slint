@@ -21,6 +21,7 @@ export enum Message {
     SetFtpPassword,
     RefreshAll,
     NotifyInfo,
+    NotifyInfoSticky,
     NotifySuccess,
     NotifySuccessSticky,
     NotifyError,
@@ -99,6 +100,18 @@ export enum Message {
     SetBadAvatarVersion,
     ResetBadAvatarUrl,
     ToggleBadAvatarSystemUpdate,
+    InstallCompat,
+    RestoreCompat,
+    SelectCompatDrive,
+    SelectCompatFtp,
+    CompatTargetReady,
+    ConfirmInstallCompat,
+    CancelInstallCompat,
+    CancelCompat,
+    CompatInstalled,
+    SetCompatPack,
+    ToggleCompatBackup,
+    ToggleCompatConfigs,
 }
 
 export global Dispatcher {

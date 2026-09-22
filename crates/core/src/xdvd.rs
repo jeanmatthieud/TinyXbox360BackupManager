@@ -111,15 +111,25 @@ impl XdvdImage {
         Ok(buf)
     }
 
+    /// Every entry of the image, as (parent path, entry) pairs walked from the
+    /// root: `""` for a root entry, `"/Content/0000000000000000"` for a package
+    /// two levels down. Directories are listed alongside files.
+    ///
+    /// `xdvdfs` hands the whole tree back as an owned `Vec`, so the mutable
+    /// borrow of the device ends with the call: the caller can keep reading
+    /// entry data through [`Self::read_prefix`] while iterating it.
+    pub fn file_tree(&mut self) -> Result<Vec<(String, DirectoryEntryNode)>> {
+        self.volume
+            .root_table
+            .file_tree(&mut self.dev)
+            .map_err(|e| anyhow!("reading file tree: {e}"))
+    }
+
     /// Size of the used part of the volume: the end of the furthest region any
     /// file or directory table occupies. Everything past it is padding, which
     /// GOD conversion trims away.
     pub fn max_used_prefix_size(&mut self) -> Result<u64> {
-        let tree = self
-            .volume
-            .root_table
-            .file_tree(&mut self.dev)
-            .map_err(|e| anyhow!("reading file tree: {e}"))?;
+        let tree = self.file_tree()?;
         let max = tree
             .iter()
             .map(|(_, node)| region_end(&node.node.dirent.data))

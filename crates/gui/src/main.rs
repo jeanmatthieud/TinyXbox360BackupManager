@@ -6,6 +6,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 #![recursion_limit = "256"]
 
+mod compat;
 mod config;
 mod covers;
 mod dialogs;
@@ -91,6 +92,7 @@ fn main() -> Result<()> {
     ui_state.set_fatx_privileges_help_url(config::fatx_privileges_help_url());
     ui_state.set_config(DisplayedConfig::from(&state.config));
     ui_state.set_badavatar(config::displayed_badavatar(&state.config));
+    ui_state.set_compat(config::displayed_compat(&state.config));
     ui_state.set_recent_locations(ModelRc::from(std::rc::Rc::new(slint::VecModel::from(
         config::recent_locations(&state.config),
     ))));

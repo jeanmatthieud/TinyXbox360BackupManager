@@ -1,0 +1,40 @@
+// SPDX-FileCopyrightText: 2026 Jean-Matthieu Dechriste (TinyXbox360BackupManager)
+// SPDX-License-Identifier: GPL-3.0-only
+
+import { Spinner } from "std-widgets.slint";
+import { IconSet } from "@lucide";
+import { UiState } from "../ui-state.slint";
+import { EmptyState } from "empty-state.slint";
+import { NoTarget } from "no-target.slint";
+import { NoGames } from "no-games.slint";
+
+// What the Games page shows, in both grid and table views, when there is no
+// game to list. Exactly one branch is visible at a time.
+export component GamesPlaceholder inherits VerticalLayout {
+    alignment: center;
+
+    if UiState.config.target.is-empty: NoTarget { }
+
+    // Connected, first fetch still running: a large indeterminate spinner.
+    if !UiState.config.target.is-empty && UiState.scanning: HorizontalLayout {
+        alignment: center;
+
+        Spinner {
+            width: 64px;
+            height: 64px;
+            indeterminate: true;
+        }
+    }
+
+    // Connected, scan done, library truly empty: invite to add a first game.
+    if !UiState.config.target.is-empty && !UiState.scanning && !UiState.has-games: NoGames { }
+
+    // Connected, library has games but they are all hidden by the current
+    // search / category filters: tell the user rather than showing NoGames.
+    if !UiState.config.target.is-empty && !UiState.scanning && UiState.has-games: EmptyState {
+        boxed: true;
+        icon: IconSet.SearchX;
+        title: "No games match the current filters";
+        description: "Clear the search box or re-enable a category to see your games again";
+    }
+}

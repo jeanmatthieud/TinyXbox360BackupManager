@@ -10,7 +10,28 @@ use std::{
     rc::Rc,
     sync::{Arc, atomic::AtomicBool},
 };
-use txbm_core::{config::Config, drive_info::DriveInfo, game::Game, job_queue::QueuedJob};
+use txbm_core::{
+    config::Config, drive_info::DriveInfo, ftp::FtpConfig, game::Game, job_queue::QueuedJob,
+};
+
+/// Where an original-Xbox compatibility install is headed. The Toolbox tool
+/// runs with no target connected, so it picks its own console: either one
+/// reached over the network, or the console's hard drive on this computer.
+#[derive(Debug, Clone)]
+pub enum CompatTarget {
+    Fatx(PathBuf),
+    Ftp(FtpConfig),
+}
+
+impl CompatTarget {
+    /// How the confirmation modal names this console.
+    pub fn label(&self) -> String {
+        match self {
+            Self::Fatx(device) => device.display().to_string(),
+            Self::Ftp(config) => format!("{}:{}", config.host, config.port),
+        }
+    }
+}
 
 pub struct State {
     pub config: Config,
@@ -56,6 +77,21 @@ pub struct State {
     /// Destination picked for the BadAvatar key, awaiting confirmation in the
     /// modal before the creation thread actually starts.
     pub badavatar_pending_dest: Option<PathBuf>,
+    pub is_installing_compat: bool,
+    /// True while the read-only inspection of a picked console is in flight.
+    /// A second one must not start: both threads deposit their answer in the
+    /// same slot, and the confirmation modal would end up pairing one
+    /// console's summary with the other's name.
+    pub is_inspecting_compat: bool,
+    /// Console picked for the original-Xbox compatibility install, awaiting
+    /// confirmation in the modal before the install thread actually starts.
+    pub compat_pending: Option<CompatTarget>,
+    /// Where the zip holding the existing compatibility files goes, when the
+    /// user asked for a backup.
+    pub compat_backup_zip: Option<PathBuf>,
+    /// A backup the user picked to put back, instead of one of the published
+    /// packs. `None` for an ordinary install.
+    pub compat_restore_zip: Option<PathBuf>,
     /// Flag shared with the scan thread to cancel it.
     pub scan_cancel: Arc<AtomicBool>,
     /// Flag shared with the network-discovery thread (FTP modal) to cancel it.
@@ -64,6 +100,13 @@ pub struct State {
     pub job_cancel: Arc<AtomicBool>,
     /// Flag shared with the BadAvatar creation thread to cancel it.
     pub badavatar_cancel: Arc<AtomicBool>,
+    /// Flag shared with the compatibility-install thread to cancel it.
+    pub compat_cancel: Arc<AtomicBool>,
+    /// Raised by the compatibility-install thread once it has started changing
+    /// the partition. Past that point an interrupted run — a cancellation
+    /// included — leaves the console unable to launch an original Xbox game,
+    /// which the notification has to say.
+    pub compat_started_writing: Arc<AtomicBool>,
     pub games_filter: String,
     /// True when the storage-configuration modal was opened to *edit* an
     /// already-configured target (from the Toolbox), so it is shown even though
@@ -99,10 +142,17 @@ impl State {
             rescan_deferred: false,
             is_creating_badavatar: false,
             badavatar_pending_dest: None,
+            is_installing_compat: false,
+            is_inspecting_compat: false,
+            compat_pending: None,
+            compat_backup_zip: None,
+            compat_restore_zip: None,
             scan_cancel: Arc::new(AtomicBool::new(false)),
             ftp_scan_cancel: Arc::new(AtomicBool::new(false)),
             job_cancel: Arc::new(AtomicBool::new(false)),
             badavatar_cancel: Arc::new(AtomicBool::new(false)),
+            compat_cancel: Arc::new(AtomicBool::new(false)),
+            compat_started_writing: Arc::new(AtomicBool::new(false)),
             games_filter: String::new(),
             editing_storage: false,
         }

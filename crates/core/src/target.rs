@@ -1752,6 +1752,25 @@ impl crate::scan::DirScanner for RemoteScanner<'_> {
                 self.session,
                 path,
                 name,
+                None,
+                &children,
+                &mut self.games,
+                &mut self.games_bytes,
+            )
+        {
+            return Ok(ChildAction::Handled);
+        }
+
+        // GOD / Arcade in a title folder named by hand (`<Game name>/00007000`):
+        // Aurora reads the STFS header rather than the path, so the game runs
+        // on the console, and its TitleID is taken from that same header. Only
+        // such a folder costs the extra listing and header download.
+        if let Some(info) = misnamed_title_package_remote(self.session, path, &children)
+            && push_god_games_remote(
+                self.session,
+                path,
+                &info.title_id,
+                info.name(),
                 &children,
                 &mut self.games,
                 &mut self.games_bytes,
@@ -1796,12 +1815,55 @@ fn detect_extracted(children: &[crate::ftp::RemoteEntry]) -> Option<GameFormat> 
     }
 }
 
-/// Handles a GOD/Arcade `<TitleID>` folder on a console. Returns true when a game
-/// (or an incomplete DLC/title-update-only entry) was pushed.
+/// Header of the first installed package of a title folder that is not named
+/// after its TitleID, i.e. one directly holding a content-type folder.
+/// `sub_entries` lists `title_dir`.
+fn misnamed_title_package_remote(
+    session: &mut dyn RemoteFs,
+    title_dir: &str,
+    sub_entries: &[crate::ftp::RemoteEntry],
+) -> Option<crate::stfs::StfsInfo> {
+    for (content_type, _, _) in game::INSTALLED_CONTENT_TYPES {
+        let Some(type_entry) = sub_entries
+            .iter()
+            .find(|s| s.is_dir && s.name.eq_ignore_ascii_case(content_type))
+        else {
+            continue;
+        };
+        let type_dir = format!("{title_dir}/{}", type_entry.name);
+        // GOD data folders (".data") are skipped here, anything else that is
+        // not a package by the magic check. Only the header prefix is read.
+        for entry in session.list_dir(&type_dir) {
+            if entry.is_dir {
+                continue;
+            }
+            let header_path = format!("{type_dir}/{}", entry.name);
+            let info = session
+                .download_prefix(&header_path, crate::stfs::HEADER_SIZE)
+                .ok()
+                .and_then(|bytes| {
+                    let mut cursor = std::io::Cursor::new(bytes);
+                    crate::stfs::inspect_reader(&mut cursor, PathBuf::from(&header_path))
+                        .ok()
+                        .flatten()
+                });
+            if info.is_some() {
+                return info;
+            }
+        }
+    }
+    None
+}
+
+/// Handles a GOD/Arcade title folder on a console — named `<TitleID>`, or under
+/// another name, `title_id_raw` and `header_title` then coming from a package
+/// header. Returns true when a game (or an incomplete DLC/title-update-only
+/// entry) was pushed.
 fn push_god_games_remote(
     session: &mut dyn RemoteFs,
     title_dir: &str,
     title_id_raw: &str,
+    header_title: Option<&str>,
     sub_entries: &[crate::ftp::RemoteEntry],
     games: &mut Vec<Game>,
     games_bytes: &mut u64,
@@ -1834,9 +1896,16 @@ fn push_god_games_remote(
         found_package = true;
         let size = session.dir_size(&format!("{title_dir}/{}", sub.name), 3)
             + std::mem::take(&mut dlc_size);
-        let title = u32::from_str_radix(&title_id, 16)
-            .ok()
-            .and_then(iso2god::game_list::find_title_by_id)
+        // The header is only read for a misnamed folder (it was needed for the
+        // TitleID anyway); a `<TitleID>` folder is named from the game list,
+        // which costs no round trip.
+        let title = header_title
+            .map(str::to_string)
+            .or_else(|| {
+                u32::from_str_radix(&title_id, 16)
+                    .ok()
+                    .and_then(iso2god::game_list::find_title_by_id)
+            })
             .unwrap_or_else(|| title_id.clone());
         let search_term = format!("{title}\0{title_id}").to_lowercase();
         *games_bytes += size;

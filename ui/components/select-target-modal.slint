@@ -9,7 +9,7 @@ import {
     RemovableDrivePicker,
     FatxDrivePicker,
 } from "removable-drive-picker.slint";
-import { TargetKind } from "../types.slint";
+import { FtpPurpose, TargetKind } from "../types.slint";
 import { IconSet, IconDisplay } from "@lucide";
 import { MyPalette } from "../styling.slint";
 import { UiState } from "../ui-state.slint";
@@ -282,6 +282,10 @@ export component SelectTargetModal inherits Modal {
                         picking-fatx = true;
                     } else if choice == TargetChoice.network {
                         UiState.selecting-target = false;
+                        // Stated rather than assumed: the Toolbox borrows the
+                        // same modal, and a purpose left over from it would
+                        // send the console to the wrong place.
+                        UiState.ftp-target-purpose = FtpPurpose.Connect;
                         UiState.editing-ftp-target = true;
                     } else if choice == TargetChoice.history {
                         UiState.selecting-target = false;

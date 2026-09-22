@@ -89,6 +89,7 @@ Inspired by [TinyWiiBackupManager](https://github.com/mq1/TinyWiiBackupManager).
 - **Accepts many kinds of input** and picks the right processing automatically: Xbox 360 ISOs, original Xbox ISOs, Arcade (XBLA) archives, install / expansion discs, and bare STFS packages.
 - **Multi-disc games with an install disc** (e.g. GTA V) and **Expansion Installer discs** (e.g. GTA IV: The Complete Edition) are handled — just provide both ISOs; DLC and title updates get installed to the right place so unlocks work out of the box.
 - **Covers** from [XboxUnity](https://www.xboxunity.net) and [MobCats](https://github.com/MobCat/MobCats-original-xbox-game-list) (with a local cache).
+- **Toolbox** for the jobs that come before the games: build a BadAvatar USB key, and install the original Xbox compatibility files to maximize the compatibility.
 - **Cross-platform**, native, no dependencies to install:
   - :window: Windows 10+ | x86 (32-bit), x64 (64-bit), arm64 (Qualcomm Snapdragon etc.)
   - :apple: macOS 10.14+ | x86_64 (Intel), arm64 (Apple Silicon/M1+)
@@ -145,12 +146,67 @@ You confirm (or adjust) the three folders, and the app writes a small **`.txbm.j
 - **Xbox360 over FTP (Aurora):** the game list is read from the console, added games are converted locally then pushed to the console; deletion is done remotely. Only **one FTP connection at a time** is used, as required by the console's FTP server.
 - **Console hard drive (FATX360), experimental:** the drive is opened as a raw device and its `data` partition — the one the console calls `Hdd1` — is read and written directly, so folders, the game list, the `.txbm.json` configuration and Aurora's own databases are the very same ones the console sees. Added games are converted locally then copied across. The drive is opened **read-only unless a write is actually taking place**, and only one session at a time. See [Using the console's hard drive](#electric_plug-using-the-consoles-hard-drive) for the disk permissions this needs.
 
+The drive's other partitions are left alone, with one exception: the [Original Xbox compatibility](#space_invader-original-xbox-compatibility-toolbox) tool in the Toolbox writes the emulator partition (`HddX`). It is a standalone tool, usable only while no target is connected, so it can never write beside a game transfer.
+
 ### Aurora scan paths
 
 Aurora only lists games from folders it is told to scan. The **Toolbox** page reads Aurora's configured scan paths and compares them with the folders this app uses:
 
 - for a **console over FTP**, and for a **USB key that carries an Aurora install**, each storage folder is flagged as scanned by Aurora or not;
 - if a folder isn't scanned yet, the app shows the exact path to add in *Aurora → Settings → Content → Manage Paths* (Scan Depth 3+), then a rescan.
+
+## :space_invader: Original Xbox compatibility (Toolbox)
+
+The Xbox 360 plays original Xbox games through an emulator of Microsoft's own, internally called
+*Xenon Fusion* — `xefu`. It does not live with your games: it sits on a partition of its own,
+which the console calls **`HddX`** and which holds a single `Compatibility` folder.
+
+That partition is only ever created when a drive is formatted at the Microsoft factory. So a
+third-party drive, a reformatted one, or one whose partition was lost simply cannot launch an
+original Xbox title — whatever the dashboard shows. The **Toolbox** page can put it back.
+
+> [!WARNING]
+> **Experimental.** This replaces the partition your console needs to boot original Xbox games,
+> and the files already there are deleted first. Tick *"Backup the current compatibility files"* on your first run — you choose where the archive goes, and it is written only once it is
+> complete.
+
+Disconnect from your current target first — like the BadAvatar tool, this one picks its own
+console: either **over the network** (FTP, console powered on) or on the console's **hard drive
+connected to this computer**. It then downloads the emulator set you chose and writes it to
+`HddX:\Compatibility`.
+
+Three sets are offered, all from the [ConsoleMods wiki](https://consolemods.org/wiki/Xbox_360:Original_Xbox_Games).
+The download button beside the picker opens the chosen pack in your browser, so you can see
+exactly where it comes from and keep a copy of what gets installed.
+
+| Pack | What it is | Console |
+|---|---|---|
+| **Retail — unmodified** | The eight official emulator revisions, as a factory drive carried them. | Any, including stock |
+| **Hacked — no whitelist** | The same, with every restriction and the game whitelist removed, plus the four emulators found in Xbox One/Series releases and the per-game config loader. | JTAG / RGH / XDK only |
+| **Hacked — with HUD** | As above, but the Xbox 360 guide stays available while a game runs. Uses more memory, so a few games behave worse. | JTAG / RGH / XDK only |
+
+### Putting a backup back
+
+The **upload icon** in the card's top-right corner takes a zip this tool wrote earlier and puts
+it back on a console. The archive is checked before anything else happens — it must carry a
+`Compatibility` folder at its root — and from there it follows exactly the same path as a
+downloaded pack: pick the console, confirm, and the partition is replaced.
+
+Backups are shaped like the published packs on purpose, so restoring is the same operation with
+a different source rather than a mode of its own.
+
+Two things this tool deliberately does **not** do:
+
+- **It never creates the partition.** If `HddX` is missing it says so and points you at the
+  *HDD Compatibility Partition Fixer* homebrew (run on the console) or FATXplorer. Come back
+  once it exists.
+- **It does not install the April 2018 title update** (build 5832) for the emulator. A stock
+  console fetches it from Xbox Live on its own, and the hacked packs neither need nor want it.
+
+> [!TIP]
+> If an original Xbox game misbehaves after a change of pack, clearing the console's system cache
+> (*Settings → System → Storage → Clear System Cache*) is worth a try: the emulator keeps a small
+> cache outside every partition, which this tool cannot touch.
 
 ## :electric_plug: Using the console's hard drive
 
@@ -237,38 +293,82 @@ Replace `YOUR_USERNAME`, and check that `setfacl` really lives at that path (`co
 
 If that trade-off bothers you, Option A stays the tightest choice.
 
-## :joystick: Games that need a hand
+## :joystick: Games that need special handling
 
-A handful of retail releases spread one game over two discs in a way that no
-tool can guess from the disc alone. They are listed here so you know what you
-are looking at; a future version could recognise them by their TitleID and
-install them the way they expect.
+A handful of retail releases split one game across two discs in a way no tool
+can guess from a disc alone: two images with the same shape need opposite
+treatments, and only the game tells them apart. The app carries a short list of
+these, keyed by TitleID and disc number, and installs them the way the console
+expects — without you having to do anything. They are described here so you know
+what you are looking at.
 
 ### Tom Clancy's Splinter Cell: Blacklist — Disc 2
 
 Disc 2 is two things at once. It holds the second half of the campaign as a
 bootable game disc, *and* a 3 GB HD texture pack packaged as downloadable
-content under the game's own TitleID (`555308B6`). The console expects both: the
-disc installed like a game, and the texture pack dropped into
-`Content/0000000000000000/555308B6/00000002`.
+content under the game's own TitleID (`555308B6`). The console expects both.
 
-The app currently sees the content folder and installs the texture pack, so add
-the second half of the campaign yourself if you want it.
+Add the disc like any other and you get both: the game is installed, and the
+texture pack lands in `Content/0000000000000000/555308B6/00000002`. Disc 1 is an
+ordinary game disc and needs nothing special.
 
 ### Watch_Dogs — Discs 1 and 2
 
-Disc 1 is an installation disc: it carries no game of its own, only two
-`installation1` / `installation2` folders whose files belong to the game on
-disc 2. Neither disc is playable on its own, and the pieces are plain folders
-rather than packaged content, so they cannot simply be copied to the console —
-the two discs have to be merged into a single ~10 GB image, which is then
-installed as one game.
+Neither disc is playable on its own. Disc 1 is an installation disc: its two
+`installation1` / `installation2` folders are a wrapper its installer would have
+unpacked, holding ordinary game data — `common.dat`, `shadersobj.dat`,
+`sound.dat`, `vidx`, `worlds` — that belongs at the root of the game on disc 2.
+Being plain files rather than packaged content, they cannot be dropped into a
+content folder on the console either.
+
+The app installs this pair as an **extracted game folder** rather than a GOD
+container, whatever storage format you have chosen — a folder can be completed
+by the other disc, a GOD container cannot. Disc 1's installation data is unpacked
+straight into that folder, beside the game's own files. Both discs land in the
+same place, so **add them in whichever order you like**: disc 1 on its own
+contributes its data and the game only appears in your library once disc 2 has
+been added too.
+
+One more twist is handled for you: disc 2's `default.xex` is a small launcher
+that looks for an installation left behind by disc 1's installer and refuses to
+start the game from a hard drive. The real game sits beside it as `game.xex`, so
+the app makes that the folder's `default.xex` and keeps the launcher as
+`default.original.xex`.
 
 ### Games that need `fakelive` disabled
 
 Call of Duty: World at War and Ultra Street Fighter IV install normally but
 refuse to start while Dashlaunch's `fakelive` option is on. That is a console
 setting, in *Dashlaunch → Options*, not something an installer can change.
+
+### Original Xbox games that pick the wrong emulator
+
+An original Xbox game that crashes, hangs on a black screen or never gets past its menus is
+often not a bad dump: it is the *wrong emulator*. The front-end, `xbox.xex`, maps each
+officially supported title to the `xefu` revision Microsoft validated for it — and every game
+outside that list (which is every game, once the whitelist is removed) falls back to the most
+recent one, which is frequently not the best choice.
+
+The [ConsoleMods compatibility list](https://consolemods.org/wiki/Xbox_360:Original_Xbox_Games_Compatibility_List)
+documents, game by game, which revision actually works: `xefu`, `xefu1_1`, `xefu2`, `xefu3`,
+`xefu5`, `xefu6`, `xefu7`, `xefu7b`, plus `xefu2019` / `xefu2021a` / `xefu2021b` / `xefu2021c`
+lifted from Xbox One/Series releases.
+
+Switching is done on the console, with **Xefu Spoofer** — in Aurora, press *Back → Scripts →
+Aurora Repo Browser → Utility Scripts → Xefu Spoofer*, and it downloads itself. (You can also
+drop the script into `User\Scripts\Utility\` in your Aurora install by hand.) Games marked
+**CFG** in the list additionally need one of the `Configs/*.bin` files loaded through
+`config_loader_xefu7`, both of which ship with the *Hacked* packs the
+[Toolbox tool](#space_invader-original-xbox-compatibility-toolbox) installs.
+
+Two frequent causes have nothing to do with the emulator:
+
+- **Plugins.** Stealth servers, the `HvP2` plugin and the Aurora Crash Patcher are known to
+  cause black screens. Disable them before launching, or press Eject right after Power to turn
+  the console on with plugins disabled for that session.
+- **Resolution.** A handful of games rendered at 480p on the original Xbox are upscaled to 720p
+  on the 360 and lose frames badly — GTA III, GTA: Vice City, Halo: Combat Evolved and
+  Counter-Strike among them. Setting the console's display to 480p fixes it.
 
 ### Found another one?
 
@@ -300,7 +400,8 @@ Pure Rust, no runtime external dependencies:
 - [suppaftp](https://crates.io/crates/suppaftp) — FTP client
 - [XboxUnity](https://www.xboxunity.net) — Xbox360 covers and title updates
 - [MobCats](https://github.com/MobCat/MobCats-original-xbox-game-list) — Xbox covers
+- [FATX](https://github.com/jeanmatthieud/fatx/tree/feat-rust-write) — FATX library, forked from [mborgerson](https://github.com/mborgerson/fatx), to read and write FATX360 filesystem.
 
 ## :scroll: License
 
-GPL-3.0-only. Based on the work of Manuel Quarneti (TinyWiiBackupManager), iliazeus (iso2god-rs) and antangelo (xdvdfs).
+GPL-3.0-only. Based on the work and ideas of Manuel Quarneti (TinyWiiBackupManager).

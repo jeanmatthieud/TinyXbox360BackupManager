@@ -1,0 +1,33 @@
+// SPDX-License-Identifier: GPL-3.0-only
+
+import { IconSet, IconDisplay } from "@lucide";
+import { MyPalette } from "../styling.slint";
+
+// An inline caution, for things the user should read *before* acting rather
+// than as a toast afterwards. Deliberately quiet: an icon and a line of text in
+// the warning colour, no border and no background, so several of them can sit
+// in one card without turning it into a wall of alerts.
+export component WarningNote inherits HorizontalLayout {
+    in property <string> text;
+
+    spacing: 8px;
+
+    VerticalLayout {
+        alignment: start;
+        padding-top: 2px;
+
+        IconDisplay {
+            icon: IconSet.TriangleAlert;
+            stroke: MyPalette.warning;
+            size: 16px;
+        }
+    }
+
+    Text {
+        text: root.text;
+        color: MyPalette.warning;
+        font-size: 12px;
+        wrap: word-wrap;
+        horizontal-stretch: 1;
+    }
+}

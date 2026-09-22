@@ -13,7 +13,7 @@ import { GameTableHeader } from "components/game-table-header.slint";
 import { GamesOtherToolbar } from "components/games-other-toolbar.slint";
 import { UiState } from "ui-state.slint";
 import { DisplayedGame } from "types.slint";
-import { NoTarget } from "components/no-target.slint";
+import { GamesPlaceholder } from "components/games-placeholder.slint";
 
 export component GameTablePage inherits VerticalLayout {
     VerticalLayout {
@@ -22,12 +22,14 @@ export component GameTablePage inherits VerticalLayout {
 
         GamesToolbar { }
 
-        if !UiState.config.target.is-empty: GamesOtherToolbar { }
+        // Same rule as the grid: kept whenever the library holds games, so
+        // the search box stays reachable when the filter matches nothing.
+        if !UiState.config.target.is-empty && UiState.has-games: GamesOtherToolbar { }
     }
 
-    if UiState.config.target.is-empty: NoTarget { }
+    if UiState.config.target.is-empty || UiState.games.length == 0: GamesPlaceholder { }
 
-    if !UiState.config.target.is-empty: ScrollView {
+    if !UiState.config.target.is-empty && UiState.games.length > 0: ScrollView {
         width: parent.width;
         viewport-height: v.preferred-height;
 
