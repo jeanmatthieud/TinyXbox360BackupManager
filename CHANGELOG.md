@@ -1,3 +1,142 @@
+## [0.14.0](https://github.com/jeanmatthieud/TinyXbox360BackupManager/compare/v0.13.0...v0.14.0) (2026-09-17)
+
+### Features
+
+* FATX help URL ([0457924](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/045792423c1799cb9dfa9e8653184fea1ae30afd))
+* Implement directory sweeping to clean up temporary files on startup ([c37ba8c](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/c37ba8ce8767308c6183fb9ab57021a0acf79452))
+* Improves FATX detection on Windows / MacOS (not tested yet); fixes some inconsistencies on game listing during upload / deletion ([a966cc3](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/a966cc32bb32ba554cd2c49bd1f6d75ebffef7d3))
+* Refactor target handling to support FATX drives ([787d312](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/787d31207ef4f3dea02427f472632430596ded7d))
+
+### Bug Fixes
+
+* **ci:** pin clang-22/lld-22 install to llvm-toolchain-bullseye-22 ([5fc09bf](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/5fc09bf2027df80c9ef7c9fb2bf0023bbd76b081))
+* code review fixes ([88f3b5a](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/88f3b5a169f7a5d7b50cd9ac514a2d7e3cd9b1db))
+* Oupsy, link missing ([d3f4bed](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/d3f4bed73bf6d10b739c4254593303783668ab2b))
+* Performances and other things! ([2cd2632](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/2cd2632fb83a797fa21f856ba186c9c6790733f2))
+* Update fatx dependency to specific commit ([d9c861c](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/d9c861c18690f38124e4699ac1c77de55757baa7))
+* Update target architecture names and dependencies in configuration files ([b7bbdcf](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/b7bbdcfec3aba1457268d2997d5b1a7717edbf59))
+
+
+---
+
+
+<a href="https://github.com/sponsors/jeanmatthieud">
+  <img src="https://img.shields.io/badge/GitHub%20Sponsors-Support-ea4aaa?logo=github-sponsors&logoColor=white" alt="GitHub Sponsors">
+</a>
+<a href="https://ko-fi.com/W6I723OON9">
+  <img src="https://img.shields.io/badge/Ko--fi-Support%20Me-ff5e5b?logo=ko-fi&logoColor=white" alt="Ko-fi">
+</a>
+
+
+Between my freelance work and my two little daughters, free time is a rare commodity! I build this tool on my own time, with a lot of late-night coffee.
+
+If TinyXbox360BackupManager saved you time or made you smile, **a donation** (much cheaper than a new game) **helps me keep maintaining and improving it**.
+
+Thanks! 🎮
+
+<hr />
+
+> [!TIP]
+> **:window: Windows installation:**\
+> Most users should download `TinyXbox360BackupManager-vX.X.X-windows-x64.exe`
+
+> [!TIP]
+> **:penguin: Linux installation:**\
+> Most users should download `TinyXbox360BackupManager-vX.X.X-linux-x86_64.AppImage`
+> `chmod +x /path/to/AppImage` after downloading may be required
+
+> [!IMPORTANT]
+> **:apple: macOS installation:**\
+> The app is not notarized, you must allow it manually after installing by running this command in Terminal:\
+> `xattr -rd com.apple.quarantine /Applications/TinyXbox360BackupManager.app`
+
+## [0.13.0](https://github.com/jeanmatthieud/TinyXbox360BackupManager/compare/v0.12.0...v0.13.0) (2026-08-29)
+
+### Features
+
+* Add ABadAvatar version selection with ABadAvatar v1.3-beta! ([9ab3575](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/9ab357598d74fd59ec2902d22a36cc9d92f17b37))
+
+
+---
+
+
+<a href="https://github.com/sponsors/jeanmatthieud">
+  <img src="https://img.shields.io/badge/GitHub%20Sponsors-Support-ea4aaa?logo=github-sponsors&logoColor=white" alt="GitHub Sponsors">
+</a>
+<a href="https://ko-fi.com/W6I723OON9">
+  <img src="https://img.shields.io/badge/Ko--fi-Support%20Me-ff5e5b?logo=ko-fi&logoColor=white" alt="Ko-fi">
+</a>
+
+
+Between my freelance work and my two little daughters, free time is a rare commodity! I build this tool on my own time, with a lot of late-night coffee.
+
+If TinyXbox360BackupManager saved you time or made you smile, **a donation** (much cheaper than a new game) **helps me keep maintaining and improving it**.
+
+Thanks! 🎮
+
+<hr />
+
+> [!TIP]
+> **:window: Windows installation:**\
+> Most users should download `TinyXbox360BackupManager-vX.X.X-windows-x64.exe`
+
+> [!TIP]
+> **:penguin: Linux installation:**\
+> Most users should download `TinyXbox360BackupManager-vX.X.X-linux-x86_64.AppImage`
+> `chmod +x /path/to/AppImage` after downloading may be required
+
+> [!IMPORTANT]
+> **:apple: macOS installation:**\
+> The app is not notarized, you must allow it manually after installing by running this command in Terminal:\
+> `xattr -rd com.apple.quarantine /Applications/TinyXbox360BackupManager.app`
+
+## [0.12.0](https://github.com/jeanmatthieud/TinyXbox360BackupManager/compare/v0.11.0...v0.12.0) (2026-08-20)
+
+### Features
+
+* Add games buttons on the queue page ([96a7c05](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/96a7c0563ace0748c63850533a4a38fb4654779b))
+* Enhance conversion queue management by skipping duplicates and notifying users ([294a0ba](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/294a0ba86334040131a679fecf5234f59c92e8ca))
+* Implement cover source selection for Xbox 360 covers with fallback options ([ba2fabe](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/ba2fabe2137664ed6296673902917933e018321a))
+* Refactor conversion queue to job queue (to properly manage deletions) ([72f79dc](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/72f79dc7c5317ff294cc0a616bc4334be6268877))
+
+### Bug Fixes
+
+* Update navbar buttons ([ef172cf](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/ef172cfc375a2fa5f971355b1b9e5b15be996483))
+
+
+---
+
+
+<a href="https://github.com/sponsors/jeanmatthieud">
+  <img src="https://img.shields.io/badge/GitHub%20Sponsors-Support-ea4aaa?logo=github-sponsors&logoColor=white" alt="GitHub Sponsors">
+</a>
+<a href="https://ko-fi.com/W6I723OON9">
+  <img src="https://img.shields.io/badge/Ko--fi-Support%20Me-ff5e5b?logo=ko-fi&logoColor=white" alt="Ko-fi">
+</a>
+
+
+Between my freelance work and my two little daughters, free time is a rare commodity! I build this tool on my own time, with a lot of late-night coffee.
+
+If TinyXbox360BackupManager saved you time or made you smile, **a donation** (much cheaper than a new game) **helps me keep maintaining and improving it**.
+
+Thanks! 🎮
+
+<hr />
+
+> [!TIP]
+> **:window: Windows installation:**\
+> Most users should download `TinyXbox360BackupManager-vX.X.X-windows-x64.exe`
+
+> [!TIP]
+> **:penguin: Linux installation:**\
+> Most users should download `TinyXbox360BackupManager-vX.X.X-linux-x86_64.AppImage`
+> `chmod +x /path/to/AppImage` after downloading may be required
+
+> [!IMPORTANT]
+> **:apple: macOS installation:**\
+> The app is not notarized, you must allow it manually after installing by running this command in Terminal:\
+> `xattr -rd com.apple.quarantine /Applications/TinyXbox360BackupManager.app`
+
 ## [0.11.0](https://github.com/jeanmatthieud/TinyXbox360BackupManager/compare/v0.10.0...v0.11.0) (2026-08-17)
 
 ### Features
