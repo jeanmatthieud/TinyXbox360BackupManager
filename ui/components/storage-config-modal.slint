@@ -171,8 +171,11 @@ export component StorageConfigModal inherits Modal {
     // given, and that in turn was depending on their own unwrapped preferred
     // width) — a chicken-and-egg that under-counted content height and let
     // the last field sit behind the footer. A fixed width breaks the cycle.
-    min-w: 680px;
-    max-w: 680px;
+    // It only needs to be fixed per state, though: while the target is being
+    // analyzed the body is a single line, and the form's width would leave it
+    // a wide, empty strip.
+    min-w: UiState.analyzing-target ? 440px : 680px;
+    max-w: self.min-w;
     // No min height: the modal must shrink to its content. While the target is
     // being analyzed the body is a single line, and a floor here would leave a
     // large empty gap between the footer and the bottom of the card (the body

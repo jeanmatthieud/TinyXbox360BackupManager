@@ -2,35 +2,24 @@
 // SPDX-FileContributor: Modified by Jean-Matthieu Dechriste (TinyXbox360BackupManager)
 // SPDX-License-Identifier: GPL-3.0-only
 
-import { IconSet, IconDisplay } from "@lucide";
-import { MyPalette } from "../styling.slint";
+import { IconSet } from "@lucide";
+import { EmptyState } from "empty-state.slint";
+import { UiState } from "../ui-state.slint";
 
-export component NoTarget inherits VerticalLayout {
-    alignment: center;
-
-    HorizontalLayout {
-        spacing: 5px;
-        alignment: center;
-        cross-axis-alignment: CrossAxisAlignment.center;
-
-        IconDisplay {
-            icon: IconSet.MoveDownLeft;
-            stroke: MyPalette.foreground;
-            size: 14px;
-        }
-
-        Text {
-            text: "Click on";
-        }
-
-        IconDisplay {
-            icon: IconSet.Zap;
-            stroke: MyPalette.foreground;
-            size: 14px;
-        }
-
-        Text {
-            text: "to select a target";
-        }
+// Shown by every page that needs a target while none is connected. Pages only
+// override `description` to say what they would show once connected.
+export component NoTarget inherits EmptyState {
+    boxed: true;
+    icon: IconSet.HardDrive;
+    title: "No target connected";
+    description: "Connect a USB drive or your console to browse and manage its games";
+    action-icon: IconSet.Zap;
+    // Same rule as the navbar: no target picking while a Toolbox tool is
+    // busy with a console of its own.
+    action-label: UiState.creating-badavatar || UiState.compat-busy
+        ? ""
+        : "Select a target";
+    action => {
+        UiState.selecting-target = true;
     }
 }

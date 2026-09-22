@@ -6,9 +6,8 @@ import { ScrollView } from "std-widgets.slint";
 import { UiState } from "ui-state.slint";
 import { Message, Dispatcher } from "messages.slint";
 import { TargetKind } from "types.slint";
-import { IconSet } from "@lucide";
 import { PageHeader } from "components/page-header.slint";
-import { EmptyState } from "components/empty-state.slint";
+import { NoTarget } from "components/no-target.slint";
 import { DriveInfoCard } from "components/toolbox/drive-info-card.slint";
 import {
     LibraryStorageCard,
@@ -28,20 +27,8 @@ export component DeviceStatusPage inherits VerticalLayout {
         title: "Device status";
     }
 
-    if UiState.config.target.is-empty: EmptyState {
-        boxed: true;
-        icon: IconSet.HardDrive;
-        title: "No target connected";
+    if UiState.config.target.is-empty: NoTarget {
         description: "Connect a USB drive or your console to see its filesystem and storage folders";
-        action-icon: IconSet.Zap;
-        // Same rule as the navbar: no target picking while a Toolbox tool is
-        // busy with a console of its own.
-        action-label: UiState.creating-badavatar || UiState.compat-busy
-            ? ""
-            : "Select a target";
-        action => {
-            UiState.selecting-target = true;
-        }
     }
 
     if !UiState.config.target.is-empty: ScrollView {

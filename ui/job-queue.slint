@@ -81,9 +81,10 @@ export component JobQueuePage inherits VerticalLayout {
 
     // Nothing queued: explain the page instead of showing an empty card.
     if UiState.job-queue.length == 0: EmptyState {
+        boxed: true;
         icon: IconSet.ListChecks;
         title: "The queue is empty";
-        description: "Games you add or delete are handled here one at a time. Nothing is pending right now.";
+        description: "Games you add or delete are handled here one at a time. Nothing is pending right now";
     }
 
     if UiState.job-queue.length > 0: ScrollView {

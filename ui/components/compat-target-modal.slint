@@ -48,22 +48,22 @@ export component CompatTargetModal inherits Modal {
             Rectangle { } // Spacing
 
             SelectableCard {
-                icon: IconSet.HardDrive;
-                title: "Xbox 360 Internal Hard Drive (FATX)";
-                subtitle: "Connect the console's own drive to this computer.";
-                selected: choice == CompatChoice.fatx;
-                clicked => {
-                    choice = CompatChoice.fatx;
-                }
-            }
-
-            SelectableCard {
                 icon: IconSet.Network;
                 title: "Remote Xbox 360 over Network (WiFi / Ethernet)";
                 subtitle: "Write over FTP, with the console powered on.";
                 selected: choice == CompatChoice.network;
                 clicked => {
                     choice = CompatChoice.network;
+                }
+            }
+
+            SelectableCard {
+                icon: IconSet.HardDrive;
+                title: "Xbox 360 Internal Hard Drive (FATX)";
+                subtitle: "Connect the console's own drive to this computer.";
+                selected: choice == CompatChoice.fatx;
+                clicked => {
+                    choice = CompatChoice.fatx;
                 }
             }
         }
