@@ -335,17 +335,16 @@ fn assemble(dest: &Path, aba_dir: &Path, xe_dir: &Path, aurora_dir: &Path) -> Re
     fs::create_dir_all(&payload_dir)?;
     fs::create_dir_all(&aurora_out)?;
 
-    // ABadAvatar: the trigger profile under Content/ and the *.bin stages.
+    // ABadAvatar: the trigger profile under Content/ and its whole payload
+    // folder, as released. The payload is not only the *.bin stages: v1.3
+    // also ships GamerProfile.xex, the clean copy its recovery mode (Y held
+    // while the exploit triggers) writes back to flash right after deleting
+    // the console's own — leaving it out would wipe that file from the NAND.
     let aba_content =
         find_entry(aba_dir, "Content", true).context("ABadAvatar: Content folder not found")?;
     copy_tree(&aba_content, &content_dir)?;
     if let Some(aba_payload) = find_entry(aba_dir, "BadUpdatePayload", true) {
-        for entry in fs::read_dir(&aba_payload)?.flatten() {
-            let path = entry.path();
-            if path.extension().is_some_and(|e| e.eq_ignore_ascii_case("bin")) {
-                fs::copy(&path, payload_dir.join(entry.file_name()))?;
-            }
-        }
+        copy_tree(&aba_payload, &payload_dir)?;
     }
 
     // XeUnshackle: the folder that directly contains launch.ini holds the full
