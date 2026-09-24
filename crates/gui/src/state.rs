@@ -77,6 +77,9 @@ pub struct State {
     /// Destination picked for the BadAvatar key, awaiting confirmation in the
     /// modal before the creation thread actually starts.
     pub badavatar_pending_dest: Option<PathBuf>,
+    /// The `launch.ini` shown in the Dashlaunch card, which its switches
+    /// write back to. `None` when the target has none.
+    pub dashlaunch_location: Option<txbm_core::dashlaunch::IniLocation>,
     pub is_installing_compat: bool,
     /// True while the read-only inspection of a picked console is in flight.
     /// A second one must not start: both threads deposit their answer in the
@@ -142,6 +145,7 @@ impl State {
             rescan_deferred: false,
             is_creating_badavatar: false,
             badavatar_pending_dest: None,
+            dashlaunch_location: None,
             is_installing_compat: false,
             is_inspecting_compat: false,
             compat_pending: None,

@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 use crate::{
-    AppWindow, Dispatcher, DisplayedConfig, DisplayedDriveInfo, DisplayedFatxDrive, DisplayedGame,
+    AppWindow, Dispatcher, DisplayedConfig, DisplayedDashlaunch, DisplayedDriveInfo, DisplayedFatxDrive, DisplayedGame,
     DisplayedGameToAdd, DisplayedJob, DisplayedStoragePath, DisplayedTitleUpdate, JobKind, Message,
     Notification, Page,
     PendingQueueAction, UiState, covers, dialogs, game_details, jobs::perform_job,
@@ -19,7 +19,8 @@ use std::{
     sync::{Arc, Mutex, atomic::AtomicBool},
 };
 use txbm_core::{
-    badavatar::UrlField, config::TargetKind, data_dir::DATA_DIR, drive_info::DriveInfo,
+    badavatar::UrlField, config::TargetKind,
+    dashlaunch::{LICENSE_PATCHES, LaunchIni}, data_dir::DATA_DIR, drive_info::DriveInfo,
     ftp::FtpSession, game::Game, game_details::ContentKind, job_queue::QueuedJob,
     target::{StorageConfig, Target, TargetAnalysis},
 };
@@ -43,6 +44,14 @@ static ANALYSIS_RESULT: Mutex<Option<anyhow::Result<TargetAnalysis>>> = Mutex::n
 /// inspection thread then retrieved in CompatTargetReady.
 /// Whether the picked console already holds compatibility files.
 static COMPAT_INSPECTION: Mutex<Option<anyhow::Result<bool>>> = Mutex::new(None);
+
+/// Result of reading (`false`) or rewriting (`true`) the target's `launch.ini`,
+/// tagged with the [`Target::remote_key`] it came from, so an answer that
+/// arrives after the user switched targets is dropped. Deposited by the worker
+/// thread, retrieved in DashlaunchFetched.
+#[allow(clippy::type_complexity)]
+static DASHLAUNCH_RESULT: Mutex<Option<(String, bool, anyhow::Result<Option<LaunchIni>>)>> =
+    Mutex::new(None);
 
 /// Result of the asynchronous network scan started from the FTP modal:
 /// `Some(ip)` when a console was found, `None` when the scan finished without
@@ -904,6 +913,10 @@ impl State {
                 self.config.contents.mount_point = PathBuf::new();
                 self.config.contents.fatx = txbm_core::fatx::FatxConfig::default();
 
+                self.dashlaunch_location = None;
+                let app = weak.upgrade().unwrap();
+                app.global::<UiState<'_>>().set_dashlaunch(DisplayedDashlaunch::default());
+
                 message_queue.push_back((Message::SyncConfig, SharedString::new()));
                 message_queue.push_back((Message::RefreshAll, SharedString::new()));
             }
@@ -957,6 +970,8 @@ impl State {
                             // connection in this session left behind.
                             message_queue
                                 .push_back((Message::FetchAuroraPaths, SharedString::new()));
+                            message_queue
+                                .push_back((Message::FetchDashlaunch, SharedString::new()));
                         } else {
                             let mut candidates: Vec<SharedString> = analysis
                                 .candidates
@@ -1028,6 +1043,10 @@ impl State {
                                     .invoke_dispatch(Message::RefreshAll, SharedString::new());
                                 dispatcher.invoke_dispatch(
                                     Message::FetchAuroraPaths,
+                                    SharedString::new(),
+                                );
+                                dispatcher.invoke_dispatch(
+                                    Message::FetchDashlaunch,
                                     SharedString::new(),
                                 );
                             }
@@ -1561,6 +1580,117 @@ impl State {
                                 }
                             });
                         });
+                    }
+                }
+            }
+            Message::FetchDashlaunch => {
+                let Some(target) = Target::from_config(&self.config.contents) else {
+                    return;
+                };
+                let key = target.remote_key();
+                let weak = weak.clone();
+                std::thread::spawn(move || {
+                    let res = target.find_launch_ini();
+                    *DASHLAUNCH_RESULT.lock().unwrap() = Some((key, false, res));
+                    let _ = weak.upgrade_in_event_loop(|app| {
+                        app.global::<Dispatcher<'_>>()
+                            .invoke_dispatch(Message::DashlaunchFetched, SharedString::new());
+                    });
+                });
+            }
+            // Payload: `key=true,key=false,…`. Deliberately outside the job
+            // queue: the card is veiled while a job runs, and the write is a
+            // single small file that is over in a blink.
+            Message::SetDashlaunch => {
+                if self.is_job_running {
+                    return;
+                }
+                let (Some(target), Some(location)) = (
+                    Target::from_config(&self.config.contents),
+                    self.dashlaunch_location.clone(),
+                ) else {
+                    return;
+                };
+                // Only the license patches are writable: the protections are
+                // shown read-only on purpose.
+                let changes: Vec<(&'static str, bool)> = payload
+                    .split(',')
+                    .filter_map(|kv| kv.split_once('='))
+                    .filter_map(|(k, v)| {
+                        let key = LICENSE_PATCHES.iter().find(|p| **p == k.trim())?;
+                        Some((*key, v.trim() == "true"))
+                    })
+                    .collect();
+                if changes.is_empty() {
+                    return;
+                }
+
+                // Shown at once rather than after the round trip; the answer
+                // then replaces it with what the file actually says.
+                let app = weak.upgrade().unwrap();
+                let ui = app.global::<UiState<'_>>();
+                let mut shown = ui.get_dashlaunch();
+                for &(key, value) in &changes {
+                    match key {
+                        "contpatch" => shown.contpatch = value,
+                        "xblapatch" => shown.xblapatch = value,
+                        _ => shown.licpatch = value,
+                    }
+                }
+                ui.set_dashlaunch(shown);
+                ui.set_writing_dashlaunch(true);
+
+                let key = target.remote_key();
+                let weak = weak.clone();
+                std::thread::spawn(move || {
+                    let res = target
+                        .update_launch_ini(&location, &changes)
+                        .map(|settings| Some(LaunchIni { location, settings }));
+                    *DASHLAUNCH_RESULT.lock().unwrap() = Some((key, true, res));
+                    let _ = weak.upgrade_in_event_loop(|app| {
+                        app.global::<Dispatcher<'_>>()
+                            .invoke_dispatch(Message::DashlaunchFetched, SharedString::new());
+                    });
+                });
+            }
+            Message::DashlaunchFetched => {
+                let Some((key, was_write, res)) = DASHLAUNCH_RESULT.lock().unwrap().take() else {
+                    return;
+                };
+                let app = weak.upgrade().unwrap();
+                let ui = app.global::<UiState<'_>>();
+                if was_write {
+                    ui.set_writing_dashlaunch(false);
+                }
+                let current = Target::from_config(&self.config.contents).map(|t| t.remote_key());
+                if current.as_deref() != Some(key.as_str()) {
+                    return;
+                }
+
+                match res {
+                    Ok(Some(ini)) => {
+                        ui.set_dashlaunch(displayed_dashlaunch(&ini));
+                        self.dashlaunch_location = Some(ini.location);
+                    }
+                    Ok(None) => {
+                        ui.set_dashlaunch(DisplayedDashlaunch::default());
+                        self.dashlaunch_location = None;
+                    }
+                    // The switch was already flipped on screen: say so, and
+                    // read the file again to show what it really holds.
+                    Err(e) if was_write => {
+                        message_queue.push_back((
+                            Message::NotifyError,
+                            slint::format!("Couldn't update launch.ini: {e:#}"),
+                        ));
+                        message_queue.push_back((Message::FetchDashlaunch, SharedString::new()));
+                    }
+                    // A read failure only hides the card: the Aurora scan paths
+                    // card already reports a target that can't be read.
+                    Err(e) => {
+                        eprintln!("Failed to read launch.ini: {e:#}");
+                        ui.set_dashlaunch(DisplayedDashlaunch::default());
+                        self.dashlaunch_location = None;
                     }
                 }
             }
@@ -2408,6 +2538,19 @@ impl State {
             #[cfg(not(windows))]
             Message::SetWindowColorLight | Message::SetWindowColorDark => {}
         }
+    }
+}
+
+fn displayed_dashlaunch(ini: &LaunchIni) -> DisplayedDashlaunch {
+    let s = &ini.settings;
+    DisplayedDashlaunch {
+        found: true,
+        location: ini.location.display().into(),
+        contpatch: s.contpatch,
+        xblapatch: s.xblapatch,
+        licpatch: s.licpatch,
+        liveblock: s.liveblock,
+        noupdater: s.noupdater,
     }
 }
 

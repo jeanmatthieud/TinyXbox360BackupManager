@@ -5,6 +5,7 @@
 import {
     DisplayedBadAvatarConfig,
     DisplayedCompatConfig,
+    DisplayedDashlaunch,
     DisplayedConfig,
     DisplayedDriveInfo,
     DisplayedFatxDrive,
@@ -185,6 +186,12 @@ export global UiState {
     // True when the Aurora coverage comparison applies (FTP console). False for
     // a local drive, where storage paths are only listed.
     in-out property <bool> storage-aurora-compared: false;
+
+    // Dashlaunch's launch.ini on the target, if it has one.
+    in-out property <DisplayedDashlaunch> dashlaunch;
+    // True while launch.ini is being rewritten: its switches are locked so a
+    // second write never starts beside the first.
+    in-out property <bool> writing-dashlaunch: false;
 
     // True while the BadAvatar USB-key drive-picker modal is shown.
     in-out property <bool> selecting-badavatar-target: false;

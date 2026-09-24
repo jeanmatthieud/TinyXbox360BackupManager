@@ -1120,7 +1120,7 @@ impl Target {
 }
 
 /// Case-insensitive lookup of a direct child (file or dir) of `dir`.
-fn find_child_ci(dir: &Path, name: &str) -> Option<PathBuf> {
+pub(crate) fn find_child_ci(dir: &Path, name: &str) -> Option<PathBuf> {
     std::fs::read_dir(dir)
         .ok()?
         .flatten()

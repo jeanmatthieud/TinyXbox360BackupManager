@@ -129,6 +129,22 @@ export struct DisplayedCompatConfig {
     update-configs: bool,
 }
 
+// Dashlaunch's `launch.ini` on the connected target (Device status page).
+// See `txbm_core::dashlaunch`.
+export struct DisplayedDashlaunch {
+    // False until a launch.ini was found: the card stays hidden.
+    found: bool,
+    // Where it was found, as the user knows the path (`Usb0:\launch.ini`).
+    location: string,
+    // Content bought on another console: add-ons, Arcade games, license mask.
+    contpatch: bool,
+    xblapatch: bool,
+    licpatch: bool,
+    // Protections, shown read-only.
+    liveblock: bool,
+    noupdater: bool,
+}
+
 export struct DisplayedRecentLocation {
     // Folder name (local drive), IP (console over FTP) or device path (a
     // console hard drive connected here).

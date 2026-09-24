@@ -14,12 +14,16 @@ import {
 } from "components/toolbox/library-storage-card.slint";
 import { ConsoleCard } from "components/toolbox/console-card.slint";
 import { AuroraScanPathsCard } from "components/toolbox/aurora-scan-paths-card.slint";
+import { DashlaunchCard } from "components/toolbox/dashlaunch-card.slint";
 
 // Health / storage report for the currently connected target.
 export component DeviceStatusPage inherits VerticalLayout {
     init => {
         if !UiState.config.target.is-empty && !UiState.fetching-aurora-paths {
             Dispatcher.dispatch(Message.FetchAuroraPaths, "");
+        }
+        if !UiState.config.target.is-empty && !UiState.writing-dashlaunch {
+            Dispatcher.dispatch(Message.FetchDashlaunch, "");
         }
     }
 
@@ -51,6 +55,10 @@ export component DeviceStatusPage inherits VerticalLayout {
             // Aurora scan paths: always for a console; for a local drive only
             // when it carries an Aurora install (otherwise nothing to show).
             if !UiState.config.target.is-empty && (UiState.config.target-kind != TargetKind.Local || UiState.aurora-scan-paths.length > 0): AuroraScanPathsCard { }
+
+            // Dashlaunch's launch.ini (XeUnshackle, RGH): only when the target
+            // has one.
+            if UiState.dashlaunch.found: DashlaunchCard { }
         }
     }
 }

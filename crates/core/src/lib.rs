@@ -8,6 +8,7 @@ pub mod badavatar;
 pub mod config;
 pub mod convert;
 pub mod covers;
+pub mod dashlaunch;
 pub mod data_dir;
 pub mod download;
 pub mod drive_info;

@@ -1,0 +1,70 @@
+// SPDX-License-Identifier: GPL-3.0-only
+
+import { MyPalette } from "../styling.slint";
+
+// An on/off switch that can also say "partly on".
+//
+// Unlike std-widgets' Switch, `checked` is a plain input: a click only raises
+// `toggled`, and the owner decides the new state. That keeps the switch bound
+// to the model (a Switch that flips itself breaks its `checked` binding) and
+// makes the third, `mixed`, state possible: the knob then rests in the middle
+// with a dash, which reads as "neither" without any legend.
+export component ToggleSwitch inherits Rectangle {
+    in property <bool> checked;
+    in property <bool> mixed;
+    in property <bool> enabled: true;
+    // Compact variant, for the rows nested under a main switch.
+    in property <bool> small;
+
+    callback toggled();
+
+    private property <length> knob-size: root.height - 6px;
+    private property <bool> lit: root.checked || root.mixed;
+
+    width: root.small ? 34px : 42px;
+    height: root.small ? 18px : 22px;
+
+    // The animation and opacity live on this inner track, not on the root:
+    // on the root they would turn it into a layer that stops following the
+    // layout it sits in.
+    Rectangle {
+        border-radius: root.height / 2;
+        background: root.lit ? MyPalette.accent-background.transparentize(root.mixed ? 0.45 : 0) : MyPalette.foreground.transparentize(0.8);
+        opacity: root.enabled ? 1 : 0.45;
+
+        animate background { duration: 150ms; }
+
+        Rectangle {
+            width: root.knob-size;
+            height: root.knob-size;
+            y: 3px;
+            x: root.mixed
+                ? (root.width - self.width) / 2
+                : root.checked ? root.width - self.width - 3px : 3px;
+            border-radius: self.height / 2;
+            // accent-foreground is what reads on the accent (dark on the dark
+            // theme's light-blue accent); the mixed knob keeps its dash visible.
+            background: root.checked && !root.mixed ? MyPalette.accent-foreground : white;
+            drop-shadow-color: #00000040;
+            drop-shadow-blur: 2px;
+            drop-shadow-offset-y: 1px;
+
+            animate x { duration: 150ms; easing: ease-out; }
+
+            if root.mixed: Rectangle {
+                width: parent.width * 0.5;
+                height: 2px;
+                border-radius: 1px;
+                background: MyPalette.accent-background;
+            }
+        }
+    }
+
+    TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: root.enabled ? pointer : default;
+        clicked => {
+            root.toggled();
+        }
+    }
+}
