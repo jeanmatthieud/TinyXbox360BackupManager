@@ -135,6 +135,14 @@ export component BadAvatarCard inherits ToolboxCard {
         }
     }
 
+    CheckBox {
+        text: "Auto start Aurora without delay (XeUnshackle Max)";
+        checked: UiState.badavatar.xeunshackle-autostart;
+        toggled => {
+            Dispatcher.dispatch(Message.ToggleBadAvatarAutostart, "");
+        }
+    }
+
     if show-badavatar-settings: VerticalLayout {
         spacing: 8px;
 
@@ -158,6 +166,13 @@ export component BadAvatarCard inherits ToolboxCard {
             url: UiState.badavatar.xeunshackle-url;
             default-url: UiState.badavatar.xeunshackle-default-url;
             field-key: "xeunshackle";
+        }
+
+        BadAvatarUrlField {
+            label: "XeUnshackle Max (used when Aurora auto start is checked)";
+            url: UiState.badavatar.xeunshackle-max-url;
+            default-url: UiState.badavatar.xeunshackle-max-default-url;
+            field-key: "xeunshackle_max";
         }
 
         BadAvatarUrlField {

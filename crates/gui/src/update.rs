@@ -1921,6 +1921,11 @@ impl State {
                 *flag = !*flag;
                 message_queue.push_back((Message::SyncConfig, SharedString::new()));
             }
+            Message::ToggleBadAvatarAutostart => {
+                let flag = &mut self.config.contents.badavatar.xeunshackle_autostart;
+                *flag = !*flag;
+                message_queue.push_back((Message::SyncConfig, SharedString::new()));
+            }
             Message::CreateBadAvatar => {
                 // See `Message::InstallCompat`: one Toolbox tool at a time.
                 if self.is_creating_badavatar

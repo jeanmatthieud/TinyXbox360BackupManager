@@ -29,6 +29,13 @@ pub const DEFAULT_ABADAVATAR_URL: &str =
     "https://github.com/bibarub/Xbox360BadUpdate/releases/download/avatar-v1.3-beta/ABadAvatar_v1.3-beta.zip";
 pub const DEFAULT_XEUNSHACKLE_URL: &str =
     "https://github.com/Byrom90/XeUnshackle/releases/download/v1.03/XeUnshackle-BETA-v1_03.zip";
+/// XeUnshackle Max, a fork of XeUnshackle that can skip its boot video and exit
+/// straight to the Dashlaunch default item. Used instead of
+/// [`DEFAULT_XEUNSHACKLE_URL`] when [`BadAvatarConfig::xeunshackle_autostart`]
+/// is set. Its package deliberately leaves out `Xbdm.xex` (a Microsoft binary),
+/// which Dashlaunch then simply fails to load as a plugin.
+pub const DEFAULT_XEUNSHACKLE_MAX_URL: &str =
+    "https://github.com/klofi/XeUnshackle-Max/releases/download/v1.0.0/XeUnshackle-Max-v1.0.0.zip";
 /// Aurora is officially distributed as a `.rar` (phoenix.xboxunity.net), which
 /// this app cannot extract: adding an UnRAR dependency would conflict with the
 /// project's GPL-3.0-only license. We use a `.zip` / `.7z` mirror
@@ -54,12 +61,13 @@ pub fn abadavatar_version_index(url: &str) -> Option<usize> {
     ABADAVATAR_VERSIONS.iter().position(|(_, u)| *u == url)
 }
 
-/// The four downloadable components, used as the stable key for per-field
+/// The downloadable components, used as the stable key for per-field
 /// URL overrides and reset in the UI.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UrlField {
     Abadavatar,
     Xeunshackle,
+    XeunshackleMax,
     Aurora,
     SystemUpdate,
 }
@@ -70,6 +78,7 @@ impl UrlField {
         match key {
             "abadavatar" => Some(Self::Abadavatar),
             "xeunshackle" => Some(Self::Xeunshackle),
+            "xeunshackle_max" => Some(Self::XeunshackleMax),
             "aurora" => Some(Self::Aurora),
             "system_update" => Some(Self::SystemUpdate),
             _ => None,
@@ -80,6 +89,7 @@ impl UrlField {
         match self {
             Self::Abadavatar => DEFAULT_ABADAVATAR_URL,
             Self::Xeunshackle => DEFAULT_XEUNSHACKLE_URL,
+            Self::XeunshackleMax => DEFAULT_XEUNSHACKLE_MAX_URL,
             Self::Aurora => DEFAULT_AURORA_URL,
             Self::SystemUpdate => DEFAULT_SYSTEM_UPDATE_URL,
         }
@@ -90,6 +100,7 @@ impl UrlField {
         match self {
             Self::Abadavatar => "ABadAvatar",
             Self::Xeunshackle => "XeUnshackle",
+            Self::XeunshackleMax => "XeUnshackle Max",
             Self::Aurora => "Aurora",
             Self::SystemUpdate => "system update",
         }
@@ -97,15 +108,20 @@ impl UrlField {
 }
 
 /// Persisted BadAvatar settings: per-component URL overrides (`None` = use the
-/// built-in default) plus whether to also fetch the official system update.
+/// built-in default) plus whether to also fetch the official system update and
+/// whether to boot straight into Aurora with XeUnshackle Max.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct BadAvatarConfig {
     pub abadavatar_url: Option<String>,
     pub xeunshackle_url: Option<String>,
+    pub xeunshackle_max_url: Option<String>,
     pub aurora_url: Option<String>,
     pub system_update_url: Option<String>,
     pub include_system_update: bool,
+    /// Use XeUnshackle Max, configured to skip its boot video and exit to
+    /// Aurora without delay, instead of the stock XeUnshackle.
+    pub xeunshackle_autostart: bool,
 }
 
 impl BadAvatarConfig {
@@ -113,6 +129,7 @@ impl BadAvatarConfig {
         match field {
             UrlField::Abadavatar => &self.abadavatar_url,
             UrlField::Xeunshackle => &self.xeunshackle_url,
+            UrlField::XeunshackleMax => &self.xeunshackle_max_url,
             UrlField::Aurora => &self.aurora_url,
             UrlField::SystemUpdate => &self.system_update_url,
         }
@@ -122,6 +139,7 @@ impl BadAvatarConfig {
         match field {
             UrlField::Abadavatar => &mut self.abadavatar_url,
             UrlField::Xeunshackle => &mut self.xeunshackle_url,
+            UrlField::XeunshackleMax => &mut self.xeunshackle_max_url,
             UrlField::Aurora => &mut self.aurora_url,
             UrlField::SystemUpdate => &mut self.system_update_url,
         }
@@ -132,6 +150,15 @@ impl BadAvatarConfig {
         self.slot(field)
             .as_deref()
             .unwrap_or_else(|| field.default_url())
+    }
+
+    /// The XeUnshackle flavour this configuration installs.
+    pub fn xeunshackle_field(&self) -> UrlField {
+        if self.xeunshackle_autostart {
+            UrlField::XeunshackleMax
+        } else {
+            UrlField::Xeunshackle
+        }
     }
 
     /// Records a user override for a component's URL.
@@ -179,7 +206,8 @@ pub fn create_badavatar(
 
     // 2. Download every component into the working directory.
     let aba_archive = download_component(UrlField::Abadavatar, cfg, &work, cancel, status)?;
-    let xe_archive = download_component(UrlField::Xeunshackle, cfg, &work, cancel, status)?;
+    let xe_field = cfg.xeunshackle_field();
+    let xe_archive = download_component(xe_field, cfg, &work, cancel, status)?;
     let aurora_archive = download_component(UrlField::Aurora, cfg, &work, cancel, status)?;
     let su_archive = if cfg.include_system_update {
         Some(download_component(UrlField::SystemUpdate, cfg, &work, cancel, status)?)
@@ -191,7 +219,7 @@ pub fn create_badavatar(
     let aba_dir =
         extract_component(&aba_archive, "abadavatar", UrlField::Abadavatar, cancel, status)?;
     let xe_dir =
-        extract_component(&xe_archive, "xeunshackle", UrlField::Xeunshackle, cancel, status)?;
+        extract_component(&xe_archive, "xeunshackle", xe_field, cancel, status)?;
     let aurora_dir =
         extract_component(&aurora_archive, "aurora", UrlField::Aurora, cancel, status)?;
     let su_dir = match &su_archive {
@@ -211,8 +239,12 @@ pub fn create_badavatar(
     assemble(dest, &aba_dir, &xe_dir, &aurora_dir)?;
     check_cancel(cancel)?;
 
-    // 5. Point launch.ini's default at Aurora.
+    // 5. Point launch.ini's default at Aurora, and have XeUnshackle Max exit
+    //    to it straight away.
     set_launch_default(dest)?;
+    if cfg.xeunshackle_autostart {
+        write_xeunshackle_max_config(dest)?;
+    }
 
     // 6. Optional official system update.
     if let Some(su_dir) = &su_dir {
@@ -343,6 +375,16 @@ fn assemble(dest: &Path, aba_dir: &Path, xe_dir: &Path, aurora_dir: &Path) -> Re
     Ok(())
 }
 
+/// Writes XeUnshackle Max's `XeUnshackleConfig.txt` (read from the folder of its
+/// `default.xex`): no boot video, and an immediate exit to the Dashlaunch
+/// default item, i.e. Aurora. The other keys keep the app's own defaults but are
+/// spelled out, as the app itself does when it creates the file.
+fn write_xeunshackle_max_config(dest: &Path) -> Result<()> {
+    const CONFIG: &str = "AutoStartDelay=0\r\nPlayVideo=0\r\nShowKeys=1\r\nVideoVolume=100\r\n";
+    fs::write(dest.join("BadUpdatePayload").join("XeUnshackleConfig.txt"), CONFIG)
+        .context("writing XeUnshackleConfig.txt")
+}
+
 /// Rewrites `launch.ini` so Aurora is the default entry booted from the key.
 fn set_launch_default(dest: &Path) -> Result<()> {
     const DEFAULT_LINE: &str = "Default = Usb:\\Aurora\\Aurora.xex";
@@ -387,7 +429,8 @@ fn write_install_notes(dest: &Path, cfg: &BadAvatarConfig) -> Result<()> {
     notes.push_str("https://github.com/jeanmatthieud/TinyXbox360BackupManager\n\n");
     notes.push_str("Components (source URLs used):\n");
     notes.push_str(&format!("- ABadAvatar:    {}\n", cfg.url(UrlField::Abadavatar)));
-    notes.push_str(&format!("- XeUnshackle:   {}\n", cfg.url(UrlField::Xeunshackle)));
+    let xe_field = cfg.xeunshackle_field();
+    notes.push_str(&format!("- {:<14} {}\n", format!("{}:", xe_field.label()), cfg.url(xe_field)));
     notes.push_str(&format!("- Aurora:        {}\n", cfg.url(UrlField::Aurora)));
     if cfg.include_system_update {
         notes.push_str(&format!(
@@ -395,7 +438,14 @@ fn write_install_notes(dest: &Path, cfg: &BadAvatarConfig) -> Result<()> {
             cfg.url(UrlField::SystemUpdate)
         ));
     }
-    notes.push_str("\nlaunch.ini Default set to: Usb:\\Aurora\\Aurora.xex\n\n");
+    notes.push_str("\nlaunch.ini Default set to: Usb:\\Aurora\\Aurora.xex\n");
+    if cfg.xeunshackle_autostart {
+        notes.push_str(
+            "XeUnshackle Max: boot video off, exits to Aurora without delay \
+             (BadUpdatePayload\\XeUnshackleConfig.txt).\n",
+        );
+    }
+    notes.push('\n');
     notes.push_str("Usage reminders:\n");
     notes.push_str("- Disconnect Wi-Fi/Ethernet before booting the console (avoids an Xbox Live ban).\n");
     notes.push_str("- The boot chain triggers on the profile/avatar selection screen.\n");
@@ -412,6 +462,7 @@ fn key_of(field: UrlField) -> &'static str {
     match field {
         UrlField::Abadavatar => "abadavatar",
         UrlField::Xeunshackle => "xeunshackle",
+        UrlField::XeunshackleMax => "xeunshacklemax",
         UrlField::Aurora => "aurora",
         UrlField::SystemUpdate => "systemupdate",
     }
