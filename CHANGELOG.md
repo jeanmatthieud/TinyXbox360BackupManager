@@ -1,3 +1,51 @@
+## [0.15.0](https://github.com/jeanmatthieud/TinyXbox360BackupManager/compare/v0.14.0...v0.15.0) (2026-09-22)
+
+### Features
+
+* **draft:** Quirk for Splinter Cell - Blacklist (disc 2) ([36acafe](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/36acafe5bcfca15cd4d0ea927fad430fc7f61a91))
+* Quirks for Watch Dogs and Splinter Cell Blacklist (disc 2) ([c1e0068](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/c1e00685b1d491a9365cfce84d61c6d40963e018))
+* Update / Backup / Restore the Xbox OG compatibility partition ([c5d9237](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/c5d9237d50907b241115f3421e29e1d7b84aea69))
+* Xbox OG - Update XEFU config files ([653d512](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/653d512486da4e79624b3f6f6115c516539df317))
+
+### Bug Fixes
+
+* List GOD games whose title folder is not named after the TitleID. ([a7efa31](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/a7efa31315d4a4fb50d5a5a2c3e291c2b1fff486))
+* UI missing padding ([43f87a5](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/43f87a5609e9ba4eb792f10b80772f60691e6b21))
+
+
+---
+
+
+<a href="https://github.com/sponsors/jeanmatthieud">
+  <img src="https://img.shields.io/badge/GitHub%20Sponsors-Support-ea4aaa?logo=github-sponsors&logoColor=white" alt="GitHub Sponsors">
+</a>
+<a href="https://ko-fi.com/W6I723OON9">
+  <img src="https://img.shields.io/badge/Ko--fi-Support%20Me-ff5e5b?logo=ko-fi&logoColor=white" alt="Ko-fi">
+</a>
+
+
+Between my freelance work and my two little daughters, free time is a rare commodity! I build this tool on my own time, with a lot of late-night coffee.
+
+If TinyXbox360BackupManager saved you time or made you smile, **a donation** (much cheaper than a new game) **helps me keep maintaining and improving it**.
+
+Thanks! 🎮
+
+<hr />
+
+> [!TIP]
+> **:window: Windows installation:**\
+> Most users should download `TinyXbox360BackupManager-vX.X.X-windows-x64.exe`
+
+> [!TIP]
+> **:penguin: Linux installation:**\
+> Most users should download `TinyXbox360BackupManager-vX.X.X-linux-x86_64.AppImage`
+> `chmod +x /path/to/AppImage` after downloading may be required
+
+> [!IMPORTANT]
+> **:apple: macOS installation:**\
+> The app is not notarized, you must allow it manually after installing by running this command in Terminal:\
+> `xattr -rd com.apple.quarantine /Applications/TinyXbox360BackupManager.app`
+
 ## [0.14.0](https://github.com/jeanmatthieud/TinyXbox360BackupManager/compare/v0.13.0...v0.14.0) (2026-09-17)
 
 ### Features
