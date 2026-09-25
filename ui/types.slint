@@ -286,6 +286,9 @@ export struct DisplayedGameComponent {
     description: string,
     size-gib: float,
     status: ComponentStatus,
+    // Tooltip of the lock icon when the package's license restricts it to
+    // some consoles / profiles; empty when it plays anywhere.
+    license-lock: string,
 }
 
 export struct DisplayedTitleUpdate {

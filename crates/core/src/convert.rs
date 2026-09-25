@@ -93,7 +93,7 @@ const CLEANUP_TEMP: &str = "🗑  Cleaning up temporary files…";
 pub enum InputKind {
     /// Optical disc image (360 game, OG game or content disc).
     Iso(IsoInfo),
-    /// .7z / .zip archive: either XBLA (STFS) packages or a wrapped ISO.
+    /// .7z / .zip / .rar archive: either XBLA (STFS) packages or a wrapped ISO.
     Archive,
     /// Bare STFS package (CON / LIVE / PIRS).
     StfsPackage(StfsInfo),
@@ -113,7 +113,7 @@ pub fn inspect_input(path: &Path) -> Result<InputKind> {
     }
     // Last resort: maybe a renamed ISO.
     iso_info::inspect(path).map(InputKind::Iso).context(
-        "unrecognized file: neither an ISO image, a .7z/.zip archive, \
+        "unrecognized file: neither an ISO image, a .7z/.zip/.rar archive, \
          nor an STFS package (CON/LIVE/PIRS)",
     )
 }
@@ -864,7 +864,7 @@ fn install_stfs_package(
     Ok(())
 }
 
-/// Extracts a .7z/.zip archive and installs what it contains. Two shapes are
+/// Extracts a .7z/.zip/.rar archive and installs what it contains. Two shapes are
 /// supported: an archive wrapping a single ISO (plus optional .txt/.md notes),
 /// which is converted like a normal ISO import; or a set of XBLA/DLC/title-
 /// update STFS packages, in which case an Arcade package is required.

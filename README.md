@@ -108,14 +108,14 @@ Everything below is optional reading — the app does it for you.
 
 ### Input types and processing
 
-Provide an **ISO** image or an **Arcade (XBLA) game** (a `.7z`/`.zip` archive or a bare STFS package); the app detects the input and converts/installs it:
+Provide an **ISO** image or an **Arcade (XBLA) game** (a `.7z`/`.zip`/`.rar` archive or a bare STFS package); the app detects the input and converts/installs it:
 
 | Detected input type | Processing | Goes to |
 |---|---|---|
 | Xbox 360 game ISO (`default.xex`) | Conversion to **GOD** (Games on Demand)<br />*or*<br />**Extraction** of the content | GOD folder → `<TitleID>/00007000/`<br />*or*<br />Extracted-XEX folder → `<Game Name>/` |
 | Original Xbox game ISO (`default.xbe`) | **Extraction** of the content | Extracted-XBE folder → `<Game Name>/` |
 | Install / **Expansion Installer** disc (no executable; contains DLC and title updates) | Extraction and merge of the `Content` folder | GOD folder → `<TitleID>/<type>/` |
-| **Arcade (XBLA) game** (`.7z`/`.zip` archive) | Extraction, verification of the **Arcade** STFS package (title, TitleID) | GOD folder → `<TitleID>/000D0000/` |
+| **Arcade (XBLA) game** (`.7z`/`.zip`/`.rar` archive) | Extraction, verification of the **Arcade** STFS package (title, TitleID) | GOD folder → `<TitleID>/000D0000/` |
 | STFS package (`LIVE`/`CON `/`PIRS`, usually no extension) | Installed as-is per its content type | GOD folder → `<TitleID>/<type>/` |
 
 **DLC and title updates** bundled with an Arcade game in an archive are installed too (respectively in `00000002/` and `000B0000/`), so unlocks work out of the box. They can also be added individually as bare STFS packages.

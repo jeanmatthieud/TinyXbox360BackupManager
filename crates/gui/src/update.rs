@@ -101,6 +101,22 @@ impl State {
     /// [`util::PickedGame::installs_title_id`]). An input with no TitleID is
     /// queued silently — the conversion overwrites just the same, it simply
     /// isn't announced.
+    /// Tells which picked files were left out of the confirmation, and why:
+    /// otherwise a rejected file just silently never shows up.
+    fn notify_rejected(&mut self, rejected: &[(String, &'static str)]) {
+        let text = match rejected {
+            [] => return,
+            [(name, reason)] => format!("Not added: {name} — {reason}"),
+            files => format!(
+                "{} files not added (e.g. {} — {})",
+                files.len(),
+                files[0].0,
+                files[0].1
+            ),
+        };
+        self.notifications.push(Notification::warning(text));
+    }
+
     fn set_games_to_add(&mut self, mut picked: Vec<util::PickedGame>, weak: &Weak<AppWindow>) {
         // Files already waiting in the queue (index 0 — the running one —
         // included) never make it to the confirmation: queueing the same input
@@ -116,13 +132,7 @@ impl State {
                 || kept.contains(&game.path);
 
             if queued {
-                skipped.push(
-                    game.path
-                        .file_name()
-                        .unwrap_or(game.path.as_os_str())
-                        .to_string_lossy()
-                        .into_owned(),
-                );
+                skipped.push(util::file_name(&game.path));
             } else {
                 kept.push(game.path.clone());
             }
@@ -1309,11 +1319,20 @@ impl State {
                     dialogs::pick_games(&window_handle)
                 };
 
-                let picked = paths
-                    .into_iter()
-                    .filter_map(util::should_add_game)
-                    .collect();
+                let mut picked = Vec::new();
+                let mut rejected = Vec::new();
+                for path in paths {
+                    let name = util::file_name(&path);
+                    match util::should_add_game(path) {
+                        Ok(game) => picked.push(game),
+                        // A folder of games holds other files too: only
+                        // flag the ones that look like inputs but are not.
+                        Err(r) if recursively && !r.invalid => {}
+                        Err(r) => rejected.push((name, r.reason)),
+                    }
+                }
 
+                self.notify_rejected(&rejected);
                 self.set_games_to_add(picked, weak);
             }
             Message::ConfirmGamesToAdd => {
@@ -2147,8 +2166,10 @@ impl State {
                 if app.global::<UiState<'_>>().get_current_page() == Page::Games {
                     let path = PathBuf::from(&payload);
 
-                    if let Some(picked) = util::should_add_game(path) {
-                        self.set_games_to_add(vec![picked], weak);
+                    let name = util::file_name(&path);
+                    match util::should_add_game(path) {
+                        Ok(picked) => self.set_games_to_add(vec![picked], weak),
+                        Err(r) => self.notify_rejected(&[(name, r.reason)]),
                     }
                 }
             }

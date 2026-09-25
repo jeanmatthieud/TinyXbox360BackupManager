@@ -7,7 +7,7 @@ use slint::WindowHandle;
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
-const INPUT_DIALOG_FILTER: &[&str] = &["iso", "7z", "zip"];
+const INPUT_DIALOG_FILTER: &[&str] = &["iso", "7z", "zip", "rar"];
 
 pub fn pick_mount_point(window_handle: &WindowHandle) -> Option<PathBuf> {
     FileDialog::new()

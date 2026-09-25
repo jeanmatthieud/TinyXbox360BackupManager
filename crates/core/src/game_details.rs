@@ -6,7 +6,7 @@
 
 use crate::remote_fs::RemoteFs;
 use crate::game::{Game, GameFormat};
-use crate::stfs::{self, dlc_dir_name};
+use crate::stfs::{self, LicenseLock, dlc_dir_name};
 use crate::target::{Target, remove_dir_all_with_progress};
 use crate::util::dir_size;
 use anyhow::{Context, Result};
@@ -66,6 +66,8 @@ pub struct DlcInfo {
     /// False when the STFS header couldn't be parsed (no magic / read
     /// error): the package is corrupted or was only partially uploaded.
     pub readable: bool,
+    /// Consoles / profiles the package is licensed to, if restricted.
+    pub license_lock: Option<LicenseLock>,
 }
 
 /// Which kind of stored component a delete targets.
@@ -89,6 +91,13 @@ fn dlc_name(info: &stfs::StfsInfo) -> Option<String> {
 pub struct GameDetails {
     pub discs: Vec<DiscInfo>,
     pub dlc: Vec<DlcInfo>,
+    /// License restriction of an Arcade game's own package (the first one
+    /// readable in `000D0000`). Always `None` for other formats.
+    pub arcade_license_lock: Option<LicenseLock>,
+}
+
+fn arcade_type_dir_name() -> String {
+    format!("{:08X}", stfs::CONTENT_TYPE_ARCADE)
 }
 
 impl Target {
@@ -246,6 +255,11 @@ fn inspect_local(game: &Game) -> GameDetails {
         }
     }
 
+    if game.format == GameFormat::Arcade {
+        details.arcade_license_lock = stfs::package_in_dir(&game.path.join(arcade_type_dir_name()))
+            .and_then(|info| info.license_lock);
+    }
+
     let dlc_dir = game.content_dir().join(dlc_dir_name());
     if let Ok(entries) = std::fs::read_dir(&dlc_dir) {
         for entry in entries.flatten() {
@@ -258,11 +272,13 @@ fn inspect_local(game: &Game) -> GameDetails {
             let info = stfs::inspect(&path).ok().flatten();
             let readable = info.is_some();
             let name = info.as_ref().and_then(dlc_name);
+            let license_lock = info.and_then(|info| info.license_lock);
             details.dlc.push(DlcInfo {
                 file_name,
                 name,
                 size,
                 readable,
+                license_lock,
             });
         }
     }
@@ -302,32 +318,42 @@ fn inspect_remote(session: &mut dyn RemoteFs, game: &Game) -> GameDetails {
         }
     }
 
+    if game.format == GameFormat::Arcade {
+        let type_dir = format!("{remote}/{}", arcade_type_dir_name());
+        details.arcade_license_lock = session
+            .list_dir(&type_dir)
+            .into_iter()
+            .filter(|entry| !entry.is_dir)
+            .find_map(|entry| inspect_remote_header(session, &format!("{type_dir}/{}", entry.name)))
+            .and_then(|info| info.license_lock);
+    }
+
     let dlc_dir = format!("{content}/{}", dlc_dir_name());
     for entry in session.list_dir(&dlc_dir) {
         if entry.is_dir {
             continue;
         }
-        // Read just the STFS header prefix (Aurora has no REST, so this is a
-        // prefix read from offset 0) rather than downloading the whole DLC.
-        let header_path = format!("{dlc_dir}/{}", entry.name);
-        let info = session
-            .download_prefix(&header_path, stfs::HEADER_SIZE)
-            .ok()
-            .and_then(|bytes| {
-                let mut cursor = std::io::Cursor::new(bytes);
-                stfs::inspect_reader(&mut cursor, PathBuf::from(&header_path))
-                    .ok()
-                    .flatten()
-            });
+        let info = inspect_remote_header(session, &format!("{dlc_dir}/{}", entry.name));
         let readable = info.is_some();
         let name = info.as_ref().and_then(dlc_name);
+        let license_lock = info.and_then(|info| info.license_lock);
         details.dlc.push(DlcInfo {
             name,
             size: entry.size,
             readable,
+            license_lock,
             file_name: entry.name,
         });
     }
 
     details
+}
+
+/// Reads just the STFS header prefix of a remote package (Aurora has no REST,
+/// so this is a prefix read from offset 0) rather than downloading the whole
+/// file — DLC and Arcade packages run to hundreds of MB.
+fn inspect_remote_header(session: &mut dyn RemoteFs, path: &str) -> Option<stfs::StfsInfo> {
+    let bytes = session.download_prefix(path, stfs::HEADER_SIZE).ok()?;
+    let mut cursor = std::io::Cursor::new(bytes);
+    stfs::inspect_reader(&mut cursor, PathBuf::from(path)).ok().flatten()
 }

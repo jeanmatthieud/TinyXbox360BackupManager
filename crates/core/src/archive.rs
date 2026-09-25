@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
-//! Extraction of archives: game archives (.7z / .zip), used for XBLA
-//! packages, and the Toolbox components, which may also come as .rar.
+//! Extraction of archives: game archives (.7z / .zip / .rar), wrapping an ISO
+//! or XBLA packages, and the Toolbox components.
 
 use crate::convert::{CONVERSION_CANCELLED, is_cancelled};
 use anyhow::{Context, Result, bail};
@@ -11,12 +11,13 @@ use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
-/// True if the extension is a supported game archive format (.7z / .zip).
-/// RAR is deliberately left out here: it is only extracted for the Toolbox
-/// components, never offered as a game input.
+/// True if the extension is a supported game archive format (.7z / .zip /
+/// .rar). Multi-volume RAR sets are not supported yet.
 pub fn is_supported_archive(path: &Path) -> bool {
     path.extension().is_some_and(|ext| {
-        ext.eq_ignore_ascii_case("7z") || ext.eq_ignore_ascii_case("zip")
+        ext.eq_ignore_ascii_case("7z")
+            || ext.eq_ignore_ascii_case("zip")
+            || ext.eq_ignore_ascii_case("rar")
     })
 }
 
@@ -29,7 +30,9 @@ pub fn looks_valid(path: &Path) -> bool {
     if file.read_exact(&mut magic).is_err() {
         return false;
     }
-    &magic == b"7z\xBC\xAF\x27\x1C" || &magic[..4] == b"PK\x03\x04"
+    // `Rar!\x1A\x07` opens both RAR 1.5-4 (then `\x00`) and RAR 5 (then
+    // `\x01\x00`) archives.
+    &magic == b"7z\xBC\xAF\x27\x1C" || &magic[..4] == b"PK\x03\x04" || &magic == b"Rar!\x1A\x07"
 }
 
 /// Extracts the archive into `dest`. `progress` receives
@@ -170,10 +173,14 @@ fn extract_7z(
 /// forbids reusing the code to recreate the compressor, a restriction the
 /// GPL does not allow on top of it.
 ///
-/// `rars` asks for one writer per entry and takes ownership of it, so the
-/// writer cannot borrow `cancel` or `progress`. Both are therefore serviced
-/// when the next entry is opened rather than per chunk; the written byte
-/// count reaches that point through a shared counter.
+/// `rars` asks for one writer per entry and takes ownership of it (a
+/// `Box<dyn Write>` is `'static`), so the writer cannot borrow `cancel` or
+/// `progress`. The decoding therefore runs on a scoped thread, while this one
+/// relays in both directions through shared atomics: it mirrors `cancel`
+/// into a flag the writer checks on every write, and reports the byte count
+/// the writer keeps. That keeps a single multi-gigabyte ISO responsive, where
+/// servicing both only between entries would freeze the progress bar and
+/// ignore the cancel button until the very end.
 fn extract_rar(
     path: &Path,
     dest: &Path,
@@ -181,40 +188,63 @@ fn extract_rar(
     progress: &mut dyn FnMut(u64, u64),
 ) -> Result<()> {
     let archive = rars::ArchiveReader::read_path(path).context("reading rar archive")?;
+    // A volume of a split set only holds a slice of its members; extracting
+    // it alone would fail halfway through with a far less helpful error.
+    if archive
+        .members()
+        .any(|m| m.meta.is_split_before || m.meta.is_split_after)
+    {
+        bail!("multi-volume RAR archives are not supported yet");
+    }
     let total: u64 = archive
         .members()
         .filter(|m| !m.meta.is_directory)
         .map(|m| m.meta.unpacked_size)
         .sum();
     let done = Arc::new(AtomicU64::new(0));
+    let stop = Arc::new(AtomicBool::new(false));
     progress(0, total);
 
-    let result = archive.extract_to(None, |meta| {
-        progress(done.load(Ordering::Relaxed), total);
-        // Surfaced as an error, like in `extract_7z`, so that stopping does
-        // not look like a successful extraction. Rewritten below.
-        if is_cancelled(cancel) {
-            return Err(io::Error::other(CONVERSION_CANCELLED).into());
+    let result = std::thread::scope(|scope| {
+        let worker = scope.spawn(|| {
+            archive.extract_to(None, |meta| {
+                // Surfaced as an error, like in `extract_7z`, so that stopping
+                // does not look like a successful extraction. Rewritten below.
+                if stop.load(Ordering::Relaxed) {
+                    return Err(io::Error::other(CONVERSION_CANCELLED).into());
+                }
+                let name = meta.name_lossy();
+                let rel = sanitized_relative_path(&name)
+                    .ok_or_else(|| io::Error::other(format!("unsafe path in archive: {name}")))?;
+                let out = dest.join(rel);
+                if meta.is_directory {
+                    std::fs::create_dir_all(&out)?;
+                    return Ok(Box::new(io::sink()));
+                }
+                if let Some(parent) = out.parent() {
+                    std::fs::create_dir_all(parent)?;
+                }
+                Ok(Box::new(CountingWriter {
+                    file: File::create(&out)?,
+                    written: Arc::clone(&done),
+                    stop: Arc::clone(&stop),
+                }))
+            })
+        });
+        while !worker.is_finished() {
+            if is_cancelled(cancel) {
+                stop.store(true, Ordering::Relaxed);
+            }
+            progress(done.load(Ordering::Relaxed), total);
+            std::thread::sleep(RAR_POLL_INTERVAL);
         }
-        let name = meta.name_lossy();
-        let rel = sanitized_relative_path(&name)
-            .ok_or_else(|| io::Error::other(format!("unsafe path in archive: {name}")))?;
-        let out = dest.join(rel);
-        if meta.is_directory {
-            std::fs::create_dir_all(&out)?;
-            return Ok(Box::new(io::sink()));
-        }
-        if let Some(parent) = out.parent() {
-            std::fs::create_dir_all(parent)?;
-        }
-        Ok(Box::new(CountingWriter {
-            file: File::create(&out)?,
-            written: Arc::clone(&done),
-        }))
+        worker
+            .join()
+            .unwrap_or_else(|panic| std::panic::resume_unwind(panic))
     });
     // A cancellation comes back wrapped in `rars`' I/O error; report it with
     // the bare marker the callers match on instead.
-    if is_cancelled(cancel) {
+    if stop.load(Ordering::Relaxed) || is_cancelled(cancel) {
         bail!(CONVERSION_CANCELLED);
     }
     result.context("extracting rar archive")?;
@@ -222,15 +252,24 @@ fn extract_rar(
     Ok(())
 }
 
+/// How often [`extract_rar`] relays progress and cancellation between the
+/// decoding thread and its caller. Also the most it adds to an extraction.
+const RAR_POLL_INTERVAL: std::time::Duration = std::time::Duration::from_millis(100);
+
 /// A file writer that adds what it writes to a counter shared with
-/// [`extract_rar`], which owns no other view of the bytes going out.
+/// [`extract_rar`], which owns no other view of the bytes going out, and
+/// fails as soon as that function raises `stop`.
 struct CountingWriter {
     file: File,
     written: Arc<AtomicU64>,
+    stop: Arc<AtomicBool>,
 }
 
 impl Write for CountingWriter {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        if self.stop.load(Ordering::Relaxed) {
+            return Err(io::Error::other(CONVERSION_CANCELLED));
+        }
         let n = self.file.write(buf)?;
         self.written.fetch_add(n as u64, Ordering::Relaxed);
         Ok(n)
