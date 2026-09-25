@@ -184,6 +184,40 @@ pub fn probe_partition(path: &Path, partition: &str) -> FatxProbe {
     probe_device_at(path, offset_of(partition))
 }
 
+/// Identifier FATXplorer writes into the superblock of a user-content
+/// partition it formats for Bad Storage, at [`BAD_STORAGE_MARKER_OFFSET`]. Bad
+/// Storage itself goes by it (`BSTOR_INDICATOR` in its source).
+const BAD_STORAGE_MARKER: &[u8; 8] = b"BSTORAGE";
+const BAD_STORAGE_MARKER_OFFSET: usize = 0x858;
+/// Offset of the root directory's first cluster in the superblock, big-endian.
+const ROOT_CLUSTER_OFFSET: usize = 12;
+
+/// Whether the user-content partition was formatted for Bad Storage.
+///
+/// Such a partition has its root cluster set to 0, so that the stock kernel
+/// takes it for corrupt and never writes to it before the exploit has run; Bad
+/// Storage then patches the kernel to use 1 and remounts it. The marker is
+/// what FATXplorer writes on it, the root cluster what actually hides the
+/// partition from the console — either is enough. A disk that cannot be read
+/// answers `false`: opening it fails with its own, better error.
+pub fn is_bad_storage(path: &Path) -> bool {
+    let Ok(mut file) = std::fs::File::open(path) else {
+        return false;
+    };
+    // A whole 4 KiB page: a multiple of any block size a raw device demands,
+    // and it covers the marker.
+    let mut superblock = [0u8; 4096];
+    if file.seek(SeekFrom::Start(partition_offset())).is_err()
+        || file.read_exact(&mut superblock).is_err()
+        || &superblock[..4] != SIGNATURE_X360
+    {
+        return false;
+    }
+    let marker = &superblock[BAD_STORAGE_MARKER_OFFSET..][..BAD_STORAGE_MARKER.len()];
+    let root_cluster = &superblock[ROOT_CLUSTER_OFFSET..][..4];
+    marker == BAD_STORAGE_MARKER || root_cluster == [0; 4]
+}
+
 /// Builds a target configuration for a device path.
 pub fn config_for(path: &Path) -> FatxConfig {
     FatxConfig::new(path.to_path_buf())

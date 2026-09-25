@@ -1692,6 +1692,7 @@ impl Target {
             // The cluster size, which is what a file on this filesystem is
             // rounded up to, exactly like a mounted drive's block size.
             allocation_granularity: space.map_or(0, |s| s.bytes_per_cluster),
+            bad_storage: crate::fatx_dev::is_bad_storage(&fatx.device),
         },
         // Nothing over FTP reports the console's free space.
         Target::Ftp(ftp) => DriveInfo {
@@ -1702,6 +1703,7 @@ impl Target {
             fs_kind: Default::default(),
             fs_label: String::new(),
             allocation_granularity: 0,
+            bad_storage: false,
         },
         // Never reached: a local drive is scanned by `scan`, not here.
         Target::Local(path) => DriveInfo {

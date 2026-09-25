@@ -180,6 +180,8 @@ export enum BadAvatarHddState {
     Incomplete,
     // Someone else's setup: reported, never touched.
     Foreign,
+    // Formatted for Bad Storage: BadAvatar cannot start from it.
+    BadStorage,
 }
 
 export struct DisplayedBadAvatarHdd {
@@ -323,6 +325,8 @@ export struct DisplayedDriveInfo {
     total-gib: float,
     fs-kind: string,
     allocation-granularity: int,
+    // FATX only: formatted for Bad Storage.
+    bad-storage: bool,
 }
 
 // Tone of a notification: picks its icon and accent colour.

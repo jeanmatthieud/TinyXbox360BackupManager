@@ -12,6 +12,10 @@
 //! Only that release has the hard-drive lookup, which is why the install always
 //! uses the 1.3-beta, whichever version the user picked for the USB key.
 //!
+//! A drive formatted for Bad Storage is refused: its `Hdd1` stays unreadable
+//! to the console until the exploit has run and Bad Storage has remounted it,
+//! so the exploit cannot be started from there.
+//!
 //! Nothing here ever reaches the console's NAND: the drive is plugged into this
 //! computer. The one way the exploit itself writes to flash is its recovery
 //! mode (Y held while it triggers), which deletes `flash:\GamerProfile.xex` and
@@ -56,6 +60,10 @@ const PROFILE_XUID: &str = "E0002FF78DFBDE7B";
 /// Folders from the drive root down to the profile package.
 const PROFILE_DIRS: [&str; 4] = ["Content", PROFILE_XUID, "FFFE07D1", "00010000"];
 const MANIFEST_NAME: &str = "txbm-badavatar.json";
+
+const BAD_STORAGE_REFUSAL: &str = "this hard drive is formatted for Bad Storage: the console \
+    can only read it once the exploit has run, so BadAvatar cannot start from it — keep it on \
+    the USB key";
 
 /// Files at the drive root that belong to a BadAvatar setup. Any of them on a
 /// drive we did not install makes it "not retail".
@@ -109,6 +117,9 @@ pub enum HddStatus {
     /// Someone else's install (another tool, a hand copy, an older release):
     /// left alone. Lists what was found, in console notation.
     Foreign { found: Vec<String> },
+    /// Formatted for Bad Storage: the console only reads the drive once the
+    /// exploit has run, so the exploit cannot start from it. Never written to.
+    BadStorage,
 }
 
 #[derive(Debug, Clone)]
@@ -127,6 +138,16 @@ pub struct HddInspection {
 
 /// Reads the drive's state. Read-only.
 pub fn inspect(target: &Target) -> Result<HddInspection> {
+    if let Target::Fatx(cfg) = target
+        && crate::fatx_dev::is_bad_storage(&cfg.device)
+    {
+        return Ok(HddInspection {
+            status: HddStatus::BadStorage,
+            aurora: None,
+            stray_aurora: None,
+            removal: Vec::new(),
+        });
+    }
     let mut session = open(target, false)?;
     let found = inspect_remote(&mut session)?;
     session.quit()?;
@@ -239,6 +260,11 @@ pub fn uninstall(target: &Target, status: &dyn Fn(&str)) -> Result<()> {
 
 fn open(target: &Target, writable: bool) -> Result<RemoteSession> {
     match target {
+        // Checked again here, whatever the inspection said: nothing of ours
+        // is ever written to such a drive.
+        Target::Fatx(cfg) if crate::fatx_dev::is_bad_storage(&cfg.device) => {
+            bail!(BAD_STORAGE_REFUSAL)
+        }
         Target::Fatx(_) => target.open_remote(writable),
         _ => bail!("BadAvatar can only be installed on a console hard drive connected here"),
     }
@@ -254,6 +280,7 @@ pub fn ensure_installable(inspection: &HddInspection) -> Result<()> {
     match inspection.status {
         HddStatus::Retail => {}
         HddStatus::Installed { .. } => bail!("BadAvatar is already installed on this hard drive"),
+        HddStatus::BadStorage => bail!(BAD_STORAGE_REFUSAL),
         HddStatus::Foreign { .. } => bail!(
             "this hard drive already holds another BadAvatar setup — restore it to its \
              retail state first"

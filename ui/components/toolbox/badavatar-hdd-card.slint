@@ -105,6 +105,27 @@ export component BadAvatarHddCard inherits ToolboxCard {
         text: "Restore the drive to its retail state by removing these files to install TinyXbox360BackupManager's own from the Toolbox.";
     }
 
+    // Bad Storage: the console only reads this drive once the exploit has run.
+    if state == BadAvatarHddState.BadStorage: HorizontalLayout {
+        spacing: 8px;
+
+        IconDisplay {
+            icon: IconSet.ShieldX;
+            stroke: MyPalette.destructive;
+            size: 16px;
+        }
+
+        Text {
+            text: "This hard drive is formatted for Bad Storage, which BadAvatar can't be installed alongside.";
+            wrap: word-wrap;
+            horizontal-stretch: 1;
+        }
+    }
+
+    if state == BadAvatarHddState.BadStorage: Hint {
+        text: "The console only reads this drive once the exploit has run, so the exploit can't start from it. Keep BadAvatar on its USB key.";
+    }
+
     if state == BadAvatarHddState.Installed || state == BadAvatarHddState.Incomplete: HorizontalLine { }
 
     if state == BadAvatarHddState.Installed || state == BadAvatarHddState.Incomplete: CardActionRow {

@@ -66,23 +66,31 @@ export component LibraryStorageCard inherits ToolboxCard {
             spacing: 8px;
             cross-axis-alignment: CrossAxisAlignment.start;
 
-            IconDisplay {
-                // Neutral folder on a local drive (no Aurora
-                // comparison); coverage badge on a console.
-                icon: !UiState.storage-aurora-compared
-                    ? IconSet.Folder
-                    : (p.covered ? IconSet.Check : IconSet.TriangleAlert);
-                stroke: !UiState.storage-aurora-compared
-                    ? MyPalette.foreground
-                    : (p.covered ? MyPalette.foreground : #e0a12f);
-                size: 15px;
+            // As tall as the title's line, so the icon centres on the
+            // title rather than on the whole two-line block.
+            Rectangle {
+                width: 15px;
+                height: path-label.preferred-height;
+
+                IconDisplay {
+                    // Neutral folder on a local drive (no Aurora
+                    // comparison); coverage badge on a console.
+                    icon: !UiState.storage-aurora-compared
+                        ? IconSet.Folder
+                        : (p.covered ? IconSet.Check : IconSet.TriangleAlert);
+                    stroke: !UiState.storage-aurora-compared
+                        ? MyPalette.foreground
+                        : (p.covered ? MyPalette.foreground : #e0a12f);
+                    size: 15px;
+                    y: (parent.height - self.height) / 2;
+                }
             }
 
             VerticalLayout {
                 spacing: 2px;
                 horizontal-stretch: 1;
 
-                Text {
+                path-label := Text {
                     text: p.label;
                 }
 
@@ -105,17 +113,23 @@ export component LibraryStorageCard inherits ToolboxCard {
             spacing: 8px;
             cross-axis-alignment: CrossAxisAlignment.start;
 
-            IconDisplay {
-                icon: IconSet.FolderTree;
-                stroke: MyPalette.foreground;
-                size: 15px;
+            Rectangle {
+                width: 15px;
+                height: layout-label.preferred-height;
+
+                IconDisplay {
+                    icon: IconSet.FolderTree;
+                    stroke: MyPalette.foreground;
+                    size: 15px;
+                    y: (parent.height - self.height) / 2;
+                }
             }
 
             VerticalLayout {
                 spacing: 2px;
                 horizontal-stretch: 1;
 
-                Text {
+                layout-label := Text {
                     text: "GOD Storage Layout";
                 }
 

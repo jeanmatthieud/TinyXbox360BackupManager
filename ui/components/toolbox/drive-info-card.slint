@@ -70,6 +70,7 @@ export component DriveInfoCard inherits ToolboxCard {
 
     HorizontalLayout {
         spacing: 5px;
+        cross-axis-alignment: CrossAxisAlignment.center;
 
         IconDisplay {
             icon: fs-icon(UiState.drive-info.fs-kind);
@@ -84,6 +85,7 @@ export component DriveInfoCard inherits ToolboxCard {
 
     HorizontalLayout {
         spacing: 5px;
+        cross-axis-alignment: CrossAxisAlignment.center;
 
         IconDisplay {
             icon: allocation-granularity-icon(is-optimal-allocation-granularity);
@@ -93,6 +95,22 @@ export component DriveInfoCard inherits ToolboxCard {
 
         Text {
             text: "Allocation granularity: \{UiState.drive-info.allocation-granularity}  (\{allocation-granularity-comment(is-optimal-allocation-granularity, is-fatx)})";
+        }
+    }
+
+    // Reported as a fact, like the rest of a FATX drive.
+    if is-fatx: HorizontalLayout {
+        spacing: 5px;
+        cross-axis-alignment: CrossAxisAlignment.center;
+
+        IconDisplay {
+            icon: IconSet.Info;
+            stroke: MyPalette.foreground;
+            size: 14px;
+        }
+
+        Text {
+            text: "Bad Storage: \{UiState.drive-info.bad-storage ? "yes" : "no"}";
         }
     }
 }

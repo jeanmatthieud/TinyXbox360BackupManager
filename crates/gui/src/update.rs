@@ -1906,6 +1906,11 @@ impl State {
                                 found.join(", ")
                             )));
                         }
+                        HddStatus::BadStorage => {
+                            self.notifications.push(Notification::warning_sticky(
+                                "This hard drive is formatted for Bad Storage: BadAvatar can't be installed on it. Keep it on the USB key.",
+                            ));
+                        }
                         HddStatus::Retail => {}
                     },
                     Some((_, Err(e))) => {
@@ -2978,6 +2983,7 @@ fn displayed_badavatar_hdd(inspection: &HddInspection) -> DisplayedBadAvatarHdd 
             (BadAvatarHddState::Incomplete, list(&[]))
         }
         HddStatus::Foreign { found } => (BadAvatarHddState::Foreign, list(found)),
+        HddStatus::BadStorage => (BadAvatarHddState::BadStorage, list(&[])),
     };
     DisplayedBadAvatarHdd {
         state,
