@@ -60,7 +60,7 @@ fn main() -> anyhow::Result<()> {
 
     // Cancelled before the first write: nothing may be on the drive after.
     let cancel = AtomicBool::new(true);
-    let res = badavatar_hdd::install(&target, &cfg, &cancel, &|_| {}, &|| {
+    let res = badavatar_hdd::install(&target, &before, &cfg, &cancel, &|_| {}, &|| {
         panic!("a cancelled install must not start writing")
     });
     println!("cancelled install: {:?}", res.as_ref().err().map(|e| e.to_string()));
@@ -74,7 +74,7 @@ fn main() -> anyhow::Result<()> {
         }
     };
     let wrote = std::cell::Cell::new(false);
-    badavatar_hdd::install(&target, &cfg, &NO_CANCEL, &status, &|| {
+    badavatar_hdd::install(&target, &before, &cfg, &NO_CANCEL, &status, &|| {
         wrote.set(true)
     })?;
     assert!(wrote.get());
@@ -126,11 +126,14 @@ fn main() -> anyhow::Result<()> {
     }
     s.quit()?;
 
-    // Installing again is refused.
+    // Installing again is refused, even from the stale look taken before.
     assert!(
-        badavatar_hdd::install(&target, &cfg, &NO_CANCEL, &|_| {}, &|| {})
+        badavatar_hdd::install(&target, &after, &cfg, &NO_CANCEL, &|_| {}, &|| {})
             .is_err()
     );
+    let res = badavatar_hdd::install(&target, &before, &cfg, &NO_CANCEL, &|_| {}, &|| {});
+    println!("install over our own: {:?}", res.as_ref().err().map(|e| e.to_string()));
+    assert!(res.is_err());
 
     // What XeUnshackle writes by itself on a console with a hard drive.
     {
@@ -166,6 +169,24 @@ fn main() -> anyhow::Result<()> {
     assert_eq!(content, vec!["0000000000000000".to_string()]);
     assert_eq!(s.download_file(&format!("{GAME_DIR}/0000000000000000000000000000"))?, vec![0x42; 4096]);
     s.quit()?;
+
+    // An Aurora folder without Aurora.xex is not taken over.
+    if with_aurora {
+        {
+            let mut s = target.open_remote(true)?;
+            s.put_bytes("/Hdd1/Aurora/Data", "settings.db", b"the user's")?;
+            s.quit()?;
+        }
+        let stray = badavatar_hdd::inspect(&target)?;
+        println!("with a stray Aurora folder: {:?}", stray.stray_aurora);
+        assert!(stray.stray_aurora.is_some());
+        assert!(
+            badavatar_hdd::install(&target, &stray, &cfg, &NO_CANCEL, &|_| {}, &|| {
+                panic!("a stray Aurora folder must stop the install before it writes")
+            })
+            .is_err()
+        );
+    }
 
     // Someone else's launch.ini makes the drive foreign, and blocks an install.
     {

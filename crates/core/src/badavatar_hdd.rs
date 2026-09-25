@@ -116,6 +116,10 @@ pub struct HddInspection {
     pub status: HddStatus,
     /// Where Aurora is on the drive (`Hdd:\Aurora`), if it is.
     pub aurora: Option<String>,
+    /// An `Aurora` folder at the drive root with no `Aurora.xex` in it, when
+    /// there is no working Aurora elsewhere. The install would write Aurora
+    /// there and claim the folder as its own, so it refuses instead.
+    pub stray_aurora: Option<String>,
     /// What a removal would delete, in console notation. Empty unless the
     /// install is ours.
     pub removal: Vec<String>,
@@ -129,20 +133,22 @@ pub fn inspect(target: &Target) -> Result<HddInspection> {
     Ok(found)
 }
 
-/// Downloads, checks and installs BadAvatar on a retail drive. `status`
-/// receives short progress lines. `cancel` is honoured until the first write;
-/// `writing` is called right before it, after which the run can no longer be
-/// stopped (it is a few megabytes, plus Aurora when it has to be installed).
+/// Downloads, checks and installs BadAvatar on a retail drive. `before` is
+/// what [`inspect`] found on it when it was picked: it decides whether Aurora
+/// has to be downloaded, and the session that writes checks the drive again
+/// before its first write. `status` receives short progress lines. `cancel` is
+/// honoured until the first write; `writing` is called right before it, after
+/// which the run can no longer be stopped (it is a few megabytes, plus Aurora
+/// when it has to be installed).
 pub fn install(
     target: &Target,
+    before: &HddInspection,
     cfg: &BadAvatarConfig,
     cancel: &AtomicBool,
     status: &dyn Fn(&str),
     writing: &dyn Fn(),
 ) -> Result<()> {
-    status("Checking the hard drive…");
-    let before = inspect(target)?;
-    ensure_retail(&before.status)?;
+    ensure_installable(before)?;
     check_cancel(cancel)?;
 
     // Always the 1.3-beta release, whichever the USB key uses: only this one
@@ -204,9 +210,12 @@ pub fn install(
 
         writing();
         let mut session = open(target, true)?;
-        check_space(&mut session, &root)?;
-        install_remote(&mut session, &root, &manifest, status)?;
-        session.quit()
+        let res = check_space(&mut session, &root)
+            .and_then(|()| install_remote(&mut session, &root, &manifest, status));
+        // Flushed even after a failure, as the removal does: whatever was
+        // written must reach the disk in a consistent state.
+        let quit = session.quit();
+        res.and(quit)
     })();
 
     let _ = fs::remove_dir_all(&work);
@@ -239,15 +248,21 @@ fn check_cancel(cancel: &AtomicBool) -> Result<()> {
     crate::download::check_cancel(cancel, BADAVATAR_CANCELLED)
 }
 
-fn ensure_retail(status: &HddStatus) -> Result<()> {
-    match status {
-        HddStatus::Retail => Ok(()),
+/// Refuses a drive the install must not write to: one that is not retail, or
+/// whose `Aurora` folder has no `Aurora.xex`.
+pub fn ensure_installable(inspection: &HddInspection) -> Result<()> {
+    match inspection.status {
+        HddStatus::Retail => {}
         HddStatus::Installed { .. } => bail!("BadAvatar is already installed on this hard drive"),
         HddStatus::Foreign { .. } => bail!(
             "this hard drive already holds another BadAvatar setup — restore it to its \
              retail state first"
         ),
     }
+    if let Some(dir) = &inspection.stray_aurora {
+        bail!("{dir} holds no Aurora.xex — nothing was installed");
+    }
+    Ok(())
 }
 
 /// Refuses a `GamerProfile.xex` that isn't the release's own.
@@ -312,7 +327,8 @@ struct Layout {
     root: String,
     /// Real name of the payload folder, when there is one.
     payload: Option<String>,
-    manifest: Option<Result<HddManifest>>,
+    /// Our manifest, `Some(None)` when the file is there but does not parse.
+    manifest: Option<Option<HddManifest>>,
     has_gamer_profile: bool,
     /// Folder holding the profile package, and the package's real name.
     profile: Option<(String, String)>,
@@ -320,6 +336,9 @@ struct Layout {
     root_files: Vec<String>,
     lhelper: Option<String>,
     aurora: Option<String>,
+    /// Real name of an `Aurora` folder at the root, with or without Aurora
+    /// in it.
+    aurora_folder: Option<String>,
 }
 
 /// Listed the strict way throughout: a folder that cannot be read must never
@@ -338,10 +357,12 @@ fn read_layout(fs: &mut dyn RemoteFs) -> Result<Layout> {
         let files = fs.try_list_dir(&dir).context("listing the payload folder")?;
         has_gamer_profile = find_ci(&files, GAMER_PROFILE, false).is_some();
         if let Some(entry) = find_ci(&files, MANIFEST_NAME, false) {
-            let parsed = fs
+            // A read error is reported as such: taken for an unparsable file,
+            // it would make our own install pass for someone else's.
+            let bytes = fs
                 .download_file(&format!("{dir}/{}", entry.name))
-                .and_then(|bytes| Ok(serde_json::from_slice(&bytes)?));
-            manifest = Some(parsed);
+                .context("reading the install manifest")?;
+            manifest = Some(serde_json::from_slice(&bytes).ok());
         }
     }
 
@@ -358,6 +379,7 @@ fn read_layout(fs: &mut dyn RemoteFs) -> Result<Layout> {
         .filter_map(|name| find_ci(&entries, name, false).map(|e| e.name.clone()))
         .collect();
     let lhelper = find_ci(&entries, LHELPER, false).map(|e| e.name.clone());
+    let aurora_folder = find_ci(&entries, "Aurora", true).map(|e| e.name.clone());
 
     let aurora = find_aurora_dir_on_root(fs, root.trim_start_matches('/'))
         .map(|dir| dir.trim_start_matches(&format!("{root}/")).to_string());
@@ -371,15 +393,23 @@ fn read_layout(fs: &mut dyn RemoteFs) -> Result<Layout> {
         root_files,
         lhelper,
         aurora,
+        aurora_folder,
     })
 }
 
 pub fn inspect_remote(fs: &mut dyn RemoteFs) -> Result<HddInspection> {
-    let layout = read_layout(fs)?;
+    Ok(inspection_of(&read_layout(fs)?))
+}
+
+fn inspection_of(layout: &Layout) -> HddInspection {
     let aurora = layout.aurora.as_deref().map(console_path);
+    let stray_aurora = match (&layout.aurora, &layout.aurora_folder) {
+        (None, Some(name)) => Some(console_path(name)),
+        _ => None,
+    };
 
     let status = match &layout.manifest {
-        Some(Ok(manifest)) => HddStatus::Installed {
+        Some(Some(manifest)) => HddStatus::Installed {
             manifest: manifest.clone(),
             complete: layout.profile.is_some() && layout.has_gamer_profile,
         },
@@ -402,15 +432,16 @@ pub fn inspect_remote(fs: &mut dyn RemoteFs) -> Result<HddInspection> {
     };
 
     let removal = match &status {
-        HddStatus::Installed { manifest, .. } => removal_list(&layout, manifest),
+        HddStatus::Installed { manifest, .. } => removal_list(layout, manifest),
         _ => Vec::new(),
     };
 
-    Ok(HddInspection {
+    HddInspection {
         status,
         aurora,
+        stray_aurora,
         removal,
-    })
+    }
 }
 
 /// What [`uninstall_remote`] deletes, in the order it does, for the
@@ -456,13 +487,11 @@ fn install_remote(
     status: &dyn Fn(&str),
 ) -> Result<()> {
     // Checked again on the session that writes: the drive may have been
-    // swapped since the first look.
+    // swapped, or changed, since it was picked.
     let layout = read_layout(fs)?;
-    if layout.payload.is_some() || layout.profile.is_some() || !layout.root_files.is_empty() {
-        bail!(
-            "this hard drive already holds another BadAvatar setup — restore it to its \
-             retail state first"
-        );
+    ensure_installable(&inspection_of(&layout))?;
+    if layout.aurora.is_some() == manifest.aurora_installed.is_some() {
+        bail!("Aurora came or went on this hard drive since it was checked — nothing was installed");
     }
     let hdd = layout.root;
     // The copies below have no reason to stop halfway once started.
@@ -487,9 +516,8 @@ fn install_remote(
     if written != GAMER_PROFILE_SHA1 {
         let _ = fs.remove_file(&payload, GAMER_PROFILE);
         bail!(
-            "{GAMER_PROFILE} did not read back intact from the hard drive, so it was removed \
-             and the install stopped before the exploit could trigger. Remove BadAvatar from \
-             the card, then try again."
+            "{GAMER_PROFILE} did not read back intact from the hard drive — the install \
+             stopped before the exploit could trigger"
         );
     }
 
@@ -524,7 +552,7 @@ fn install_remote(
 fn uninstall_remote(fs: &mut dyn RemoteFs, status: &dyn Fn(&str)) -> Result<()> {
     let layout = read_layout(fs)?;
     let manifest = match &layout.manifest {
-        Some(Ok(manifest)) => manifest.clone(),
+        Some(Some(manifest)) => manifest.clone(),
         _ => bail!("BadAvatar wasn't installed on this hard drive by TinyXbox360BackupManager"),
     };
     let hdd = layout.root.clone();
@@ -562,8 +590,9 @@ fn uninstall_remote(fs: &mut dyn RemoteFs, status: &dyn Fn(&str)) -> Result<()> 
 
     // 3. Aurora, when we installed it.
     if let Some(rel) = &manifest.aurora_installed {
-        let dir = format!("{hdd}/{rel}");
-        if walk_ci(fs, &hdd, &rel.split('/').collect::<Vec<_>>())?.is_some() {
+        // The folder's real name, which may not be spelled as the manifest has
+        // it.
+        if let Some(dir) = walk_ci(fs, &hdd, &rel.split('/').collect::<Vec<_>>())? {
             status("Removing Aurora…");
             fs.remove_dir_recursive(&dir, &never, &mut |_, _| {})
                 .context("removing Aurora")?;

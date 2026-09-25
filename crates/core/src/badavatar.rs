@@ -84,13 +84,26 @@ pub const DEFAULT_SYSTEM_UPDATE_URL: &str =
     "https://archive.org/download/xbox-360-system-update-17559-usb/SystemUpdate_17559_USB.zip";
 
 /// The ABadAvatar releases the app knows how to install.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize)]
 pub enum AbadavatarVersion {
     #[serde(rename = "1.0-beta")]
     V10,
     #[default]
     #[serde(rename = "1.3-beta")]
     V13,
+}
+
+/// Leniently: a release this build does not know — from a settings file
+/// written by a later version — falls back to the default. A strict enum would
+/// fail the whole settings file, which is then reset.
+impl<'de> Deserialize<'de> for AbadavatarVersion {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let value = serde_json::Value::deserialize(deserializer)?;
+        Ok(Self::ALL
+            .into_iter()
+            .find(|v| value.as_str() == Some(v.label()))
+            .unwrap_or_default())
+    }
 }
 
 impl AbadavatarVersion {
@@ -710,6 +723,19 @@ mod tests {
         let none = migrated(r#"{"abadavatar_url":null,"xeunshackle_autostart":true}"#);
         assert_eq!(none.abadavatar_version, AbadavatarVersion::V13);
         assert!(none.xeunshackle_autostart);
+    }
+
+    #[test]
+    fn an_unknown_version_keeps_the_rest() {
+        let cfg: BadAvatarConfig = serde_json::from_str(
+            r#"{"abadavatar_version":"1.4-beta","include_system_update":true}"#,
+        )
+        .unwrap();
+        assert_eq!(cfg.abadavatar_version, AbadavatarVersion::V13);
+        assert!(cfg.include_system_update);
+        let v10: BadAvatarConfig =
+            serde_json::from_str(r#"{"abadavatar_version":"1.0-beta"}"#).unwrap();
+        assert_eq!(v10.abadavatar_version, AbadavatarVersion::V10);
     }
 
     #[test]
