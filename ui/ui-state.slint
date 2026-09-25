@@ -5,7 +5,9 @@
 import {
     DisplayedBadAvatarConfig,
     DisplayedCompatConfig,
+    DisplayedCompatPack,
     DisplayedDashlaunch,
+    DisplayedBadAvatarHdd,
     DisplayedConfig,
     DisplayedDriveInfo,
     DisplayedFatxDrive,
@@ -193,6 +195,33 @@ export global UiState {
     // second write never starts beside the first.
     in-out property <bool> writing-dashlaunch: false;
 
+    // BadAvatar on the connected console hard drive (FATX target only).
+    in-out property <DisplayedBadAvatarHdd> badavatar-hdd;
+    // True from the start of an install or removal until it is over. A
+    // removal runs on the connected target, outside the queue: jobs queued
+    // meanwhile wait for it.
+    in-out property <bool> badavatar-hdd-busy: false;
+    // True once the install has started writing: it can no longer be cancelled.
+    in-out property <bool> badavatar-hdd-writing: false;
+    // Removal confirmation modal (Device status).
+    in-out property <bool> confirming-badavatar-hdd-uninstall: false;
+    // Install (Toolbox): the drive picker, then the read-only look at the
+    // picked drive, then the confirmation modal, shown while
+    // `badavatar-hdd-pending-target` names the drive.
+    in-out property <bool> selecting-badavatar-hdd-target: false;
+    in-out property <bool> inspecting-badavatar-hdd: false;
+    in-out property <string> badavatar-hdd-pending-target: "";
+    // Where Aurora already is on the picked drive; empty when the install
+    // brings it.
+    in-out property <string> badavatar-hdd-pending-aurora: "";
+    // True from the moment the install tool picks a drive until it is done
+    // with it, and while a removal runs: no target may be connected, and no
+    // other Toolbox tool started, in between.
+    out property <bool> badavatar-hdd-tool-busy: badavatar-hdd-busy
+        || selecting-badavatar-hdd-target
+        || inspecting-badavatar-hdd
+        || badavatar-hdd-pending-target != "";
+
     // True while the BadAvatar USB-key drive-picker modal is shown.
     in-out property <bool> selecting-badavatar-target: false;
 
@@ -207,6 +236,13 @@ export global UiState {
     // Original-Xbox compatibility partition (Toolbox), independent of the
     // target: the tool picks its own console, over FTP or on a raw disk.
     in-out property <DisplayedCompatConfig> compat;
+    // The emulator packs listed in the settings. Kept apart from `compat`,
+    // which is rebuilt on every config change: these back rows of text
+    // fields, and a rebuilt model would recreate the row being typed in
+    // (losing its focus) at every keystroke. Rust keeps both models alive and
+    // updates their rows in place.
+    in-out property <[DisplayedCompatPack]> compat-builtin-packs;
+    in-out property <[DisplayedCompatPack]> compat-custom-packs;
     // True while the tool's own target-picker modal is shown.
     in-out property <bool> selecting-compat-target: false;
     // True while the compatibility files are being installed.

@@ -1,0 +1,156 @@
+// SPDX-License-Identifier: GPL-3.0-only
+
+import { IconSet } from "@lucide";
+import { ToolboxCard } from "toolbox-card.slint";
+import { CardHeader } from "card-header.slint";
+import { HorizontalLine } from "horizontal-line.slint";
+import { IconButton } from "icon-button.slint";
+import { BadAvatarUrlField, DownloadUrlField } from "download-url-field.slint";
+import { BuiltinPackRow, CustomPackRow } from "compat-pack-rows.slint";
+import { Message, Dispatcher } from "../messages.slint";
+import { MyPalette } from "../styling.slint";
+import { UiState } from "../ui-state.slint";
+
+// Title of one tool's group of sources, with optional actions on the right.
+component SectionTitle inherits HorizontalLayout {
+    in property <string> text;
+    spacing: 5px;
+    height: 27px;
+
+    Text {
+        text: root.text;
+        font-weight: 600;
+        horizontal-stretch: 1;
+        vertical-alignment: center;
+    }
+
+    @children
+}
+
+// Where the Toolbox tools download what they install: the BadAvatar
+// components, and the original-Xbox emulator packs with their per-title
+// configs. Every BadAvatar field falls back to a built-in release, and its
+// reset button brings it back; the built-in emulator packs are fixed, and
+// packs of the user's own come after them.
+export component DownloadSourcesCard inherits ToolboxCard {
+    // The tools read these when they start: changing them mid-run would
+    // mislead, since the run in progress keeps the URLs it started with.
+    disabled: UiState.creating-badavatar || UiState.badavatar-hdd-busy || UiState.compat-busy;
+    disabled-tooltip: "Available once the running Toolbox tool is done.";
+
+    CardHeader {
+        icon: IconSet.Download;
+        title: "Download sources";
+    }
+
+    HorizontalLine { }
+
+    Text {
+        text: "Advanced users only: update the package source URLs before downloading and installing them.";
+        font-size: 12px;
+        wrap: word-wrap;
+        color: MyPalette.foreground.transparentize(0.35);
+    }
+
+    SectionTitle {
+        text: "BadAvatar";
+    }
+
+    BadAvatarUrlField {
+        label: "ABadAvatar 1.0-beta";
+        url: UiState.badavatar.abadavatar-v10-url;
+        default-url: UiState.badavatar.abadavatar-v10-default-url;
+        field-key: "abadavatar_v10";
+    }
+
+    BadAvatarUrlField {
+        label: "ABadAvatar 1.3-beta (also used for the hard drive)";
+        url: UiState.badavatar.abadavatar-v13-url;
+        default-url: UiState.badavatar.abadavatar-v13-default-url;
+        field-key: "abadavatar_v13";
+    }
+
+    BadAvatarUrlField {
+        label: "XeUnshackle";
+        url: UiState.badavatar.xeunshackle-url;
+        default-url: UiState.badavatar.xeunshackle-default-url;
+        field-key: "xeunshackle";
+    }
+
+    BadAvatarUrlField {
+        label: "XeUnshackle Max (used when Aurora starts without delay)";
+        url: UiState.badavatar.xeunshackle-max-url;
+        default-url: UiState.badavatar.xeunshackle-max-default-url;
+        field-key: "xeunshackle_max";
+    }
+
+    BadAvatarUrlField {
+        label: "Aurora";
+        url: UiState.badavatar.aurora-url;
+        default-url: UiState.badavatar.aurora-default-url;
+        field-key: "aurora";
+        sources: UiState.badavatar.aurora-sources;
+    }
+
+    BadAvatarUrlField {
+        label: "System update";
+        url: UiState.badavatar.system-update-url;
+        default-url: UiState.badavatar.system-update-default-url;
+        field-key: "system_update";
+    }
+
+    HorizontalLine { }
+
+    SectionTitle {
+        text: "Original Xbox compatibility";
+
+        // Only once there is something to take away.
+        if UiState.compat-custom-packs.length > 0: IconButton {
+            icon: IconSet.RotateCcw;
+            label: "Restore defaults";
+            font-size: 12px;
+            horizontal-stretch: 0;
+            tooltip: "Remove the packs you added";
+            clicked => Dispatcher.dispatch(Message.ResetCompatPacks, "");
+        }
+
+        IconButton {
+            icon: IconSet.Plus;
+            label: "Add pack";
+            font-size: 12px;
+            horizontal-stretch: 0;
+            clicked => Dispatcher.dispatch(Message.AddCompatPack, "");
+        }
+    }
+
+    Text {
+        text: "Built-in packs are fixed; the ones you add follow them in the Toolbox.";
+        font-size: 12px;
+        wrap: word-wrap;
+        color: MyPalette.foreground.transparentize(0.35);
+    }
+
+    for pack in UiState.compat-builtin-packs: BuiltinPackRow {
+        pack: pack;
+    }
+
+    for pack in UiState.compat-custom-packs: CustomPackRow {
+        pack: pack;
+    }
+
+    // Sets the configs apart from the pack list: they are not a pack, and
+    // would otherwise read as one more row of it.
+    HorizontalLine { }
+
+    DownloadUrlField {
+        label: "Per-title configs";
+        url: UiState.compat.configs-url;
+        default-url: UiState.compat.configs-default-url;
+        url-edited(url) => {
+            Dispatcher.dispatch(Message.SetCompatConfigsUrl, url);
+        }
+        reset-requested => {
+            Dispatcher.dispatch(Message.ResetCompatConfigsUrl, "");
+        }
+    }
+}

@@ -10,6 +10,7 @@ mod compat;
 mod config;
 mod covers;
 mod dialogs;
+mod download_errors;
 mod drive_info;
 mod file_drop;
 mod game_details;
@@ -93,6 +94,11 @@ fn main() -> Result<()> {
     ui_state.set_config(DisplayedConfig::from(&state.config));
     ui_state.set_badavatar(config::displayed_badavatar(&state.config));
     ui_state.set_compat(config::displayed_compat(&state.config));
+    ui_state.set_compat_builtin_packs(ModelRc::from(std::rc::Rc::new(slint::VecModel::from(
+        config::builtin_compat_packs(),
+    ))));
+    config::sync_custom_packs(&state.compat_custom_packs, &state.config);
+    ui_state.set_compat_custom_packs(ModelRc::from(state.compat_custom_packs.clone()));
     ui_state.set_recent_locations(ModelRc::from(std::rc::Rc::new(slint::VecModel::from(
         config::recent_locations(&state.config),
     ))));

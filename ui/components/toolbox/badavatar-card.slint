@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 import { IconSet } from "@lucide";
-import { LineEdit, CheckBox, ComboBox, Spinner } from "std-widgets.slint";
+import { CheckBox, ComboBox, Spinner } from "std-widgets.slint";
 import { ToolboxCard } from "../toolbox-card.slint";
 import { CardHeader } from "../card-header.slint";
 import { CardActionRow } from "../card-action-row.slint";
@@ -12,66 +12,22 @@ import { IconButton } from "../icon-button.slint";
 import { UiState } from "../../ui-state.slint";
 import { Message, Dispatcher } from "../../messages.slint";
 
-// One editable BadAvatar download-URL row with a per-field reset button
-// (shown only when the field differs from its built-in default).
-component BadAvatarUrlField inherits VerticalLayout {
-    in property <string> label;
-    in property <string> url;
-    in property <string> default-url;
-    in property <string> field-key;
-    spacing: 3px;
-
-    // Editing a LineEdit breaks its `text: url` binding, so a later reset (url
-    // reverting to the default) would leave the field stale. Push the value back
-    // imperatively when `url` changes — but only when it actually differs from
-    // what's shown, otherwise the echo of the user's own keystroke (which
-    // round-trips through the config) would reassign the text every character
-    // and bounce the caret to the end, breaking mid-string editing.
-    changed url => {
-        if edit.text != url {
-            edit.text = url;
-        }
-    }
-
-    Text {
-        text: label;
-        font-size: 12px;
-    }
-
-    HorizontalLayout {
-        spacing: 5px;
-
-        edit := LineEdit {
-            horizontal-stretch: 1;
-            text: url;
-            edited => Dispatcher.dispatch(Message.SetBadAvatarUrl, field-key + "\n" + self.text);
-        }
-
-        if url != default-url: IconButton {
-            icon: IconSet.RotateCcw;
-            width: self.height;
-            clicked => Dispatcher.dispatch(Message.ResetBadAvatarUrl, field-key);
-        }
-    }
-}
-
 // Card offering to build a homebrew boot USB key. Always shown, but the action
 // is disabled while a target is connected (the key must be built standalone).
 export component BadAvatarCard inherits ToolboxCard {
-    // Local toggle for the advanced (URL) settings section.
-    private property <bool> show-badavatar-settings: false;
-
     private property <bool> target-connected: !UiState.config.target.is-empty;
 
     // Nothing here is usable while the key is being built, while a target is
     // connected (the key must be prepared standalone)
     // — so veil the whole card rather than just its action row.
-    disabled: UiState.creating-badavatar || UiState.compat-busy || target-connected;
+    disabled: UiState.creating-badavatar || UiState.compat-busy || UiState.badavatar-hdd-tool-busy || target-connected;
     disabled-tooltip: target-connected
-        ? "Disconnect from the current target first — the USB key must be prepared on its own."
+        ? "Disconnect from the current target first"
         : UiState.compat-busy
             ? "Wait for the original Xbox compatibility install to finish."
-            : "";
+            : UiState.badavatar-hdd-tool-busy
+                ? "Wait for BadAvatar to be written to the hard drive."
+                : "";
 
     CardHeader {
         icon: IconSet.Usb;
@@ -83,13 +39,6 @@ export component BadAvatarCard inherits ToolboxCard {
             indeterminate: true;
         }
 
-        if !UiState.creating-badavatar: IconButton {
-            icon: IconSet.Settings2;
-            width: self.height;
-            clicked => {
-                show-badavatar-settings = !show-badavatar-settings;
-            }
-        }
     }
 
     HorizontalLine { }
@@ -99,11 +48,9 @@ export component BadAvatarCard inherits ToolboxCard {
         wrap: word-wrap;
     }
 
-    // Version picker for the ABadAvatar boot chain. Hidden as soon as the URL
-    // no longer matches a known release (index -1), i.e. once the user has
-    // edited the field by hand — the per-field reset in the advanced settings
-    // brings it back.
-    if UiState.badavatar.abadavatar-version-index >= 0: HorizontalLayout {
+    // Version picker for the ABadAvatar boot chain. Where each version is
+    // downloaded from is set in the Settings page.
+    HorizontalLayout {
         spacing: 8px;
 
         VerticalLayout {
@@ -140,53 +87,6 @@ export component BadAvatarCard inherits ToolboxCard {
         checked: UiState.badavatar.xeunshackle-autostart;
         toggled => {
             Dispatcher.dispatch(Message.ToggleBadAvatarAutostart, "");
-        }
-    }
-
-    if show-badavatar-settings: VerticalLayout {
-        spacing: 8px;
-
-        HorizontalLine { }
-
-        Text {
-            text: "Download URLs — edit to use a different source, reset to restore the default:";
-            font-size: 12px;
-            wrap: word-wrap;
-        }
-
-        BadAvatarUrlField {
-            label: "ABadAvatar";
-            url: UiState.badavatar.abadavatar-url;
-            default-url: UiState.badavatar.abadavatar-default-url;
-            field-key: "abadavatar";
-        }
-
-        BadAvatarUrlField {
-            label: "XeUnshackle";
-            url: UiState.badavatar.xeunshackle-url;
-            default-url: UiState.badavatar.xeunshackle-default-url;
-            field-key: "xeunshackle";
-        }
-
-        BadAvatarUrlField {
-            label: "XeUnshackle Max (used when Aurora auto start is checked)";
-            url: UiState.badavatar.xeunshackle-max-url;
-            default-url: UiState.badavatar.xeunshackle-max-default-url;
-            field-key: "xeunshackle_max";
-        }
-
-        BadAvatarUrlField {
-            label: "Aurora (.zip/.7z — the official .rar is not supported)";
-            url: UiState.badavatar.aurora-url;
-            default-url: UiState.badavatar.aurora-default-url;
-            field-key: "aurora";
-        }
-
-        if UiState.badavatar.include-system-update: BadAvatarUrlField {
-            label: "System update";
-            url: UiState.badavatar.system-update-url;
-            default-url: UiState.badavatar.system-update-default-url;
-            field-key: "system_update";
         }
     }
 

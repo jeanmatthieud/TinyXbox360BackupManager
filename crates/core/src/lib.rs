@@ -5,6 +5,7 @@
 
 pub mod archive;
 pub mod badavatar;
+pub mod badavatar_hdd;
 pub mod config;
 pub mod convert;
 pub mod covers;

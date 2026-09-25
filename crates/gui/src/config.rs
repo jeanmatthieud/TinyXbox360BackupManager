@@ -3,15 +3,16 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 use crate::{
-    DisplayedBadAvatarConfig, DisplayedCompatConfig, DisplayedConfig, DisplayedFatxDrive,
-    DisplayedRecentLocation, DisplayedRemovableDrive, GodLayout, TargetKind,
+    DisplayedBadAvatarConfig, DisplayedCompatConfig, DisplayedCompatPack, DisplayedConfig,
+    DisplayedFatxDrive, DisplayedRecentLocation, DisplayedRemovableDrive, DisplayedUrlSource,
+    GodLayout, TargetKind,
 };
 use crate::util::GIB;
-use slint::{ModelRc, SharedString, ToSharedString, VecModel};
+use slint::{Model, ModelRc, SharedString, ToSharedString, VecModel};
 use txbm_core::{
-    badavatar::UrlField,
+    badavatar::{AbadavatarVersion, UrlField},
     config::{Config, GodLayout as CoreGodLayout},
-    ogxbox_compat::COMPAT_PACKS,
+    ogxbox_compat::{COMPAT_PACKS, XEFU_CONFIGS_URL},
     target::Target,
 };
 
@@ -21,55 +22,139 @@ use txbm_core::{
 pub fn displayed_badavatar(config: &Config) -> DisplayedBadAvatarConfig {
     let ba = &config.contents.badavatar;
     DisplayedBadAvatarConfig {
-        abadavatar_url: ba.url(UrlField::Abadavatar).to_shared_string(),
+        abadavatar_v10_url: ba.url(UrlField::AbadavatarV10).to_shared_string(),
+        abadavatar_v13_url: ba.url(UrlField::AbadavatarV13).to_shared_string(),
         xeunshackle_url: ba.url(UrlField::Xeunshackle).to_shared_string(),
         xeunshackle_max_url: ba.url(UrlField::XeunshackleMax).to_shared_string(),
         aurora_url: ba.url(UrlField::Aurora).to_shared_string(),
         system_update_url: ba.url(UrlField::SystemUpdate).to_shared_string(),
-        abadavatar_default_url: UrlField::Abadavatar.default_url().to_shared_string(),
+        abadavatar_v10_default_url: UrlField::AbadavatarV10.default_url().to_shared_string(),
+        abadavatar_v13_default_url: UrlField::AbadavatarV13.default_url().to_shared_string(),
         xeunshackle_default_url: UrlField::Xeunshackle.default_url().to_shared_string(),
         xeunshackle_max_default_url: UrlField::XeunshackleMax.default_url().to_shared_string(),
         aurora_default_url: UrlField::Aurora.default_url().to_shared_string(),
         system_update_default_url: UrlField::SystemUpdate.default_url().to_shared_string(),
+        aurora_sources: displayed_sources(UrlField::Aurora),
         include_system_update: ba.include_system_update,
         xeunshackle_autostart: ba.xeunshackle_autostart,
         abadavatar_versions: ModelRc::new(VecModel::from(
-            txbm_core::badavatar::ABADAVATAR_VERSIONS
+            AbadavatarVersion::ALL
                 .iter()
-                .map(|(label, _)| label.to_shared_string())
+                .map(|v| v.label().to_shared_string())
                 .collect::<Vec<_>>(),
         )),
-        // -1 for a URL the user typed themselves: the UI hides the version
-        // drop-down until the field is reset to a known release.
-        abadavatar_version_index: txbm_core::badavatar::abadavatar_version_index(
-            ba.url(UrlField::Abadavatar),
-        )
-        .map_or(-1, |i| i as i32),
+        abadavatar_version_index: AbadavatarVersion::ALL
+            .iter()
+            .position(|v| *v == ba.abadavatar_version)
+            .unwrap_or(0) as i32,
     }
 }
 
+/// The known download sources of a component, for its URL field's picker.
+fn displayed_sources(field: UrlField) -> ModelRc<DisplayedUrlSource> {
+    ModelRc::new(VecModel::from(
+        field
+            .sources()
+            .iter()
+            .map(|s| DisplayedUrlSource {
+                label: s.label.to_shared_string(),
+                url: s.url.to_shared_string(),
+                host: url_host(s.url).to_shared_string(),
+            })
+            .collect::<Vec<_>>(),
+    ))
+}
+
+/// The host part of a URL (`archive.org` for `https://archive.org/…`), or the
+/// URL itself when it has no scheme.
+fn url_host(url: &str) -> &str {
+    let Some((_, rest)) = url.split_once("://") else {
+        return url;
+    };
+    rest.split('/').next().unwrap_or(rest)
+}
+
 /// Builds the model backing `UiState.compat` from the config: the pack list in
-/// the drop-down's order, the chosen row, and the URL alongside the pack's own
-/// so the field can offer a reset when the user has overridden it.
+/// the drop-down's order, the chosen row with what is known of it, and the
+/// configs URL alongside the built-in one so its field can offer a reset.
 pub fn displayed_compat(config: &Config) -> DisplayedCompatConfig {
     let cfg = &config.contents.ogxbox_compat;
     let pack = cfg.pack();
     DisplayedCompatConfig {
         packs: ModelRc::new(VecModel::from(
-            COMPAT_PACKS
-                .iter()
-                .map(|p| p.label.to_shared_string())
+            cfg.packs()
+                .map(|p| p.label().to_shared_string())
                 .collect::<Vec<_>>(),
         )),
-        pack_index: COMPAT_PACKS
-            .iter()
-            .position(|p| p.key == pack.key)
-            .unwrap_or(0) as i32,
-        pack_description: pack.description.to_shared_string(),
-        needs_exploit: pack.needs_exploit,
-        pack_url: pack.url.to_shared_string(),
+        pack_index: cfg.packs().position(|p| p.key() == pack.key()).unwrap_or(0) as i32,
+        pack_description: match pack.description() {
+            Some(description) => description.to_shared_string(),
+            None if pack.url().is_empty() => {
+                "Custom pack, with no URL yet: set one in Settings › Download sources."
+                    .to_shared_string()
+            }
+            None => slint::format!("Custom pack, downloaded from {}.", url_host(pack.url())),
+        },
+        needs_exploit: pack.needs_exploit(),
+        configs_url: cfg.configs_url().to_shared_string(),
+        configs_default_url: XEFU_CONFIGS_URL.to_shared_string(),
+        // The built-in URL is a branch archive: naming the repository says
+        // more than naming GitHub. Anything else is known by its host alone.
+        configs_source: if cfg.configs_url() == XEFU_CONFIGS_URL {
+            "github.com/Goatman13/xefu".to_shared_string()
+        } else {
+            url_host(cfg.configs_url().trim()).to_shared_string()
+        },
         backup_first: cfg.backup_first,
         update_configs: cfg.update_configs,
+    }
+}
+
+/// The built-in emulator packs, for the settings list. They never change, so
+/// this is set once at startup.
+pub fn builtin_compat_packs() -> Vec<DisplayedCompatPack> {
+    COMPAT_PACKS
+        .iter()
+        .map(|p| DisplayedCompatPack {
+            key: p.key.to_shared_string(),
+            label: p.label.to_shared_string(),
+            url: p.url.to_shared_string(),
+        })
+        .collect()
+}
+
+/// Brings `model` (backing `UiState.compat-custom-packs`) in line with the
+/// config's custom packs.
+///
+/// The model is updated rather than replaced: each row is a pair of text
+/// fields, and handing Slint a new model recreates every row, which would
+/// take the focus away from the one being typed in. With the same packs in
+/// the same order — the case of every keystroke — only rows that differ are
+/// rewritten, which Slint applies to the existing row. An addition or a
+/// removal (a button click, no field focused) rebuilds the list.
+pub fn sync_custom_packs(model: &VecModel<DisplayedCompatPack>, config: &Config) {
+    let wanted: Vec<DisplayedCompatPack> = config
+        .contents
+        .ogxbox_compat
+        .custom_packs
+        .iter()
+        .map(|p| DisplayedCompatPack {
+            key: p.key.to_shared_string(),
+            label: p.label.to_shared_string(),
+            url: p.url.to_shared_string(),
+        })
+        .collect();
+
+    let same_rows = model.row_count() == wanted.len()
+        && model.iter().zip(&wanted).all(|(have, want)| have.key == want.key);
+    if !same_rows {
+        model.set_vec(wanted);
+        return;
+    }
+    for (i, want) in wanted.into_iter().enumerate() {
+        if model.row_data(i).as_ref() != Some(&want) {
+            model.set_row_data(i, want);
+        }
     }
 }
 

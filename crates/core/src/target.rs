@@ -564,7 +564,7 @@ pub(crate) fn find_aurora_data_dir(session: &mut dyn RemoteFs) -> Option<String>
 /// Resolves the Aurora install directory on one console volume: prefers a
 /// `launch.ini`'s `[Paths]` entry when present (whatever the actual layout),
 /// falling back to `Aurora` or `Dashboard/Aurora` at the volume's root.
-fn find_aurora_dir_on_root(session: &mut dyn RemoteFs, root: &str) -> Option<String> {
+pub(crate) fn find_aurora_dir_on_root(session: &mut dyn RemoteFs, root: &str) -> Option<String> {
     let root_path = format!("/{root}");
 
     let has_ini = session

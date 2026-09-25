@@ -1,0 +1,170 @@
+// SPDX-FileCopyrightText: 2026 Manuel Quarneti <mq1@ik.me> (TinyWiiBackupManager)
+// SPDX-FileContributor: Modified by Jean-Matthieu Dechriste (TinyXbox360BackupManager)
+// SPDX-License-Identifier: GPL-3.0-only
+
+import { IconDisplay, IconSet } from "@lucide";
+import { LineEdit } from "std-widgets.slint";
+import { IconButton } from "icon-button.slint";
+import { Message, Dispatcher } from "../messages.slint";
+import { MyPalette } from "../styling.slint";
+import { DisplayedUrlSource } from "../types.slint";
+
+// One known source in the picker: its label, the host it points at, and a
+// check when the field currently holds its URL.
+component UrlSourceRow inherits Rectangle {
+    in property <DisplayedUrlSource> source;
+    in property <bool> selected;
+    callback picked;
+
+    height: rows.preferred-height;
+    border-radius: 6px;
+    background: touch.has-hover ? MyPalette.alternate-background.darker(0.1) : transparent;
+
+    rows := HorizontalLayout {
+        padding: 6px;
+        padding-left: 8px;
+        padding-right: 8px;
+        spacing: 8px;
+
+        VerticalLayout {
+            alignment: center;
+            width: 14px;
+
+            if selected: IconDisplay {
+                icon: IconSet.Check;
+                stroke: MyPalette.accent-background;
+                size: 14px;
+            }
+        }
+
+        VerticalLayout {
+            horizontal-stretch: 1;
+            spacing: 1px;
+
+            Text {
+                text: source.label;
+                font-size: 12px;
+                font-weight: selected ? 600 : 400;
+            }
+
+            Text {
+                text: source.host;
+                font-size: 11px;
+                color: MyPalette.foreground.transparentize(0.45);
+            }
+        }
+    }
+
+    touch := TouchArea {
+        clicked => picked();
+    }
+}
+
+// One editable download-URL row with a reset button (shown only when the
+// field differs from its built-in default) and, for a component with known
+// mirrors, a picker that fills the field with one of them. The field stays
+// freely editable either way. What an edit or a reset changes is up to the
+// user of the component, through the two callbacks.
+export component DownloadUrlField inherits VerticalLayout {
+    in property <string> label;
+    in property <string> url;
+    in property <string> default-url;
+    in property <[DisplayedUrlSource]> sources: [];
+    callback url-edited(url: string);
+    // Back to the built-in default: the override is dropped, not set to a
+    // copy of the default, so the field keeps following it.
+    callback reset-requested();
+    spacing: 3px;
+
+    // Editing a LineEdit breaks its `text: url` binding, so a later reset (url
+    // reverting to the default) would leave the field stale. Push the value back
+    // imperatively when `url` changes — but only when it actually differs from
+    // what's shown, otherwise the echo of the user's own keystroke (which
+    // round-trips through the config) would reassign the text every character
+    // and bounce the caret to the end, breaking mid-string editing.
+    changed url => {
+        if edit.text != url {
+            edit.text = url;
+        }
+    }
+
+    Text {
+        text: label;
+        font-size: 12px;
+    }
+
+    HorizontalLayout {
+        spacing: 5px;
+
+        edit := LineEdit {
+            horizontal-stretch: 1;
+            text: url;
+            edited => root.url-edited(self.text);
+        }
+
+        if sources.length > 0: VerticalLayout {
+            alignment: center;
+
+            sources-button := IconButton {
+                icon: IconSet.ChevronDown;
+                width: self.height;
+                tooltip: "Choose another download source";
+                clicked => sources-popup.show();
+            }
+
+            // Anchored under the button, its right edge on the button's.
+            sources-popup := PopupWindow {
+                x: sources-button.x + sources-button.width - self.width;
+                y: sources-button.y + sources-button.height + 4px;
+                width: 260px;
+
+                Rectangle {
+                    background: MyPalette.background;
+                    border-color: MyPalette.border;
+                    border-width: 1px;
+                    border-radius: 8px;
+                    drop-shadow-blur: 12px;
+                    drop-shadow-offset-y: 3px;
+                    drop-shadow-color: #00000040;
+
+                    VerticalLayout {
+                        padding: 4px;
+                        spacing: 2px;
+
+                        for source in sources: UrlSourceRow {
+                            source: source;
+                            selected: source.url == url;
+                            picked => {
+                                if source.url == default-url {
+                                    root.reset-requested();
+                                } else {
+                                    root.url-edited(source.url);
+                                }
+                                sources-popup.close();
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if url != default-url: IconButton {
+            icon: IconSet.RotateCcw;
+            width: self.height;
+            tooltip: "Restore the default URL";
+            clicked => root.reset-requested();
+        }
+    }
+}
+
+// A BadAvatar component's URL, stored under its key in the BadAvatar settings.
+export component BadAvatarUrlField inherits DownloadUrlField {
+    in property <string> field-key;
+
+    url-edited(url) => {
+        Dispatcher.dispatch(Message.SetBadAvatarUrl, field-key + "\n" + url);
+    }
+    reset-requested => {
+        Dispatcher.dispatch(Message.ResetBadAvatarUrl, field-key);
+    }
+}

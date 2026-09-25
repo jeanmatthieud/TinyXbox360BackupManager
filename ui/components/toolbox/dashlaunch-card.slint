@@ -140,8 +140,10 @@ export component DashlaunchCard inherits ToolboxCard {
         }
     }
 
-    disabled: UiState.job-running;
-    disabled-tooltip: "Available once the queue has finished.";
+    disabled: UiState.job-running || UiState.badavatar-hdd-busy;
+    disabled-tooltip: UiState.badavatar-hdd-busy
+        ? "Available once BadAvatar is written to the hard drive."
+        : "Available once the queue has finished.";
 
     CardHeader {
         icon: IconSet.SlidersHorizontal;

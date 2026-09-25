@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 use crate::{
-    AppWindow, Dispatcher, DisplayedConfig, DisplayedDashlaunch, DisplayedDriveInfo, DisplayedFatxDrive, DisplayedGame,
+    AppWindow, BadAvatarHddState, Dispatcher, DisplayedBadAvatarHdd, DisplayedConfig, DisplayedDashlaunch, DisplayedDriveInfo, DisplayedFatxDrive, DisplayedGame,
     DisplayedGameToAdd, DisplayedJob, DisplayedStoragePath, DisplayedTitleUpdate, JobKind, Message,
     Notification, Page,
     PendingQueueAction, UiState, covers, dialogs, game_details, jobs::perform_job,
@@ -19,7 +19,8 @@ use std::{
     sync::{Arc, Mutex, atomic::AtomicBool},
 };
 use txbm_core::{
-    badavatar::UrlField, config::TargetKind,
+    badavatar::{AbadavatarVersion, UrlField}, badavatar_hdd::{HddInspection, HddStatus},
+    config::TargetKind, fatx::FatxConfig,
     dashlaunch::{LICENSE_PATCHES, LaunchIni}, data_dir::DATA_DIR, drive_info::DriveInfo,
     ftp::FtpSession, game::Game, game_details::ContentKind, job_queue::QueuedJob,
     target::{StorageConfig, Target, TargetAnalysis},
@@ -52,6 +53,19 @@ static COMPAT_INSPECTION: Mutex<Option<anyhow::Result<bool>>> = Mutex::new(None)
 #[allow(clippy::type_complexity)]
 static DASHLAUNCH_RESULT: Mutex<Option<(String, bool, anyhow::Result<Option<LaunchIni>>)>> =
     Mutex::new(None);
+
+/// Result of reading the connected hard drive's BadAvatar state, tagged with
+/// the [`Target::remote_key`] it came from so an answer that arrives after the
+/// user switched targets is dropped. Deposited by the worker thread,
+/// retrieved in BadAvatarHddFetched.
+#[allow(clippy::type_complexity)]
+static BADAVATAR_HDD_RESULT: Mutex<Option<(String, anyhow::Result<HddInspection>)>> =
+    Mutex::new(None);
+
+/// Result of reading a drive picked by the BadAvatar install tool, before its
+/// confirmation modal opens. Deposited by the worker thread, retrieved in
+/// BadAvatarHddPicked.
+static BADAVATAR_HDD_PICK: Mutex<Option<anyhow::Result<HddInspection>>> = Mutex::new(None);
 
 /// Result of the asynchronous network scan started from the FTP modal:
 /// `Some(ip)` when a console was found, `None` when the scan finished without
@@ -192,6 +206,15 @@ impl State {
             )
     }
 
+    /// True while the BadAvatar hard-drive tool is at work: from the drive
+    /// picked in the Toolbox until its install is over, or during a removal.
+    /// The other Toolbox tools, and connecting a target, wait meanwhile.
+    fn badavatar_hdd_tool_busy(&self) -> bool {
+        self.badavatar_hdd_busy
+            || self.is_inspecting_badavatar_hdd
+            || self.badavatar_hdd_pending.is_some()
+    }
+
     /// Cancels the whole job queue: the running item (index 0) is only
     /// signalled to stop — it bails at its next cancellation checkpoint, cleans
     /// up its partial output, and is removed by `JobFinished` — while the
@@ -245,6 +268,18 @@ impl State {
         let app = weak.upgrade().unwrap();
         app.global::<UiState<'_>>().set_cancelling_queue(false);
         self.batch_cancelled = false;
+
+        // A BadAvatar install or removal is writing to the hard drive outside
+        // the queue: the job waits for it, and `BadAvatarHddDone` starts it.
+        if self.badavatar_hdd_busy {
+            // Said once per batch, not once per game of it.
+            if self.job_queue.len() == 1 {
+                self.notifications.push(Notification::info(
+                    "Queued: it starts once BadAvatar is removed from the hard drive",
+                ));
+            }
+            return;
+        }
 
         if !self.is_job_running {
             self.is_job_running = true;
@@ -349,7 +384,7 @@ impl State {
             None => {
                 ui_state.set_compat_restoring(false);
                 ui_state.set_compat_pending_source(
-                    self.config.contents.ogxbox_compat.pack().label.to_shared_string(),
+                    self.config.contents.ogxbox_compat.pack().label().to_shared_string(),
                 );
             }
         }
@@ -417,6 +452,7 @@ impl State {
                 ui_state.set_config(DisplayedConfig::from(&self.config));
                 ui_state.set_badavatar(crate::config::displayed_badavatar(&self.config));
                 ui_state.set_compat(crate::config::displayed_compat(&self.config));
+                crate::config::sync_custom_packs(&self.compat_custom_packs, &self.config);
                 ui_state.set_recent_locations(ModelRc::from(Rc::new(VecModel::from(
                     crate::config::recent_locations(&self.config),
                 ))));
@@ -848,6 +884,16 @@ impl State {
                 }
             }
             Message::RequestDisconnect | Message::RequestQuit => {
+                // Letting go of the drive mid-write could leave BadAvatar half
+                // installed; the navbar already disables the button, but the
+                // window's close button still lands here.
+                if self.badavatar_hdd_busy {
+                    self.notifications.push(Notification::warning(
+                        "Wait until BadAvatar is done with the hard drive",
+                    ));
+                    return;
+                }
+
                 let action = if matches!(message, Message::RequestQuit) {
                     PendingQueueAction::Quit
                 } else {
@@ -916,6 +962,8 @@ impl State {
                 self.dashlaunch_location = None;
                 let app = weak.upgrade().unwrap();
                 app.global::<UiState<'_>>().set_dashlaunch(DisplayedDashlaunch::default());
+                app.global::<UiState<'_>>()
+                    .set_badavatar_hdd(DisplayedBadAvatarHdd::default());
 
                 message_queue.push_back((Message::SyncConfig, SharedString::new()));
                 message_queue.push_back((Message::RefreshAll, SharedString::new()));
@@ -972,6 +1020,8 @@ impl State {
                                 .push_back((Message::FetchAuroraPaths, SharedString::new()));
                             message_queue
                                 .push_back((Message::FetchDashlaunch, SharedString::new()));
+                            message_queue
+                                .push_back((Message::FetchBadAvatarHdd, SharedString::new()));
                         } else {
                             let mut candidates: Vec<SharedString> = analysis
                                 .candidates
@@ -1047,6 +1097,10 @@ impl State {
                                 );
                                 dispatcher.invoke_dispatch(
                                     Message::FetchDashlaunch,
+                                    SharedString::new(),
+                                );
+                                dispatcher.invoke_dispatch(
+                                    Message::FetchBadAvatarHdd,
                                     SharedString::new(),
                                 );
                             }
@@ -1602,7 +1656,7 @@ impl State {
             // queue: the card is veiled while a job runs, and the write is a
             // single small file that is over in a blink.
             Message::SetDashlaunch => {
-                if self.is_job_running {
+                if self.is_job_running || self.badavatar_hdd_busy {
                     return;
                 }
                 let (Some(target), Some(location)) = (
@@ -1692,6 +1746,295 @@ impl State {
                         ui.set_dashlaunch(DisplayedDashlaunch::default());
                         self.dashlaunch_location = None;
                     }
+                }
+            }
+            Message::FetchBadAvatarHdd => {
+                // Our own write is in flight: what a read finds now is in flux,
+                // and `BadAvatarHddDone` reads the drive again anyway.
+                if self.badavatar_hdd_busy {
+                    return;
+                }
+                let target = Target::from_config(&self.config.contents);
+                let Some(target @ Target::Fatx(_)) = target else {
+                    let app = weak.upgrade().unwrap();
+                    app.global::<UiState<'_>>()
+                        .set_badavatar_hdd(DisplayedBadAvatarHdd::default());
+                    return;
+                };
+                let key = target.remote_key();
+                let weak = weak.clone();
+                std::thread::spawn(move || {
+                    let res = txbm_core::badavatar_hdd::inspect(&target);
+                    *BADAVATAR_HDD_RESULT.lock().unwrap() = Some((key, res));
+                    let _ = weak.upgrade_in_event_loop(|app| {
+                        app.global::<Dispatcher<'_>>()
+                            .invoke_dispatch(Message::BadAvatarHddFetched, SharedString::new());
+                    });
+                });
+            }
+            Message::BadAvatarHddFetched => {
+                let Some((key, res)) = BADAVATAR_HDD_RESULT.lock().unwrap().take() else {
+                    return;
+                };
+                let current = Target::from_config(&self.config.contents).map(|t| t.remote_key());
+                if current.as_deref() != Some(key.as_str()) {
+                    return;
+                }
+                let app = weak.upgrade().unwrap();
+                let ui = app.global::<UiState<'_>>();
+                match res {
+                    Ok(inspection) => ui.set_badavatar_hdd(displayed_badavatar_hdd(&inspection)),
+                    // Only hides the card: a drive that can't be read is
+                    // already reported by the scan.
+                    Err(e) => {
+                        eprintln!("Failed to read the BadAvatar state: {e:#}");
+                        ui.set_badavatar_hdd(DisplayedBadAvatarHdd::default());
+                    }
+                }
+            }
+            // Toolbox: pick the drive. Like the other Toolbox tools, only with
+            // no target connected — which is also what keeps its write alone
+            // on the drive: with no target, no job can run.
+            Message::InstallBadAvatarHdd => {
+                if self.badavatar_hdd_tool_busy()
+                    || self.is_creating_badavatar
+                    || self.is_installing_compat
+                    || self.is_inspecting_compat
+                    || Target::from_config(&self.config.contents).is_some()
+                {
+                    return;
+                }
+                let app = weak.upgrade().unwrap();
+                app.global::<UiState<'_>>()
+                    .set_selecting_badavatar_hdd_target(true);
+                message_queue.push_back((Message::RefreshFatxDrives, SharedString::new()));
+            }
+            Message::SelectBadAvatarHddDrive => {
+                if self.badavatar_hdd_tool_busy() {
+                    return;
+                }
+                // Payload: the raw device picked in the tool's FATX picker.
+                let device = PathBuf::from(payload.as_str());
+                self.badavatar_hdd_pending = Some(device.clone());
+                self.is_inspecting_badavatar_hdd = true;
+                let app = weak.upgrade().unwrap();
+                let ui = app.global::<UiState<'_>>();
+                ui.set_inspecting_badavatar_hdd(true);
+                ui.set_status("Reading the hard drive…".into());
+
+                let weak = weak.clone();
+                std::thread::spawn(move || {
+                    let target = Target::Fatx(FatxConfig::new(device));
+                    let res = txbm_core::badavatar_hdd::inspect(&target);
+                    *BADAVATAR_HDD_PICK.lock().unwrap() = Some(res);
+                    let _ = weak.upgrade_in_event_loop(|app| {
+                        app.global::<Dispatcher<'_>>()
+                            .invoke_dispatch(Message::BadAvatarHddPicked, SharedString::new());
+                    });
+                });
+            }
+            Message::BadAvatarHddPicked => {
+                let res = BADAVATAR_HDD_PICK.lock().unwrap().take();
+                self.is_inspecting_badavatar_hdd = false;
+                let app = weak.upgrade().unwrap();
+                let ui = app.global::<UiState<'_>>();
+                ui.set_inspecting_badavatar_hdd(false);
+                ui.set_status(SharedString::new());
+
+                // Only a retail drive goes on to the confirmation modal.
+                let device = self.badavatar_hdd_pending.clone();
+                match (res, device) {
+                    (Some(Ok(inspection)), Some(device))
+                        if matches!(inspection.status, HddStatus::Retail) =>
+                    {
+                        ui.set_badavatar_hdd_pending_aurora(
+                            inspection.aurora.unwrap_or_default().to_shared_string(),
+                        );
+                        ui.set_badavatar_hdd_pending_target(
+                            device.display().to_shared_string(),
+                        );
+                        return;
+                    }
+                    (Some(Ok(inspection)), _) => match inspection.status {
+                        HddStatus::Installed { .. } => {
+                            self.notifications.push(Notification::info(
+                                "BadAvatar is already on this hard drive — connect to it to see it, or remove it, in Device status",
+                            ));
+                        }
+                        HddStatus::Foreign { found } => {
+                            self.notifications.push(Notification::warning_sticky(slint::format!(
+                                "Another BadAvatar or BadUpdate setup is on this hard drive ({}). Restore it to its retail state first.",
+                                found.join(", ")
+                            )));
+                        }
+                        HddStatus::Retail => {}
+                    },
+                    (Some(Err(e)), _) => {
+                        self.notifications
+                            .push(Notification::error(slint::format!("{e:#}")));
+                    }
+                    (None, _) => {}
+                }
+                self.badavatar_hdd_pending = None;
+            }
+            Message::CancelInstallBadAvatarHdd => {
+                self.badavatar_hdd_pending = None;
+                let app = weak.upgrade().unwrap();
+                app.global::<UiState<'_>>()
+                    .set_badavatar_hdd_pending_target(SharedString::new());
+            }
+            // Device status: the removal, on the connected drive.
+            Message::UninstallBadAvatarHdd => {
+                let app = weak.upgrade().unwrap();
+                let ui = app.global::<UiState<'_>>();
+                if self.badavatar_hdd_busy || self.is_job_running || ui.get_writing_dashlaunch() {
+                    return;
+                }
+                ui.set_confirming_badavatar_hdd_uninstall(true);
+            }
+            Message::ConfirmInstallBadAvatarHdd | Message::ConfirmUninstallBadAvatarHdd => {
+                let installing = matches!(message, Message::ConfirmInstallBadAvatarHdd);
+                let app = weak.upgrade().unwrap();
+                let ui = app.global::<UiState<'_>>();
+                let pending = self.badavatar_hdd_pending.take();
+                ui.set_badavatar_hdd_pending_target(SharedString::new());
+                if self.badavatar_hdd_busy {
+                    return;
+                }
+
+                let target = if installing {
+                    // Asked again, and not only when the tool was started: a
+                    // target connected meanwhile could run a job beside this
+                    // write.
+                    if Target::from_config(&self.config.contents).is_some() {
+                        self.notifications.push(Notification::error(
+                            "Install cancelled — disconnect from the current target first",
+                        ));
+                        return;
+                    }
+                    let Some(device) = pending else {
+                        return;
+                    };
+                    Target::Fatx(FatxConfig::new(device))
+                } else {
+                    // Deliberately outside the job queue: the card is veiled
+                    // while a job runs, and jobs queued meanwhile wait for the
+                    // removal to finish (see `enqueue_job`), so it is still the
+                    // only write in flight. Asked again: a job may have started
+                    // while the modal was up.
+                    if self.is_job_running || ui.get_writing_dashlaunch() {
+                        self.notifications.push(Notification::error(
+                            "Not started — wait for the queue to finish first",
+                        ));
+                        return;
+                    }
+                    match Target::from_config(&self.config.contents) {
+                        Some(target @ Target::Fatx(_)) => target,
+                        _ => return,
+                    }
+                };
+
+                self.badavatar_hdd_busy = true;
+                self.badavatar_hdd_cancel
+                    .store(false, std::sync::atomic::Ordering::Relaxed);
+                ui.set_badavatar_hdd_busy(true);
+                // A removal has nothing to cancel: it only deletes, and is over
+                // in a moment.
+                ui.set_badavatar_hdd_writing(!installing);
+
+                let cfg = self.config.contents.badavatar.clone();
+                let cancel = self.badavatar_hdd_cancel.clone();
+                let weak = weak.clone();
+                std::thread::spawn(move || {
+                    let weak_status = weak.clone();
+                    let status = move |line: &str| {
+                        let text = SharedString::from(line);
+                        let _ = weak_status.upgrade_in_event_loop(move |app| {
+                            app.global::<UiState<'_>>().set_status(text);
+                        });
+                    };
+                    let weak_writing = weak.clone();
+                    let writing = move || {
+                        let _ = weak_writing.upgrade_in_event_loop(|app| {
+                            app.global::<Dispatcher<'_>>()
+                                .invoke_dispatch(Message::BadAvatarHddWriting, SharedString::new());
+                        });
+                    };
+
+                    let res = if installing {
+                        txbm_core::badavatar_hdd::install(&target, &cfg, &cancel, &status, &writing)
+                    } else {
+                        txbm_core::badavatar_hdd::uninstall(&target, &status)
+                    };
+
+                    let _ = weak.upgrade_in_event_loop(move |app| {
+                        let dispatcher = app.global::<Dispatcher<'_>>();
+                        dispatcher.invoke_dispatch(Message::SetStatus, SharedString::new());
+                        dispatcher.invoke_dispatch(Message::BadAvatarHddDone, SharedString::new());
+
+                        match res {
+                            Ok(()) if installing => dispatcher.invoke_dispatch(
+                                Message::NotifySuccessSticky,
+                                "BadAvatar is installed on the hard drive. Unplug any BadAvatar USB key before starting the console.".to_shared_string(),
+                            ),
+                            Ok(()) => dispatcher.invoke_dispatch(
+                                Message::NotifySuccess,
+                                "BadAvatar removed from the hard drive".to_shared_string(),
+                            ),
+                            Err(e)
+                                if e.to_string()
+                                    .contains(txbm_core::badavatar::BADAVATAR_CANCELLED) =>
+                            {
+                                dispatcher.invoke_dispatch(
+                                    Message::NotifyInfo,
+                                    "BadAvatar install cancelled".to_shared_string(),
+                                );
+                            }
+                            Err(e) => {
+                                let text = if let Some(text) =
+                                    crate::download_errors::badavatar(&e)
+                                {
+                                    text.into()
+                                } else if installing {
+                                    slint::format!("Failed to install BadAvatar: {e:#}")
+                                } else {
+                                    slint::format!("Failed to remove BadAvatar: {e:#}")
+                                };
+                                dispatcher.invoke_dispatch(Message::NotifyError, text);
+                            }
+                        }
+                    });
+                });
+            }
+            Message::CancelBadAvatarHdd => {
+                if self.badavatar_hdd_busy {
+                    self.badavatar_hdd_cancel
+                        .store(true, std::sync::atomic::Ordering::Relaxed);
+                    message_queue
+                        .push_back((Message::SetStatus, "⟳  Cancelling…".to_shared_string()));
+                }
+            }
+            Message::BadAvatarHddWriting => {
+                let app = weak.upgrade().unwrap();
+                app.global::<UiState<'_>>().set_badavatar_hdd_writing(true);
+            }
+            Message::BadAvatarHddDone => {
+                self.badavatar_hdd_busy = false;
+                let app = weak.upgrade().unwrap();
+                let ui = app.global::<UiState<'_>>();
+                ui.set_badavatar_hdd_busy(false);
+                ui.set_badavatar_hdd_writing(false);
+
+                // Show what is on the drive now: launch.ini included, which the
+                // Dashlaunch card reads, and Aurora, which may have come or gone.
+                message_queue.push_back((Message::FetchBadAvatarHdd, SharedString::new()));
+                message_queue.push_back((Message::FetchDashlaunch, SharedString::new()));
+                message_queue.push_back((Message::FetchAuroraPaths, SharedString::new()));
+
+                // Start the jobs that were queued meanwhile.
+                if !self.is_job_running && !self.job_queue.is_empty() {
+                    self.is_job_running = true;
+                    message_queue.push_back((Message::TriggerJob, SharedString::new()));
                 }
             }
             Message::DeleteGame => {
@@ -2025,18 +2368,9 @@ impl State {
             Message::SetBadAvatarVersion => {
                 // Payload: the row picked in the ABadAvatar version drop-down.
                 if let Ok(index) = payload.parse::<usize>()
-                    && let Some((_, url)) = txbm_core::badavatar::ABADAVATAR_VERSIONS.get(index)
+                    && let Some(version) = AbadavatarVersion::ALL.get(index)
                 {
-                    // The built-in default is stored as "no override", so the
-                    // per-field reset button stays hidden for it.
-                    if *url == UrlField::Abadavatar.default_url() {
-                        self.config.contents.badavatar.reset_url(UrlField::Abadavatar);
-                    } else {
-                        self.config
-                            .contents
-                            .badavatar
-                            .set_url(UrlField::Abadavatar, url.to_string());
-                    }
+                    self.config.contents.badavatar.abadavatar_version = *version;
                     message_queue.push_back((Message::SyncConfig, SharedString::new()));
                 }
             }
@@ -2061,6 +2395,7 @@ impl State {
                 if self.is_creating_badavatar
                     || self.is_installing_compat
                     || self.is_inspecting_compat
+                    || self.badavatar_hdd_tool_busy()
                 {
                     return;
                 }
@@ -2176,8 +2511,12 @@ impl State {
                                 );
                             }
                             Err(e) => {
-                                let text =
-                                    slint::format!("Failed to create BadAvatar key: {e:#}");
+                                let text = match crate::download_errors::badavatar(&e) {
+                                    Some(text) => text.into(),
+                                    None => {
+                                        slint::format!("Failed to create BadAvatar key: {e:#}")
+                                    }
+                                };
                                 dispatcher.invoke_dispatch(Message::NotifyError, text);
                             }
                         }
@@ -2199,12 +2538,52 @@ impl State {
             }
             Message::SetCompatPack => {
                 // Payload: the row picked in the XeFu pack drop-down.
-                if let Ok(index) = payload.parse::<usize>()
-                    && let Some(pack) = txbm_core::ogxbox_compat::COMPAT_PACKS.get(index)
-                {
-                    self.config.contents.ogxbox_compat.pack = pack.key.to_string();
+                let cfg = &mut self.config.contents.ogxbox_compat;
+                // Owned before the assignment: `packs()` borrows `cfg`.
+                let key = payload
+                    .parse::<usize>()
+                    .ok()
+                    .and_then(|index| cfg.packs().nth(index))
+                    .map(|p| p.key().to_string());
+                if let Some(key) = key {
+                    cfg.pack = key;
                     message_queue.push_back((Message::SyncConfig, SharedString::new()));
                 }
+            }
+            Message::AddCompatPack => {
+                self.config.contents.ogxbox_compat.add_custom_pack();
+                message_queue.push_back((Message::SyncConfig, SharedString::new()));
+            }
+            Message::RemoveCompatPack => {
+                // Payload: the custom pack's key.
+                self.config.contents.ogxbox_compat.remove_custom_pack(payload.as_str());
+                message_queue.push_back((Message::SyncConfig, SharedString::new()));
+            }
+            Message::SetCompatPackLabel | Message::SetCompatPackUrl => {
+                // Payload: "<key>\n<value>". Only a custom pack is found by
+                // key here: the built-in ones cannot be changed.
+                if let Some((key, value)) = payload.split_once('\n')
+                    && let Some(pack) = self.config.contents.ogxbox_compat.custom_pack_mut(key)
+                {
+                    let slot = match message {
+                        Message::SetCompatPackLabel => &mut pack.label,
+                        _ => &mut pack.url,
+                    };
+                    *slot = value.to_string();
+                    message_queue.push_back((Message::SyncConfig, SharedString::new()));
+                }
+            }
+            Message::ResetCompatPacks => {
+                self.config.contents.ogxbox_compat.reset_custom_packs();
+                message_queue.push_back((Message::SyncConfig, SharedString::new()));
+            }
+            Message::SetCompatConfigsUrl => {
+                self.config.contents.ogxbox_compat.configs_url = Some(payload.to_string());
+                message_queue.push_back((Message::SyncConfig, SharedString::new()));
+            }
+            Message::ResetCompatConfigsUrl => {
+                self.config.contents.ogxbox_compat.configs_url = None;
+                message_queue.push_back((Message::SyncConfig, SharedString::new()));
             }
             Message::ToggleCompatBackup => {
                 let flag = &mut self.config.contents.ogxbox_compat.backup_first;
@@ -2224,6 +2603,7 @@ impl State {
                     || self.is_inspecting_compat
                     || self.is_creating_badavatar
                     || self.compat_pending.is_some()
+                    || self.badavatar_hdd_tool_busy()
                 {
                     return;
                 }
@@ -2252,6 +2632,7 @@ impl State {
                     || self.is_inspecting_compat
                     || self.is_creating_badavatar
                     || self.compat_pending.is_some()
+                    || self.badavatar_hdd_tool_busy()
                 {
                     return;
                 }
@@ -2497,16 +2878,18 @@ impl State {
                                 }
                             }
                             Err(e) => {
+                                let reason = crate::download_errors::compat(&e)
+                                    .unwrap_or_else(|| {
+                                        format!("Failed to install the compatibility files: {e:#}")
+                                    });
                                 let text = if partition_touched {
                                     slint::format!(
-                                        "Failed to install the compatibility files: {e:#}\n\n\
+                                        "{reason}\n\n\
                                          The partition is now incomplete — original Xbox \
                                          games will not run until the install is run again."
                                     )
                                 } else {
-                                    slint::format!(
-                                        "Failed to install the compatibility files: {e:#}"
-                                    )
+                                    reason.into()
                                 };
                                 dispatcher.invoke_dispatch(Message::NotifyError, text);
                             }
@@ -2538,6 +2921,27 @@ impl State {
             #[cfg(not(windows))]
             Message::SetWindowColorLight | Message::SetWindowColorDark => {}
         }
+    }
+}
+
+fn displayed_badavatar_hdd(inspection: &HddInspection) -> DisplayedBadAvatarHdd {
+    let list = |items: &[String]| {
+        ModelRc::new(VecModel::from(
+            items.iter().map(|s| s.to_shared_string()).collect::<Vec<_>>(),
+        ))
+    };
+    let (state, found) = match &inspection.status {
+        HddStatus::Retail => (BadAvatarHddState::Retail, list(&[])),
+        HddStatus::Installed { complete: true, .. } => (BadAvatarHddState::Installed, list(&[])),
+        HddStatus::Installed { complete: false, .. } => {
+            (BadAvatarHddState::Incomplete, list(&[]))
+        }
+        HddStatus::Foreign { found } => (BadAvatarHddState::Foreign, list(found)),
+    };
+    DisplayedBadAvatarHdd {
+        state,
+        found,
+        removal: list(&inspection.removal),
     }
 }
 

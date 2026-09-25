@@ -22,12 +22,14 @@ export component OgXboxCompatCard inherits ToolboxCard {
     // The two Toolbox tools exclude each other: they share the status line and
     // the toolbar's cancel button, so running both at once makes progress and
     // cancellation unreadable.
-    disabled: UiState.compat-busy || UiState.creating-badavatar || target-connected;
+    disabled: UiState.compat-busy || UiState.creating-badavatar || UiState.badavatar-hdd-tool-busy || target-connected;
     disabled-tooltip: target-connected
-        ? "Disconnect from the current target first — this tool picks the console itself."
+        ? "Disconnect from the current target first"
         : UiState.creating-badavatar
             ? "Wait for the BadAvatar USB key to be written."
-            : "";
+            : UiState.badavatar-hdd-tool-busy
+                ? "Wait for BadAvatar to be written to the hard drive."
+                : "";
 
     CardHeader {
         icon: IconSet.Gamepad2;
@@ -82,17 +84,6 @@ export component OgXboxCompatCard inherits ToolboxCard {
                 Dispatcher.dispatch(Message.SetCompatPack, self.current-index);
             }
         }
-
-        // Hands the pack's URL to the browser rather than fetching it here:
-        // the point is that the user sees where it comes from, and is left
-        // with a copy of what the tool is about to install.
-        IconButton {
-            icon: IconSet.Download;
-            width: 34px;
-            height: 34px;
-            tooltip: "Download this pack yourself (opens your browser)";
-            clicked => Dispatcher.dispatch(Message.OpenThat, UiState.compat.pack-url);
-        }
     }
 
     // Indented to the drop-down's own left edge rather than the card's, so it
@@ -139,7 +130,7 @@ export component OgXboxCompatCard inherits ToolboxCard {
         padding-left: 24px;
 
         Text {
-            text: "Community configs from github.com/Goatman13/xefu, written to Compatibility/Configs.";
+            text: "Community configs from " + UiState.compat.configs-source + ", written to Compatibility/Configs.";
             font-size: 12px;
             wrap: word-wrap;
         }

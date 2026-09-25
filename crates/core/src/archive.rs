@@ -1,15 +1,19 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
-//! Extraction of game archives (.7z / .zip), used for XBLA packages.
+//! Extraction of archives: game archives (.7z / .zip), used for XBLA
+//! packages, and the Toolbox components, which may also come as .rar.
 
 use crate::convert::{CONVERSION_CANCELLED, is_cancelled};
 use anyhow::{Context, Result, bail};
 use std::fs::File;
-use std::io::Read;
+use std::io::{self, Read, Write};
 use std::path::{Component, Path, PathBuf};
-use std::sync::atomic::AtomicBool;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
-/// True if the extension is a supported archive format (.7z / .zip).
+/// True if the extension is a supported game archive format (.7z / .zip).
+/// RAR is deliberately left out here: it is only extracted for the Toolbox
+/// components, never offered as a game input.
 pub fn is_supported_archive(path: &Path) -> bool {
     path.extension().is_some_and(|ext| {
         ext.eq_ignore_ascii_case("7z") || ext.eq_ignore_ascii_case("zip")
@@ -41,11 +45,14 @@ pub fn extract_to(
     progress: &mut dyn FnMut(u64, u64),
 ) -> Result<()> {
     std::fs::create_dir_all(dest)?;
-    let is_7z = path
+    let ext = path
         .extension()
-        .is_some_and(|ext| ext.eq_ignore_ascii_case("7z"));
-    if is_7z {
+        .and_then(|ext| ext.to_str())
+        .unwrap_or_default();
+    if ext.eq_ignore_ascii_case("7z") {
         extract_7z(path, dest, cancel, progress)
+    } else if ext.eq_ignore_ascii_case("rar") {
+        extract_rar(path, dest, cancel, progress)
     } else {
         extract_zip(path, dest, cancel, progress)
     }
@@ -72,7 +79,7 @@ fn copy_with_progress(
         if n == 0 {
             return Ok(());
         }
-        std::io::Write::write_all(&mut out_file, &buf[..n])?;
+        out_file.write_all(&buf[..n])?;
         *done += n as u64;
         progress(*done, total);
     }
@@ -158,9 +165,86 @@ fn extract_7z(
     Ok(())
 }
 
+/// RAR 1.3 through 7, decoded by `rars`, a pure-Rust implementation under
+/// Apache-2.0. The reference UnRAR source is not an option: its licence
+/// forbids reusing the code to recreate the compressor, a restriction the
+/// GPL does not allow on top of it.
+///
+/// `rars` asks for one writer per entry and takes ownership of it, so the
+/// writer cannot borrow `cancel` or `progress`. Both are therefore serviced
+/// when the next entry is opened rather than per chunk; the written byte
+/// count reaches that point through a shared counter.
+fn extract_rar(
+    path: &Path,
+    dest: &Path,
+    cancel: &AtomicBool,
+    progress: &mut dyn FnMut(u64, u64),
+) -> Result<()> {
+    let archive = rars::ArchiveReader::read_path(path).context("reading rar archive")?;
+    let total: u64 = archive
+        .members()
+        .filter(|m| !m.meta.is_directory)
+        .map(|m| m.meta.unpacked_size)
+        .sum();
+    let done = Arc::new(AtomicU64::new(0));
+    progress(0, total);
+
+    let result = archive.extract_to(None, |meta| {
+        progress(done.load(Ordering::Relaxed), total);
+        // Surfaced as an error, like in `extract_7z`, so that stopping does
+        // not look like a successful extraction. Rewritten below.
+        if is_cancelled(cancel) {
+            return Err(io::Error::other(CONVERSION_CANCELLED).into());
+        }
+        let name = meta.name_lossy();
+        let rel = sanitized_relative_path(&name)
+            .ok_or_else(|| io::Error::other(format!("unsafe path in archive: {name}")))?;
+        let out = dest.join(rel);
+        if meta.is_directory {
+            std::fs::create_dir_all(&out)?;
+            return Ok(Box::new(io::sink()));
+        }
+        if let Some(parent) = out.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        Ok(Box::new(CountingWriter {
+            file: File::create(&out)?,
+            written: Arc::clone(&done),
+        }))
+    });
+    // A cancellation comes back wrapped in `rars`' I/O error; report it with
+    // the bare marker the callers match on instead.
+    if is_cancelled(cancel) {
+        bail!(CONVERSION_CANCELLED);
+    }
+    result.context("extracting rar archive")?;
+    progress(total, total);
+    Ok(())
+}
+
+/// A file writer that adds what it writes to a counter shared with
+/// [`extract_rar`], which owns no other view of the bytes going out.
+struct CountingWriter {
+    file: File,
+    written: Arc<AtomicU64>,
+}
+
+impl Write for CountingWriter {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        let n = self.file.write(buf)?;
+        self.written.fetch_add(n as u64, Ordering::Relaxed);
+        Ok(n)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.file.flush()
+    }
+}
+
 /// Rejects absolute paths and `..` components (zip-slip protection).
 fn sanitized_relative_path(name: &str) -> Option<PathBuf> {
-    // 7z entry names may use backslashes regardless of the host platform.
+    // 7z and RAR entry names may use backslashes regardless of the host
+    // platform.
     let name = name.replace('\\', "/");
     let path = Path::new(&name);
     let mut out = PathBuf::new();

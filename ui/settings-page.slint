@@ -7,6 +7,7 @@ import { IconSet } from "@lucide";
 import { SettingCard } from "components/setting-card.slint";
 import { PageHeader } from "components/page-header.slint";
 import { CoversCacheCard } from "components/toolbox/covers-cache-card.slint";
+import { DownloadSourcesCard } from "components/download-sources-card.slint";
 import { UiState } from "ui-state.slint";
 import { Message, Dispatcher } from "messages.slint";
 
@@ -92,6 +93,8 @@ export component SettingsPage inherits VerticalLayout {
             }
 
             if !UiState.config.target.is-empty: CoversCacheCard { }
+
+            DownloadSourcesCard { }
         }
     }
 }
