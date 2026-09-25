@@ -1876,14 +1876,12 @@ impl State {
                 ui.set_status(SharedString::new());
 
                 // Only a drive the install can write to goes on to the
-                // confirmation modal.
+                // confirmation modal; any other says why it can't.
                 match res {
-                    Some((device, Ok(inspection)))
-                        if matches!(inspection.status, HddStatus::Retail) =>
-                    {
+                    Some((device, Ok(inspection))) => {
                         if let Err(e) = txbm_core::badavatar_hdd::ensure_installable(&inspection) {
                             self.notifications
-                                .push(Notification::error(slint::format!("{e:#}")));
+                                .push(Notification::warning_sticky(slint::format!("{e:#}")));
                             return;
                         }
                         ui.set_badavatar_hdd_pending_aurora(
@@ -1894,25 +1892,6 @@ impl State {
                         );
                         self.badavatar_hdd_pending = Some((device, inspection));
                     }
-                    Some((_, Ok(inspection))) => match inspection.status {
-                        HddStatus::Installed { .. } => {
-                            self.notifications.push(Notification::info(
-                                "BadAvatar is already installed on this hard drive",
-                            ));
-                        }
-                        HddStatus::Foreign { found } => {
-                            self.notifications.push(Notification::warning_sticky(slint::format!(
-                                "Another BadAvatar or BadUpdate setup is on this hard drive ({}). Restore it to its retail state first.",
-                                found.join(", ")
-                            )));
-                        }
-                        HddStatus::BadStorage => {
-                            self.notifications.push(Notification::warning_sticky(
-                                "This hard drive is formatted for Bad Storage: BadAvatar can't be installed on it. Keep it on the USB key.",
-                            ));
-                        }
-                        HddStatus::Retail => {}
-                    },
                     Some((_, Err(e))) => {
                         self.notifications
                             .push(Notification::error(slint::format!("{e:#}")));

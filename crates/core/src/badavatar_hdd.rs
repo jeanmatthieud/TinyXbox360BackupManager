@@ -61,10 +61,6 @@ const PROFILE_XUID: &str = "E0002FF78DFBDE7B";
 const PROFILE_DIRS: [&str; 4] = ["Content", PROFILE_XUID, "FFFE07D1", "00010000"];
 const MANIFEST_NAME: &str = "txbm-badavatar.json";
 
-const BAD_STORAGE_REFUSAL: &str = "this hard drive is formatted for Bad Storage: the console \
-    can only read it once the exploit has run, so BadAvatar cannot start from it — keep it on \
-    the USB key";
-
 /// Files at the drive root that belong to a BadAvatar setup. Any of them on a
 /// drive we did not install makes it "not retail".
 const ROOT_FILES: [&str; 3] = ["launch.ini", "JRPC2.xex", "Xbdm.xex"];
@@ -138,16 +134,6 @@ pub struct HddInspection {
 
 /// Reads the drive's state. Read-only.
 pub fn inspect(target: &Target) -> Result<HddInspection> {
-    if let Target::Fatx(cfg) = target
-        && crate::fatx_dev::is_bad_storage(&cfg.device)
-    {
-        return Ok(HddInspection {
-            status: HddStatus::BadStorage,
-            aurora: None,
-            stray_aurora: None,
-            removal: Vec::new(),
-        });
-    }
     let mut session = open(target, false)?;
     let found = inspect_remote(&mut session)?;
     session.quit()?;
@@ -260,11 +246,6 @@ pub fn uninstall(target: &Target, status: &dyn Fn(&str)) -> Result<()> {
 
 fn open(target: &Target, writable: bool) -> Result<RemoteSession> {
     match target {
-        // Checked again here, whatever the inspection said: nothing of ours
-        // is ever written to such a drive.
-        Target::Fatx(cfg) if crate::fatx_dev::is_bad_storage(&cfg.device) => {
-            bail!(BAD_STORAGE_REFUSAL)
-        }
         Target::Fatx(_) => target.open_remote(writable),
         _ => bail!("BadAvatar can only be installed on a console hard drive connected here"),
     }
@@ -277,13 +258,17 @@ fn check_cancel(cancel: &AtomicBool) -> Result<()> {
 /// Refuses a drive the install must not write to: one that is not retail, or
 /// whose `Aurora` folder has no `Aurora.xex`.
 pub fn ensure_installable(inspection: &HddInspection) -> Result<()> {
-    match inspection.status {
+    match &inspection.status {
         HddStatus::Retail => {}
         HddStatus::Installed { .. } => bail!("BadAvatar is already installed on this hard drive"),
-        HddStatus::BadStorage => bail!(BAD_STORAGE_REFUSAL),
-        HddStatus::Foreign { .. } => bail!(
-            "this hard drive already holds another BadAvatar setup — restore it to its \
-             retail state first"
+        HddStatus::BadStorage => bail!(
+            "this hard drive is formatted for Bad Storage: the console can only read it once \
+             the exploit has run, so BadAvatar cannot start from it — keep it on the USB key"
+        ),
+        HddStatus::Foreign { found } => bail!(
+            "this hard drive already holds another BadAvatar or BadUpdate setup ({}) — restore \
+             it to its retail state first",
+            found.join(", ")
         ),
     }
     if let Some(dir) = &inspection.stray_aurora {
@@ -425,10 +410,11 @@ fn read_layout(fs: &mut dyn RemoteFs) -> Result<Layout> {
 }
 
 pub fn inspect_remote(fs: &mut dyn RemoteFs) -> Result<HddInspection> {
-    Ok(inspection_of(&read_layout(fs)?))
+    let bad_storage = fs.is_bad_storage();
+    Ok(inspection_of(&read_layout(fs)?, bad_storage))
 }
 
-fn inspection_of(layout: &Layout) -> HddInspection {
+fn inspection_of(layout: &Layout, bad_storage: bool) -> HddInspection {
     let aurora = layout.aurora.as_deref().map(console_path);
     let stray_aurora = match (&layout.aurora, &layout.aurora_folder) {
         (None, Some(name)) => Some(console_path(name)),
@@ -436,6 +422,7 @@ fn inspection_of(layout: &Layout) -> HddInspection {
     };
 
     let status = match &layout.manifest {
+        _ if bad_storage => HddStatus::BadStorage,
         Some(Some(manifest)) => HddStatus::Installed {
             manifest: manifest.clone(),
             complete: layout.profile.is_some() && layout.has_gamer_profile,
@@ -515,8 +502,9 @@ fn install_remote(
 ) -> Result<()> {
     // Checked again on the session that writes: the drive may have been
     // swapped, or changed, since it was picked.
+    let bad_storage = fs.is_bad_storage();
     let layout = read_layout(fs)?;
-    ensure_installable(&inspection_of(&layout))?;
+    ensure_installable(&inspection_of(&layout, bad_storage))?;
     if layout.aurora.is_some() == manifest.aurora_installed.is_some() {
         bail!("Aurora came or went on this hard drive since it was checked — nothing was installed");
     }

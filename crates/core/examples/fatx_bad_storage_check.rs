@@ -12,6 +12,9 @@
 //! The image is left behind, blank again, so it can be opened in the app with
 //! "Pick FATX image". It is sparse: its `data` partition spans 16 GiB — enough
 //! for a FAT32, like any real Bad Storage drive — at almost no cost on disk.
+//! On Linux and macOS, that is, where `set_len` leaves a hole. NTFS only does
+//! so for a file flagged sparse, which this one is not: on Windows the image
+//! really takes its 21 GB, and is left in place all the same.
 
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
@@ -49,7 +52,6 @@ fn main() -> anyhow::Result<()> {
     let probe = txbm_core::fatx_dev::probe_path(&image);
     println!("probe: {probe:?} — {}", probe.label());
     assert!(probe.is_usable(), "the image was not recognized");
-    assert!(txbm_core::fatx_dev::is_bad_storage(&image));
 
     // BadAvatar: reported as incompatible, and refused.
     let target = Target::Fatx(FatxConfig::new(image.clone()));
@@ -58,7 +60,6 @@ fn main() -> anyhow::Result<()> {
     assert!(matches!(inspection.status, HddStatus::BadStorage));
     let refusal = badavatar_hdd::ensure_installable(&inspection).unwrap_err();
     println!("install refused: {refusal}");
-    assert!(badavatar_hdd::uninstall(&target, &|_| {}).is_err());
 
     // A FATX target like any other.
     let analysis = target.analyze()?;
@@ -94,6 +95,7 @@ fn main() -> anyhow::Result<()> {
         txbm_core::util::human_size(info.total_bytes)
     );
     assert!(info.used_bytes >= 5 * 1024 * 1024);
+    assert!(info.bad_storage, "the drive info does not report Bad Storage");
 
     // What the console relies on must still be on disk after all those writes.
     let superblock = read_superblock(&image, partition_offset)?;

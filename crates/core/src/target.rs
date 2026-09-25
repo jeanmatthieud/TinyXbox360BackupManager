@@ -1679,6 +1679,7 @@ impl Target {
         RemoteSession::Fatx(fatx) => fatx.space().ok(),
         RemoteSession::Ftp(_) => None,
     };
+    let bad_storage = session.is_bad_storage();
     session.quit()?;
 
     let drive_info = match self {
@@ -1692,7 +1693,7 @@ impl Target {
             // The cluster size, which is what a file on this filesystem is
             // rounded up to, exactly like a mounted drive's block size.
             allocation_granularity: space.map_or(0, |s| s.bytes_per_cluster),
-            bad_storage: crate::fatx_dev::is_bad_storage(&fatx.device),
+            bad_storage,
         },
         // Nothing over FTP reports the console's free space.
         Target::Ftp(ftp) => DriveInfo {

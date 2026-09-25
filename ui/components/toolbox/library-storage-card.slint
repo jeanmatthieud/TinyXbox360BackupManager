@@ -2,7 +2,7 @@
 // SPDX-FileContributor: Modified by Jean-Matthieu Dechriste (TinyXbox360BackupManager)
 // SPDX-License-Identifier: GPL-3.0-only
 
-import { IconSet, IconDisplay } from "@lucide";
+import { IconSet, IconDisplay, Icon } from "@lucide";
 import { Spinner } from "std-widgets.slint";
 import { ToolboxCard } from "../toolbox-card.slint";
 import { CardHeader } from "../card-header.slint";
@@ -13,6 +13,40 @@ import { MyPalette } from "../../styling.slint";
 import { UiState } from "../../ui-state.slint";
 import { Message, Dispatcher } from "../../messages.slint";
 import { GodLayout, TargetKind } from "../../types.slint";
+
+// An icon beside a title, with whatever lines follow the title below it. The
+// icon centres on the title's line rather than on the whole block.
+component IconRow inherits HorizontalLayout {
+    in property <Icon> icon;
+    in property <brush> stroke: MyPalette.foreground;
+    in property <string> title;
+
+    spacing: 8px;
+    cross-axis-alignment: CrossAxisAlignment.start;
+
+    // A fixed-size child is centred in its parent by default.
+    Rectangle {
+        width: 15px;
+        height: title-text.preferred-height;
+
+        IconDisplay {
+            icon: root.icon;
+            stroke: root.stroke;
+            size: 15px;
+        }
+    }
+
+    VerticalLayout {
+        spacing: 2px;
+        horizontal-stretch: 1;
+
+        title-text := Text {
+            text: root.title;
+        }
+
+        @children
+    }
+}
 
 // App storage folders (and, on a console, their Aurora scan coverage).
 export component LibraryStorageCard inherits ToolboxCard {
@@ -62,83 +96,40 @@ export component LibraryStorageCard inherits ToolboxCard {
     if UiState.app-storage-paths.length > 0: VerticalLayout {
         spacing: 10px;
 
-        for p in UiState.app-storage-paths: HorizontalLayout {
-            spacing: 8px;
-            cross-axis-alignment: CrossAxisAlignment.start;
+        for p in UiState.app-storage-paths: IconRow {
+            // Neutral folder on a local drive (no Aurora comparison);
+            // coverage badge on a console.
+            icon: !UiState.storage-aurora-compared
+                ? IconSet.Folder
+                : (p.covered ? IconSet.Check : IconSet.TriangleAlert);
+            stroke: !UiState.storage-aurora-compared
+                ? MyPalette.foreground
+                : (p.covered ? MyPalette.foreground : #e0a12f);
+            title: p.label;
 
-            // As tall as the title's line, so the icon centres on the
-            // title rather than on the whole two-line block.
-            Rectangle {
-                width: 15px;
-                height: path-label.preferred-height;
-
-                IconDisplay {
-                    // Neutral folder on a local drive (no Aurora
-                    // comparison); coverage badge on a console.
-                    icon: !UiState.storage-aurora-compared
-                        ? IconSet.Folder
-                        : (p.covered ? IconSet.Check : IconSet.TriangleAlert);
-                    stroke: !UiState.storage-aurora-compared
-                        ? MyPalette.foreground
-                        : (p.covered ? MyPalette.foreground : #e0a12f);
-                    size: 15px;
-                    y: (parent.height - self.height) / 2;
-                }
+            Text {
+                text: p.aurora-path;
+                font-size: 12px;
+                wrap: char-wrap;
+                color: MyPalette.foreground.transparentize(0.4);
             }
 
-            VerticalLayout {
-                spacing: 2px;
-                horizontal-stretch: 1;
-
-                path-label := Text {
-                    text: p.label;
-                }
-
-                Text {
-                    text: p.aurora-path;
-                    font-size: 12px;
-                    wrap: char-wrap;
-                    color: MyPalette.foreground.transparentize(0.4);
-                }
-
-                if UiState.storage-aurora-compared && !p.covered: Text {
-                    text: "Not scanned by Aurora yet.";
-                    font-size: 11px;
-                    color: #e0a12f;
-                }
+            if UiState.storage-aurora-compared && !p.covered: Text {
+                text: "Not scanned by Aurora yet.";
+                font-size: 11px;
+                color: #e0a12f;
             }
         }
 
-        HorizontalLayout {
-            spacing: 8px;
-            cross-axis-alignment: CrossAxisAlignment.start;
+        IconRow {
+            icon: IconSet.FolderTree;
+            title: "GOD Storage Layout";
 
-            Rectangle {
-                width: 15px;
-                height: layout-label.preferred-height;
-
-                IconDisplay {
-                    icon: IconSet.FolderTree;
-                    stroke: MyPalette.foreground;
-                    size: 15px;
-                    y: (parent.height - self.height) / 2;
-                }
-            }
-
-            VerticalLayout {
-                spacing: 2px;
-                horizontal-stretch: 1;
-
-                layout-label := Text {
-                    text: "GOD Storage Layout";
-                }
-
-                Text {
-                    text: god-layout-label(UiState.storage-god-layout);
-                    font-size: 12px;
-                    wrap: char-wrap;
-                    color: MyPalette.foreground.transparentize(0.4);
-                }
+            Text {
+                text: god-layout-label(UiState.storage-god-layout);
+                font-size: 12px;
+                wrap: char-wrap;
+                color: MyPalette.foreground.transparentize(0.4);
             }
         }
     }

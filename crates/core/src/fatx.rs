@@ -610,4 +610,8 @@ impl RemoteFs for FatxSession {
     fn aurora_data_dir_cache(&mut self) -> &mut Option<Option<String>> {
         &mut self.aurora_data_dir_cache
     }
+
+    fn is_bad_storage(&self) -> bool {
+        self.fs.is_bad_storage()
+    }
 }
