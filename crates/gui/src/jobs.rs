@@ -156,11 +156,7 @@ fn perform_add(
     cancel: &AtomicBool,
     weak: &Weak<AppWindow>,
 ) -> anyhow::Result<()> {
-    let filename = in_path
-        .file_name()
-        .unwrap_or_default()
-        .to_string_lossy()
-        .to_string();
+    let filename = txbm_core::util::display_file_name(in_path);
 
     let weak2 = weak.clone();
     let update_progress = move |percentage: u32, speed: Option<f64>| {

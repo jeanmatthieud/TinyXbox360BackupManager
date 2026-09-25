@@ -23,7 +23,7 @@ use txbm_core::{
     config::TargetKind, fatx::FatxConfig,
     dashlaunch::{LICENSE_PATCHES, LaunchIni}, data_dir::DATA_DIR, drive_info::DriveInfo,
     ftp::FtpSession, game::Game, game_details::ContentKind, job_queue::QueuedJob,
-    target::{StorageConfig, Target, TargetAnalysis},
+    target::{StorageConfig, Target, TargetAnalysis}, util::display_file_name,
 };
 
 /// Shown once per console drive, the first time it is opened directly. Writing
@@ -88,20 +88,6 @@ static TITLE_UPDATES_RESULT: Mutex<
 > = Mutex::new(None);
 
 impl State {
-    /// Fills the "add these conversions to the queue?" confirmation from the
-    /// picked files, dropping those already queued and flagging each one that
-    /// would overwrite an installed game.
-    ///
-    /// The check is done here, before the queue is confirmed, rather than left
-    /// to the conversion: the user gets to see it while they can still back
-    /// out. It costs no I/O — the TitleID comes from the inspection the pick
-    /// already did, and the installed games are the ones the last scan found.
-    ///
-    /// It is therefore only as good as the TitleID the pick could read: ISOs
-    /// and Arcade packages are covered, archives never are (see
-    /// [`util::PickedGame::installs_title_id`]). An input with no TitleID is
-    /// queued silently — the conversion overwrites just the same, it simply
-    /// isn't announced.
     /// Tells which picked files were left out of the confirmation, and why:
     /// otherwise a rejected file just silently never shows up.
     fn notify_rejected(&mut self, rejected: &[(String, &'static str)]) {
@@ -118,6 +104,20 @@ impl State {
         self.notifications.push(Notification::warning(text));
     }
 
+    /// Fills the "add these conversions to the queue?" confirmation from the
+    /// picked files, dropping those already queued and flagging each one that
+    /// would overwrite an installed game.
+    ///
+    /// The check is done here, before the queue is confirmed, rather than left
+    /// to the conversion: the user gets to see it while they can still back
+    /// out. It costs no I/O — the TitleID comes from the inspection the pick
+    /// already did, and the installed games are the ones the last scan found.
+    ///
+    /// It is therefore only as good as the TitleID the pick could read: ISOs
+    /// and Arcade packages are covered, archives never are (see
+    /// [`util::PickedGame::installs_title_id`]). An input with no TitleID is
+    /// queued silently — the conversion overwrites just the same, it simply
+    /// isn't announced.
     fn set_games_to_add(&mut self, mut picked: Vec<util::PickedGame>, weak: &Weak<AppWindow>) {
         // Files already waiting in the queue (index 0 — the running one —
         // included) never make it to the confirmation: queueing the same input
@@ -133,7 +133,7 @@ impl State {
                 || kept.contains(&game.path);
 
             if queued {
-                skipped.push(util::file_name(&game.path));
+                skipped.push(display_file_name(&game.path));
             } else {
                 kept.push(game.path.clone());
             }
@@ -157,10 +157,7 @@ impl State {
         let displayed = picked
             .iter()
             .map(|game| {
-                let name = match game.path.file_name() {
-                    Some(filename) => filename.to_string_lossy().to_shared_string(),
-                    None => "?".to_shared_string(),
-                };
+                let name = display_file_name(&game.path).to_shared_string();
 
                 // An `incomplete` entry only holds DLC/title updates for that
                 // TitleID: installing the game itself completes it instead of
@@ -1323,7 +1320,7 @@ impl State {
                 let mut picked = Vec::new();
                 let mut rejected = Vec::new();
                 for path in paths {
-                    let name = util::file_name(&path);
+                    let name = display_file_name(&path);
                     match util::should_add_game(path) {
                         Ok(game) => picked.push(game),
                         // A folder of games holds other files too: only
@@ -2170,7 +2167,7 @@ impl State {
                 if app.global::<UiState<'_>>().get_current_page() == Page::Games {
                     let path = PathBuf::from(&payload);
 
-                    let name = util::file_name(&path);
+                    let name = display_file_name(&path);
                     match util::should_add_game(path) {
                         Ok(picked) => self.set_games_to_add(vec![picked], weak),
                         Err(r) => self.notify_rejected(&[(name, r.reason)]),

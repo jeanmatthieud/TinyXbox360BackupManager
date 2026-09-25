@@ -39,14 +39,6 @@ pub struct PickedGame {
     pub installs_title_id: Option<String>,
 }
 
-/// File name of `path` for display, falling back to the whole path.
-pub fn file_name(path: &Path) -> String {
-    path.file_name()
-        .unwrap_or(path.as_os_str())
-        .to_string_lossy()
-        .into_owned()
-}
-
 /// Why a picked file was not accepted by [`should_add_game`].
 pub struct Rejected {
     /// False when the file is simply not something the app installs (wrong
@@ -108,14 +100,18 @@ pub fn should_add_game(path: PathBuf) -> Result<PickedGame, Rejected> {
         // The archive content (Arcade package present?) is validated
         // during the conversion itself — and so is the game it installs:
         // see `installs_title_id` for why it stays unknown until then.
-        return if txbm_core::archive::looks_valid(&path) {
-            Ok(PickedGame {
-                path,
-                installs_title_id: None,
-            })
-        } else {
-            Err(Rejected::invalid("corrupted or mislabelled archive"))
-        };
+        if !txbm_core::archive::looks_valid(&path) {
+            return Err(Rejected::invalid("corrupted or mislabelled archive"));
+        }
+        // Once per volume: a recursive add of a split set is reported as a
+        // batch of rejections rather than as one failed job per volume.
+        if txbm_core::archive::is_rar_volume(&path) {
+            return Err(Rejected::invalid(txbm_core::archive::MULTI_VOLUME_RAR));
+        }
+        return Ok(PickedGame {
+            path,
+            installs_title_id: None,
+        });
     }
 
     // Anything else: accept installable STFS packages.

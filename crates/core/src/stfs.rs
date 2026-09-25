@@ -44,6 +44,12 @@ pub fn dlc_dir_name() -> String {
     format!("{CONTENT_TYPE_DLC:08X}")
 }
 
+/// Folder name for an installed Arcade (XBLA) game's own package
+/// (`Content/0000000000000000/<TitleID>/000D0000`).
+pub fn arcade_dir_name() -> String {
+    format!("{CONTENT_TYPE_ARCADE:08X}")
+}
+
 /// Folder name for installed title updates, read by the dashboard at boot
 /// (`Content/0000000000000000/<TitleID>/000B0000`).
 pub fn title_update_dir_name() -> String {

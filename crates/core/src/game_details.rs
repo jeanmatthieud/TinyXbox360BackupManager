@@ -96,10 +96,6 @@ pub struct GameDetails {
     pub arcade_license_lock: Option<LicenseLock>,
 }
 
-fn arcade_type_dir_name() -> String {
-    format!("{:08X}", stfs::CONTENT_TYPE_ARCADE)
-}
-
 impl Target {
     /// Lists `game`'s discs and installed DLC.
     pub fn game_details(&self, game: &Game) -> Result<GameDetails> {
@@ -256,7 +252,7 @@ fn inspect_local(game: &Game) -> GameDetails {
     }
 
     if game.format == GameFormat::Arcade {
-        details.arcade_license_lock = stfs::package_in_dir(&game.path.join(arcade_type_dir_name()))
+        details.arcade_license_lock = stfs::package_in_dir(&game.path.join(stfs::arcade_dir_name()))
             .and_then(|info| info.license_lock);
     }
 
@@ -319,7 +315,7 @@ fn inspect_remote(session: &mut dyn RemoteFs, game: &Game) -> GameDetails {
     }
 
     if game.format == GameFormat::Arcade {
-        let type_dir = format!("{remote}/{}", arcade_type_dir_name());
+        let type_dir = format!("{remote}/{}", stfs::arcade_dir_name());
         details.arcade_license_lock = session
             .list_dir(&type_dir)
             .into_iter()

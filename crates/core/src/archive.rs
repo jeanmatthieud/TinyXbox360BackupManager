@@ -11,8 +11,12 @@ use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
+/// Why a volume of a split RAR set is refused, at pick time
+/// ([`is_rar_volume`]) and again at extraction.
+pub const MULTI_VOLUME_RAR: &str = "multi-volume RAR archives are not supported yet";
+
 /// True if the extension is a supported game archive format (.7z / .zip /
-/// .rar). Multi-volume RAR sets are not supported yet.
+/// .rar). Multi-volume RAR sets are not supported yet: see [`is_rar_volume`].
 pub fn is_supported_archive(path: &Path) -> bool {
     path.extension().is_some_and(|ext| {
         ext.eq_ignore_ascii_case("7z")
@@ -31,8 +35,43 @@ pub fn looks_valid(path: &Path) -> bool {
         return false;
     }
     // `Rar!\x1A\x07` opens both RAR 1.5-4 (then `\x00`) and RAR 5 (then
-    // `\x01\x00`) archives.
-    &magic == b"7z\xBC\xAF\x27\x1C" || &magic[..4] == b"PK\x03\x04" || &magic == b"Rar!\x1A\x07"
+    // `\x01\x00`) archives; `RE~^` is RAR 1.3/1.4.
+    &magic == b"7z\xBC\xAF\x27\x1C"
+        || &magic[..4] == b"PK\x03\x04"
+        || &magic == b"Rar!\x1A\x07"
+        || &magic[..4] == b"RE~^"
+}
+
+/// True if `path` is a RAR archive that is one volume of a split set
+/// (`.partN.rar`, or a `.rar` followed by `.r00`, `.r01`…). Reads only the
+/// headers, so it is cheap enough to reject such a file when it is picked
+/// rather than as a failed job, once per volume, after the queue started.
+pub fn is_rar_volume(path: &Path) -> bool {
+    // `read_path` scans up to 8 MiB for a self-extracting stub: not worth
+    // doing for a file that cannot be a RAR archive anyway.
+    if !path.extension().is_some_and(|ext| ext.eq_ignore_ascii_case("rar")) {
+        return false;
+    }
+    rars::ArchiveReader::read_path(path).is_ok_and(|archive| rar_is_volume(&archive))
+}
+
+/// The main header's volume flag is set on every volume of a split set,
+/// including the parts whose boundaries fall between two members: the member
+/// split flags alone would let those through, and extracting one would then
+/// install part of the content and report success.
+fn rar_is_volume(archive: &rars::Archive) -> bool {
+    let main_flag = match archive {
+        rars::Archive::Rar13(a) => a.main.is_volume(),
+        rars::Archive::Rar15To40(a) => a.main.is_volume(),
+        rars::Archive::Rar50Plus(a) => a.main.is_volume(),
+        // A family added by a later `rars`: the member flags still catch
+        // most split sets.
+        _ => false,
+    };
+    main_flag
+        || archive
+            .members()
+            .any(|m| m.meta.is_split_before || m.meta.is_split_after)
 }
 
 /// Extracts the archive into `dest`. `progress` receives
@@ -181,6 +220,13 @@ fn extract_7z(
 /// the writer keeps. That keeps a single multi-gigabyte ISO responsive, where
 /// servicing both only between entries would freeze the progress bar and
 /// ignore the cancel button until the very end.
+///
+/// One exception: a compressed RAR 5 member of up to 512 MiB is decoded
+/// whole in memory before `rars` writes any of it, so for such a member (an
+/// XBLA package, typically) progress and cancellation only take effect once
+/// it is decoded. Lowering that limit through `ArchiveReadOptions` is not an
+/// option: above it, `rars` refuses filtered members instead of streaming
+/// them, which would turn a slow extraction into a failed one.
 fn extract_rar(
     path: &Path,
     dest: &Path,
@@ -188,13 +234,10 @@ fn extract_rar(
     progress: &mut dyn FnMut(u64, u64),
 ) -> Result<()> {
     let archive = rars::ArchiveReader::read_path(path).context("reading rar archive")?;
-    // A volume of a split set only holds a slice of its members; extracting
-    // it alone would fail halfway through with a far less helpful error.
-    if archive
-        .members()
-        .any(|m| m.meta.is_split_before || m.meta.is_split_after)
-    {
-        bail!("multi-volume RAR archives are not supported yet");
+    // Already refused at pick time; checked again for the Toolbox, whose
+    // downloads are never picked.
+    if rar_is_volume(&archive) {
+        bail!(MULTI_VOLUME_RAR);
     }
     let total: u64 = archive
         .members()

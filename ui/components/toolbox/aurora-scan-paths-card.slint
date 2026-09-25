@@ -109,9 +109,24 @@ export component AuroraScanPathsCard inherits ToolboxCard {
         }
     }
 
-    if !UiState.fetching-aurora-paths && UiState.aurora-install-dir != "": Text {
-        text: "Aurora found at: " + UiState.aurora-install-dir;
-        wrap: word-wrap;
+    // Quiet footnote, styled like the launch.ini location on the Dashlaunch card.
+    if !UiState.fetching-aurora-paths && UiState.aurora-install-dir != "": HorizontalLayout {
+        spacing: 5px;
+        cross-axis-alignment: CrossAxisAlignment.center;
+
+        IconDisplay {
+            icon: IconSet.Folder;
+            stroke: MyPalette.foreground.transparentize(0.5);
+            size: 12px;
+        }
+
+        Text {
+            text: "Aurora found at: " + UiState.aurora-install-dir;
+            font-size: 11px;
+            wrap: word-wrap;
+            horizontal-stretch: 1;
+            color: MyPalette.foreground.transparentize(0.5);
+        }
     }
 
     if !UiState.fetching-aurora-paths && UiState.aurora-scan-paths.length > 0: VerticalLayout {

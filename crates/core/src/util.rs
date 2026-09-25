@@ -3,6 +3,16 @@
 use sha1::{Digest, Sha1};
 use std::path::Path;
 
+/// File name of `path` for display (queue rows, confirmations, notices),
+/// falling back to the whole path when it has none. Shared so that the same
+/// input reads the same everywhere it is named.
+pub fn display_file_name(path: &Path) -> String {
+    path.file_name()
+        .unwrap_or(path.as_os_str())
+        .to_string_lossy()
+        .into_owned()
+}
+
 /// SHA1 hex digest of `bytes` (lowercase).
 pub fn sha1_hex(bytes: &[u8]) -> String {
     let mut hasher = Sha1::new();
