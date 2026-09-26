@@ -19,6 +19,7 @@ import { Notifications } from "components/notifications.slint";
 import { GameInfoModal } from "components/game-info-modal.slint";
 import { TitleUpdatesModal } from "components/title-updates-modal.slint";
 import { ConfirmationModal } from "components/confirmation-modal.slint";
+import { BadAvatarHddTargetModal } from "components/badavatar-hdd-target-modal.slint";
 import { Tooltip } from "tooltip.slint";
 import { ToolboxPage } from "toolbox-page.slint";
 import { DeviceStatusPage } from "device-status-page.slint";
@@ -116,6 +117,15 @@ export component AppWindow inherits Window {
                         clicked => Dispatcher.dispatch(Message.CancelBadAvatar, "");
                     }
 
+                    if UiState.badavatar-hdd-busy && !UiState.badavatar-hdd-writing: IconButton {
+                        icon: IconSet.X;
+                        tooltip: "Cancel the BadAvatar install";
+                        height: 24px;
+                        width: 24px;
+                        squared: true;
+                        clicked => Dispatcher.dispatch(Message.CancelBadAvatarHdd, "");
+                    }
+
                     if UiState.installing-compat: IconButton {
                         icon: IconSet.X;
                         tooltip: "Cancel the compatibility install";
@@ -155,6 +165,7 @@ export component AppWindow inherits Window {
     if UiState.selecting-target: SelectTargetModal { }
     if UiState.selecting-badavatar-target: BadAvatarTargetModal { }
     if UiState.selecting-compat-target: CompatTargetModal { }
+    if UiState.selecting-badavatar-hdd-target: BadAvatarHddTargetModal { }
     if UiState.editing-ftp-target: FtpTargetModal { }
     if UiState.showing-aurora-help: AuroraHelpModal { }
     if UiState.configuring-storage: StorageConfigModal { }
@@ -253,6 +264,76 @@ export component AppWindow inherits Window {
         confirm-label: "Confirm";
         cancelled => Dispatcher.dispatch(Message.CancelInstallCompat, "");
         confirmed => Dispatcher.dispatch(Message.ConfirmInstallCompat, "");
+    }
+
+    if UiState.badavatar-hdd-pending-target != "": ConfirmationModal {
+        Text {
+            text: "Install BadAvatar on the hard drive";
+            font-size: 18px;
+        }
+
+        Rectangle { height: 5px; } // Spacing
+
+        Text {
+            text: "Your console must run dashboard 2.0.17559.0 (Settings › System › Console Info), with the avatar data of that update installed. Check it before going on: the exploit only works on that version.";
+            color: MyPalette.warning;
+            wrap: word-wrap;
+        }
+
+        Text {
+            text: "Written to \{UiState.badavatar-hdd-pending-target}: ABadAvatar 1.3-beta, XeUnshackle"
+                + ", Dashlaunch's launch.ini with its plugins"
+                + (UiState.badavatar-hdd-pending-aurora != ""
+                    ? ", starting the Aurora already at \{UiState.badavatar-hdd-pending-aurora}."
+                    : ", and Aurora, installed at Hdd:\\Aurora.");
+            wrap: word-wrap;
+        }
+
+        Text {
+            text: "Before booting the console: disconnect it from the Internet, turn off automatic sign-in, and unplug any BadAvatar USB key (the console looks for one first).";
+            wrap: word-wrap;
+        }
+
+        btn-icon: IconSet.Hammer;
+        confirm-label: "Install";
+        cancelled => Dispatcher.dispatch(Message.CancelInstallBadAvatarHdd, "");
+        confirmed => Dispatcher.dispatch(Message.ConfirmInstallBadAvatarHdd, "");
+    }
+
+    if UiState.confirming-badavatar-hdd-uninstall: ConfirmationModal {
+        Text {
+            text: "Remove BadAvatar from the hard drive";
+            font-size: 18px;
+        }
+
+        Rectangle { height: 5px; } // Spacing
+
+        Text {
+            text: "Every file that comes with BadAvatar is deleted from \{UiState.config.target}, so the console boots as a retail one again:";
+            wrap: word-wrap;
+        }
+
+        for item in UiState.badavatar-hdd.removal: Text {
+            text: "  • " + item;
+            wrap: word-wrap;
+        }
+
+        Text {
+            text: "Your games are not touched.";
+            wrap: word-wrap;
+            color: MyPalette.foreground.transparentize(0.35);
+        }
+
+        destructive: true;
+        btn-icon: IconSet.Trash2;
+        confirm-label: "Remove";
+        cancelled => {
+            UiState.confirming-badavatar-hdd-uninstall = false;
+        }
+        confirmed => {
+            UiState.confirming-badavatar-hdd-uninstall = false;
+            Dispatcher.dispatch(Message.ConfirmUninstallBadAvatarHdd, "");
+        }
     }
 
     if UiState.confirming-cancel-all: ConfirmationModal {

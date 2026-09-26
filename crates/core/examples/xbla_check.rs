@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
-//! Manual check: installs an XBLA input (archive .7z/.zip or bare STFS
+//! Manual check: installs an XBLA input (archive .7z/.zip/.rar or bare STFS
 //! package) into a local target folder, then rescans it.
 //!
 //! Usage: cargo run --example xbla_check -- <input> <target-dir>

@@ -15,6 +15,7 @@ impl From<&DriveInfo> for DisplayedDriveInfo {
             total_gib: drive_info.total_bytes as f32 / GIB,
             games_gib: drive_info.games_bytes as f32 / GIB,
             allocation_granularity: drive_info.allocation_granularity as i32,
+            bad_storage: drive_info.bad_storage,
         }
     }
 }

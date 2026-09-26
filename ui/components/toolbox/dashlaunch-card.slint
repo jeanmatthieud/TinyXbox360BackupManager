@@ -1,0 +1,335 @@
+// SPDX-License-Identifier: GPL-3.0-only
+
+import { IconSet, Icon, IconDisplay } from "@lucide";
+import { Spinner } from "std-widgets.slint";
+import { ToolboxCard } from "../toolbox-card.slint";
+import { CardHeader } from "../card-header.slint";
+import { HorizontalLine } from "../horizontal-line.slint";
+import { IconButton } from "../icon-button.slint";
+import { ToggleSwitch } from "../toggle-switch.slint";
+import { MyPalette } from "../../styling.slint";
+import { UiState } from "../../ui-state.slint";
+import { Message, Dispatcher } from "../../messages.slint";
+
+// One of the three license patches, nested under the main switch.
+component PatchRow inherits HorizontalLayout {
+    in property <string> label;
+    // The launch.ini key, shown for whoever wants to check the file.
+    in property <string> key;
+    in property <bool> checked;
+    in property <bool> enabled;
+
+    callback toggled();
+
+    spacing: 8px;
+    alignment: space-between;
+    cross-axis-alignment: CrossAxisAlignment.center;
+
+    HorizontalLayout {
+        spacing: 6px;
+        cross-axis-alignment: CrossAxisAlignment.center;
+
+        Text {
+            text: root.label;
+            font-size: 13px;
+        }
+
+        Text {
+            text: root.key;
+            font-size: 11px;
+            font-family: "monospace";
+            color: MyPalette.foreground.transparentize(0.5);
+        }
+    }
+
+    ToggleSwitch {
+        small: true;
+        checked: root.checked;
+        enabled: root.enabled;
+        toggled => {
+            root.toggled();
+        }
+    }
+}
+
+// A protection launch.ini should keep on: a green confirmation while it is,
+// an amber warning with the risk and the fix while it isn't. Read-only on
+// purpose — switching one off is never something to do by accident.
+component ProtectionRow inherits HorizontalLayout {
+    in property <bool> ok;
+    in property <string> ok-text;
+    in property <string> bad-text;
+    in property <string> risk;
+    // The launch.ini line that fixes it, shown in monospace under the risk.
+    in property <string> fix;
+
+    spacing: 8px;
+
+    VerticalLayout {
+        alignment: start;
+        padding-top: 1px;
+
+        IconDisplay {
+            icon: root.ok ? IconSet.ShieldCheck : IconSet.ShieldAlert;
+            stroke: root.ok ? MyPalette.success : MyPalette.warning;
+            size: 16px;
+        }
+    }
+
+    VerticalLayout {
+        spacing: 2px;
+        horizontal-stretch: 1;
+
+        Text {
+            text: root.ok ? root.ok-text : root.bad-text;
+            color: root.ok ? MyPalette.foreground : MyPalette.warning;
+            wrap: word-wrap;
+        }
+
+        if !root.ok: Text {
+            text: root.risk;
+            font-size: 12px;
+            wrap: word-wrap;
+            color: MyPalette.foreground.transparentize(0.35);
+        }
+
+        if !root.ok: HorizontalLayout {
+            spacing: 4px;
+            alignment: start;
+
+            Text {
+                text: "To fix it, set in launch.ini:";
+                font-size: 12px;
+                color: MyPalette.foreground.transparentize(0.35);
+            }
+
+            Text {
+                text: root.fix;
+                font-size: 12px;
+                font-family: "monospace";
+            }
+        }
+    }
+}
+
+// Dashlaunch's launch.ini on the target (the config XeUnshackle and RGH
+// consoles boot with): the license patches that let content bought on another
+// console run, and the state of the two protections. Only shown when a
+// launch.ini was found. Its writes bypass the job queue, so it is veiled while
+// a job runs.
+export component DashlaunchCard inherits ToolboxCard {
+    private property <int> patches-on: (UiState.dashlaunch.contpatch ? 1 : 0)
+        + (UiState.dashlaunch.xblapatch ? 1 : 0)
+        + (UiState.dashlaunch.licpatch ? 1 : 0);
+    private property <bool> all-on: patches-on == 3;
+    private property <bool> mixed: patches-on > 0 && patches-on < 3;
+    private property <bool> can-edit: !UiState.writing-dashlaunch;
+    // The three patches are unfolded as soon as they disagree — the user has
+    // to see why the main switch is neither on nor off — and stay unfolded
+    // afterwards, so the row being clicked never vanishes under the cursor.
+    private property <bool> expanded: false;
+
+    init => {
+        if mixed {
+            expanded = true;
+        }
+    }
+    changed mixed => {
+        if mixed {
+            expanded = true;
+        }
+    }
+
+    disabled: UiState.job-running || UiState.badavatar-hdd-busy;
+    disabled-tooltip: UiState.badavatar-hdd-busy
+        ? "Available once BadAvatar is written to the hard drive."
+        : "Available once the queue has finished.";
+
+    CardHeader {
+        icon: IconSet.SlidersHorizontal;
+        title: "Dashlaunch";
+
+        if UiState.writing-dashlaunch: Spinner {
+            width: 27px;
+            height: 27px;
+            indeterminate: true;
+        }
+
+        if !UiState.writing-dashlaunch: IconButton {
+            icon: IconSet.RefreshCcw;
+            width: self.height;
+            tooltip: "Read launch.ini again";
+            clicked => Dispatcher.dispatch(Message.FetchDashlaunch, "");
+        }
+    }
+
+    HorizontalLine { }
+
+    // Main switch: the three patches at once.
+    HorizontalLayout {
+        spacing: 12px;
+        cross-axis-alignment: CrossAxisAlignment.center;
+
+        VerticalLayout {
+            spacing: 3px;
+            horizontal-stretch: 1;
+
+            Text {
+                text: "Play content from another console";
+                font-weight: 600;
+                wrap: word-wrap;
+            }
+
+            Text {
+                text: "Lets Arcade games and add-ons (DLC) bought on another Xbox 360 run on this one.";
+                font-size: 12px;
+                wrap: word-wrap;
+                color: MyPalette.foreground.transparentize(0.35);
+            }
+        }
+
+        ToggleSwitch {
+            checked: root.all-on;
+            mixed: root.mixed;
+            enabled: root.can-edit;
+            // Partly on counts as "not yet": the click finishes the job.
+            toggled => {
+                if root.all-on {
+                    Dispatcher.dispatch(Message.SetDashlaunch, "contpatch=false,xblapatch=false,licpatch=false");
+                } else {
+                    Dispatcher.dispatch(Message.SetDashlaunch, "contpatch=true,xblapatch=true,licpatch=true");
+                }
+            }
+        }
+    }
+
+    // Disclosure: summary of the state, and the switch to unfold the details.
+    Rectangle {
+        height: disclosure.preferred-height;
+
+        disclosure := HorizontalLayout {
+            spacing: 4px;
+            alignment: start;
+            cross-axis-alignment: CrossAxisAlignment.center;
+
+            IconDisplay {
+                icon: root.expanded ? IconSet.ChevronDown : IconSet.ChevronRight;
+                stroke: MyPalette.foreground.transparentize(0.35);
+                size: 14px;
+            }
+
+            Text {
+                text: root.all-on
+                    ? "On · all 3 settings"
+                    : root.mixed ? "Custom · " + root.patches-on + " of 3 settings on" : "Off · all 3 settings";
+                font-size: 12px;
+                color: root.mixed ? MyPalette.accent-background : MyPalette.foreground.transparentize(0.35);
+            }
+        }
+
+        TouchArea {
+            mouse-cursor: pointer;
+            clicked => {
+                root.expanded = !root.expanded;
+            }
+        }
+    }
+
+    if root.expanded: HorizontalLayout {
+        padding-left: 6px;
+        spacing: 12px;
+
+        // Guide line tying the three rows to the main switch above.
+        Rectangle {
+            width: 2px;
+            border-radius: 1px;
+            background: MyPalette.border;
+        }
+
+        VerticalLayout {
+            spacing: 8px;
+            horizontal-stretch: 1;
+
+            PatchRow {
+                label: "Add-ons (DLC)";
+                key: "contpatch";
+                checked: UiState.dashlaunch.contpatch;
+                enabled: root.can-edit;
+                toggled => {
+                    Dispatcher.dispatch(Message.SetDashlaunch, UiState.dashlaunch.contpatch ? "contpatch=false" : "contpatch=true");
+                }
+            }
+
+            PatchRow {
+                label: "Arcade games";
+                key: "xblapatch";
+                checked: UiState.dashlaunch.xblapatch;
+                enabled: root.can-edit;
+                toggled => {
+                    Dispatcher.dispatch(Message.SetDashlaunch, UiState.dashlaunch.xblapatch ? "xblapatch=false" : "xblapatch=true");
+                }
+            }
+
+            PatchRow {
+                label: "License check";
+                key: "licpatch";
+                checked: UiState.dashlaunch.licpatch;
+                enabled: root.can-edit;
+                toggled => {
+                    Dispatcher.dispatch(Message.SetDashlaunch, UiState.dashlaunch.licpatch ? "licpatch=false" : "licpatch=true");
+                }
+            }
+        }
+    }
+
+    HorizontalLine { }
+
+    ProtectionRow {
+        ok: UiState.dashlaunch.liveblock;
+        ok-text: "Xbox Live is blocked";
+        bad-text: "Xbox Live isn't blocked";
+        risk: "A modded console that reaches Xbox Live can be banned for good.";
+        fix: "liveblock = true";
+    }
+
+    ProtectionRow {
+        ok: UiState.dashlaunch.noupdater;
+        ok-text: "System updates are blocked";
+        bad-text: "System updates aren't blocked";
+        risk: "An update could stop the hack from working.";
+        fix: "noupdater = true";
+    }
+
+    HorizontalLine { }
+
+    // Footnote: where the file is and when edits apply. Quiet on purpose.
+    VerticalLayout {
+        spacing: 3px;
+
+        HorizontalLayout {
+            spacing: 5px;
+            cross-axis-alignment: CrossAxisAlignment.center;
+
+            IconDisplay {
+                icon: IconSet.FileText;
+                stroke: MyPalette.foreground.transparentize(0.5);
+                size: 12px;
+            }
+
+            Text {
+                text: UiState.dashlaunch.location;
+                font-size: 11px;
+                wrap: word-wrap;
+                horizontal-stretch: 1;
+                color: MyPalette.foreground.transparentize(0.5);
+            }
+        }
+
+        Text {
+            text: "Changes apply the next time the console restarts.";
+            font-size: 11px;
+            wrap: word-wrap;
+            color: MyPalette.foreground.transparentize(0.5);
+        }
+    }
+}

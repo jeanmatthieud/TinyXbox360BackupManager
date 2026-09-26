@@ -564,7 +564,7 @@ pub(crate) fn find_aurora_data_dir(session: &mut dyn RemoteFs) -> Option<String>
 /// Resolves the Aurora install directory on one console volume: prefers a
 /// `launch.ini`'s `[Paths]` entry when present (whatever the actual layout),
 /// falling back to `Aurora` or `Dashboard/Aurora` at the volume's root.
-fn find_aurora_dir_on_root(session: &mut dyn RemoteFs, root: &str) -> Option<String> {
+pub(crate) fn find_aurora_dir_on_root(session: &mut dyn RemoteFs, root: &str) -> Option<String> {
     let root_path = format!("/{root}");
 
     let has_ini = session
@@ -1120,7 +1120,7 @@ impl Target {
 }
 
 /// Case-insensitive lookup of a direct child (file or dir) of `dir`.
-fn find_child_ci(dir: &Path, name: &str) -> Option<PathBuf> {
+pub(crate) fn find_child_ci(dir: &Path, name: &str) -> Option<PathBuf> {
     std::fs::read_dir(dir)
         .ok()?
         .flatten()
@@ -1679,6 +1679,7 @@ impl Target {
         RemoteSession::Fatx(fatx) => fatx.space().ok(),
         RemoteSession::Ftp(_) => None,
     };
+    let bad_storage = session.is_bad_storage();
     session.quit()?;
 
     let drive_info = match self {
@@ -1692,6 +1693,7 @@ impl Target {
             // The cluster size, which is what a file on this filesystem is
             // rounded up to, exactly like a mounted drive's block size.
             allocation_granularity: space.map_or(0, |s| s.bytes_per_cluster),
+            bad_storage,
         },
         // Nothing over FTP reports the console's free space.
         Target::Ftp(ftp) => DriveInfo {
@@ -1702,6 +1704,7 @@ impl Target {
             fs_kind: Default::default(),
             fs_label: String::new(),
             allocation_granularity: 0,
+            bad_storage: false,
         },
         // Never reached: a local drive is scanned by `scan`, not here.
         Target::Local(path) => DriveInfo {

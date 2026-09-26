@@ -1,0 +1,137 @@
+// SPDX-License-Identifier: GPL-3.0-only
+
+import { IconSet, IconDisplay } from "@lucide";
+import { Spinner } from "std-widgets.slint";
+import { ToolboxCard } from "../toolbox-card.slint";
+import { CardHeader } from "../card-header.slint";
+import { CardActionRow } from "../card-action-row.slint";
+import { HorizontalLine } from "../horizontal-line.slint";
+import { IconButton } from "../icon-button.slint";
+import { WarningNote } from "../warning-note.slint";
+import { MyPalette } from "../../styling.slint";
+import { UiState } from "../../ui-state.slint";
+import { Message, Dispatcher } from "../../messages.slint";
+import { BadAvatarHddState } from "../../types.slint";
+
+// A quiet explanatory line.
+component Hint inherits Text {
+    font-size: 12px;
+    wrap: word-wrap;
+    color: MyPalette.foreground.transparentize(0.35);
+}
+
+// BadAvatar on the connected console hard drive (FATX target only): its state,
+// and the removal of our own install. Someone else's setup is only reported,
+// and the install itself is a Toolbox tool (it needs no target connected).
+// The removal bypasses the job queue, so the card is veiled while a job runs
+// (and the queue waits for the removal in turn).
+export component BadAvatarHddCard inherits ToolboxCard {
+    private property <BadAvatarHddState> state: UiState.badavatar-hdd.state;
+
+    disabled: (UiState.job-running || UiState.writing-dashlaunch) && !UiState.badavatar-hdd-busy;
+    disabled-tooltip: "Available once the queue has finished.";
+
+    CardHeader {
+        icon: IconSet.HardDrive;
+        title: "BadAvatar on the hard drive";
+
+        if UiState.badavatar-hdd-busy: Spinner {
+            width: 27px;
+            height: 27px;
+            indeterminate: true;
+        }
+
+        if !UiState.badavatar-hdd-busy: IconButton {
+            icon: IconSet.RefreshCcw;
+            width: self.height;
+            tooltip: "Read the hard drive again";
+            clicked => Dispatcher.dispatch(Message.FetchBadAvatarHdd, "");
+        }
+    }
+
+    HorizontalLine { }
+
+    // Each piece sits directly in the card's own layout rather than in a
+    // nested one per state: a wrapped Text only gets the height of its wrapped
+    // lines from the layout that sets its width.
+
+    // Retail: nothing to do here; the install is a Toolbox tool.
+    if state == BadAvatarHddState.Retail: Text {
+        text: "BadAvatar isn't installed on this hard drive.";
+        wrap: word-wrap;
+    }
+
+    if state == BadAvatarHddState.Retail: Hint {
+        text: "To install it, disconnect from this drive, then use \"BadAvatar on a console hard drive\" in the Toolbox.";
+    }
+
+    // Ours: installed, or only partly.
+    if state == BadAvatarHddState.Installed: HorizontalLayout {
+        spacing: 8px;
+
+        IconDisplay {
+            icon: IconSet.ShieldCheck;
+            stroke: MyPalette.success;
+            size: 16px;
+        }
+
+        Text {
+            text: "BadAvatar is installed on this hard drive.";
+            horizontal-stretch: 1;
+        }
+    }
+
+    if state == BadAvatarHddState.Incomplete: WarningNote {
+        text: "BadAvatar is only partly installed: an install was interrupted, or files were removed since. Remove it, then install it again.";
+    }
+
+    if state == BadAvatarHddState.Installed: Hint {
+        text: "It triggers at every boot, on the profile screen. To start the console without it, keep pressing B as that screen loads. Unplug any BadAvatar USB key: the console looks for one first.";
+    }
+
+    // Someone else's setup: reported only.
+    if state == BadAvatarHddState.Foreign: WarningNote {
+        text: "Another BadAvatar or BadUpdate setup is on this hard drive:";
+    }
+
+    for item in (state == BadAvatarHddState.Foreign ? UiState.badavatar-hdd.found : []): Text {
+        text: "  • " + item;
+        font-size: 12px;
+        font-family: "monospace";
+        wrap: word-wrap;
+    }
+
+    if state == BadAvatarHddState.Foreign: Hint {
+        text: "Restore the drive to its retail state by removing these files to install TinyXbox360BackupManager's own from the Toolbox.";
+    }
+
+    // Bad Storage: the console only reads this drive once the exploit has run.
+    if state == BadAvatarHddState.BadStorage: HorizontalLayout {
+        spacing: 8px;
+
+        IconDisplay {
+            icon: IconSet.ShieldX;
+            stroke: MyPalette.destructive;
+            size: 16px;
+        }
+
+        Text {
+            text: "This hard drive is formatted for Bad Storage, which BadAvatar can't be installed alongside.";
+            wrap: word-wrap;
+            horizontal-stretch: 1;
+        }
+    }
+
+    if state == BadAvatarHddState.BadStorage: Hint {
+        text: "The console only reads this drive once the exploit has run, so the exploit can't start from it. Keep BadAvatar on its USB key.";
+    }
+
+    if state == BadAvatarHddState.Installed || state == BadAvatarHddState.Incomplete: HorizontalLine { }
+
+    if state == BadAvatarHddState.Installed || state == BadAvatarHddState.Incomplete: CardActionRow {
+        icon: IconSet.Trash2;
+        text: UiState.badavatar-hdd-busy ? "Working… see the status bar below." : "Remove BadAvatar from this hard drive";
+        disabled: UiState.badavatar-hdd-busy;
+        clicked => Dispatcher.dispatch(Message.UninstallBadAvatarHdd, "");
+    }
+}

@@ -2,7 +2,7 @@
 
 //! Fetching a component archive off the web, for the Toolbox tools.
 //!
-//! Both Toolbox tools work the same way: pull a `.zip`/`.7z` from a pinned URL,
+//! Both Toolbox tools work the same way: pull a `.zip`/`.7z`/`.rar` from a URL,
 //! unpack it somewhere temporary, and pick the one folder inside it that
 //! matters. Only the assembly step differs, so everything up to it lives here
 //! and is shared by [`crate::badavatar`] and [`crate::ogxbox_compat`].
@@ -12,8 +12,9 @@
 //! passed in rather than fixed here.
 
 use anyhow::{Context, Result, bail};
+use std::fmt;
 use std::fs::{self, File};
-use std::io::{Read, Write};
+use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -46,6 +47,88 @@ pub static AGENT: LazyLock<ureq::Agent> = LazyLock::new(|| {
         .into()
 });
 
+/// Why a download failed, in terms the user can act on. Carried as a typed
+/// error (rather than folded into the message) so the GUI can find it in the
+/// chain with `downcast_ref` and word its own advice — "pick another source",
+/// "try again later" — without matching on the HTTP client's wording.
+#[derive(Debug)]
+pub struct DownloadError {
+    /// What was being downloaded, e.g. "Aurora".
+    pub label: String,
+    pub url: String,
+    pub kind: DownloadFailure,
+    /// The HTTP client's own error, kept for the log.
+    pub detail: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DownloadFailure {
+    /// The server answered, but with an error status (404, 500, …).
+    HttpStatus(u16),
+    /// The server could not be reached at all (DNS, connection refused, TLS).
+    Unreachable,
+    /// The server stopped answering.
+    Timeout,
+    /// The transfer started but broke off.
+    Interrupted,
+}
+
+impl DownloadError {
+    fn new(label: &str, url: &str, kind: DownloadFailure, detail: impl fmt::Display) -> Self {
+        Self {
+            label: label.to_string(),
+            url: url.to_string(),
+            kind,
+            detail: detail.to_string(),
+        }
+    }
+
+    fn from_ureq(label: &str, url: &str, err: ureq::Error) -> Self {
+        let kind = match &err {
+            ureq::Error::StatusCode(code) => DownloadFailure::HttpStatus(*code),
+            ureq::Error::Timeout(_) => DownloadFailure::Timeout,
+            ureq::Error::Io(e) if e.kind() == io::ErrorKind::TimedOut => DownloadFailure::Timeout,
+            // Before any answer, an I/O error (DNS lookup, refused connection)
+            // means the server was never reached.
+            _ => DownloadFailure::Unreachable,
+        };
+        Self::new(label, url, kind, err)
+    }
+
+    /// For an error reading the body, once the server has answered.
+    fn from_io(label: &str, url: &str, err: &io::Error) -> Self {
+        let kind = match err.kind() {
+            io::ErrorKind::TimedOut => DownloadFailure::Timeout,
+            _ => DownloadFailure::Interrupted,
+        };
+        Self::new(label, url, kind, err)
+    }
+
+    /// Finds a download failure anywhere in an error's chain.
+    pub fn find(err: &anyhow::Error) -> Option<&Self> {
+        err.chain().find_map(|e| e.downcast_ref::<Self>())
+    }
+}
+
+impl fmt::Display for DownloadFailure {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::HttpStatus(code) => write!(f, "the server answered with error {code}"),
+            Self::Unreachable => f.write_str("the server could not be reached"),
+            Self::Timeout => f.write_str("the server stopped responding"),
+            Self::Interrupted => f.write_str("the connection was interrupted"),
+        }
+    }
+}
+
+impl fmt::Display for DownloadError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Couldn't download {} ({})", self.label, self.kind)
+    }
+}
+
+impl std::error::Error for DownloadError {}
+
 /// Bails with `marker` when the user has asked to stop.
 pub fn check_cancel(cancel: &AtomicBool, marker: &str) -> Result<()> {
     if cancel.load(Ordering::Relaxed) {
@@ -56,6 +139,8 @@ pub fn check_cancel(cancel: &AtomicBool, marker: &str) -> Result<()> {
 
 /// Streams `url` to `dest`, reporting a coarse percentage in the status line.
 /// Polls `cancel` between chunks so a long transfer can be interrupted.
+///
+/// A network failure comes back as a [`DownloadError`].
 pub fn download_to_file(
     url: &str,
     dest: &Path,
@@ -68,7 +153,7 @@ pub fn download_to_file(
         .get(url)
         .header("Referer", origin_of(url).as_str())
         .call()
-        .with_context(|| format!("requesting {url}"))?;
+        .map_err(|e| DownloadError::from_ureq(label, url, e))?;
 
     let total = response.body().content_length();
     let mut reader = response
@@ -84,7 +169,9 @@ pub fn download_to_file(
 
     loop {
         check_cancel(cancel, cancelled_marker)?;
-        let n = reader.read(&mut buf).context("reading response body")?;
+        let n = reader
+            .read(&mut buf)
+            .map_err(|e| DownloadError::from_io(label, url, &e))?;
         if n == 0 {
             break;
         }
@@ -109,13 +196,15 @@ pub fn download_to_file(
     Ok(())
 }
 
-/// Returns the archive extension ("7z" or "zip") to save a download under,
-/// inferred from the URL. `None` for an unsupported extension (e.g. `.rar`).
+/// Returns the archive extension ("7z", "rar" or "zip") to save a download
+/// under, inferred from the URL. `None` for an unsupported extension.
 pub fn archive_extension(url: &str) -> Option<&'static str> {
     let path = url.split(['?', '#']).next().unwrap_or(url);
     let lower = path.to_lowercase();
     if lower.ends_with(".7z") {
         Some("7z")
+    } else if lower.ends_with(".rar") {
+        Some("rar")
     } else if lower.ends_with(".zip") {
         Some("zip")
     } else {

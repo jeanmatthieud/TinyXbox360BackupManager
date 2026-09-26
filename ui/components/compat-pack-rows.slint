@@ -1,0 +1,109 @@
+// SPDX-License-Identifier: GPL-3.0-only
+
+import { IconDisplay, IconSet } from "@lucide";
+import { LineEdit } from "std-widgets.slint";
+import { IconButton, IconButtonKind } from "icon-button.slint";
+import { Message, Dispatcher } from "../messages.slint";
+import { MyPalette } from "../styling.slint";
+import { DisplayedCompatPack } from "../types.slint";
+
+// A built-in emulator pack: its name over its URL, both fixed. The URL sits
+// in a read-only field rather than a plain text so it can still be selected
+// and copied.
+export component BuiltinPackRow inherits VerticalLayout {
+    in property <DisplayedCompatPack> pack;
+    spacing: 3px;
+
+    HorizontalLayout {
+        spacing: 5px;
+
+        Text {
+            text: pack.label;
+            font-size: 12px;
+            horizontal-stretch: 1;
+            vertical-alignment: center;
+        }
+
+        HorizontalLayout {
+            spacing: 3px;
+            horizontal-stretch: 0;
+
+            VerticalLayout {
+                alignment: center;
+
+                IconDisplay {
+                    icon: IconSet.Lock;
+                    stroke: MyPalette.foreground.transparentize(0.5);
+                    size: 11px;
+                }
+            }
+
+            Text {
+                text: "Built-in";
+                font-size: 11px;
+                color: MyPalette.foreground.transparentize(0.45);
+                vertical-alignment: center;
+            }
+        }
+    }
+
+    LineEdit {
+        text: pack.url;
+        read-only: true;
+    }
+}
+
+// A pack the user added: an editable name (with its delete button) over an
+// editable URL. Every keystroke is written to the config.
+export component CustomPackRow inherits VerticalLayout {
+    in property <DisplayedCompatPack> pack;
+    spacing: 5px;
+
+    // Same reason as in `DownloadUrlField`: typing breaks the `text:`
+    // bindings, so a value coming back from Rust is pushed in by hand — and
+    // only when it differs, or every echoed keystroke would reset the caret.
+    changed pack => {
+        if name-edit.text != pack.label {
+            name-edit.text = pack.label;
+        }
+        if url-edit.text != pack.url {
+            url-edit.text = pack.url;
+        }
+    }
+
+    // A row appears empty only right after "Add pack": start typing its name.
+    init => {
+        if pack.label == "" && pack.url == "" {
+            name-edit.focus();
+        }
+    }
+
+    HorizontalLayout {
+        spacing: 5px;
+
+        name-edit := LineEdit {
+            horizontal-stretch: 1;
+            text: pack.label;
+            placeholder-text: "Pack name";
+            edited => Dispatcher.dispatch(Message.SetCompatPackLabel, pack.key + "\n" + self.text);
+        }
+
+        VerticalLayout {
+            alignment: center;
+
+            IconButton {
+                icon: IconSet.Trash2;
+                kind: IconButtonKind.DestructiveText;
+                width: self.height;
+                tooltip: "Remove this pack";
+                clicked => Dispatcher.dispatch(Message.RemoveCompatPack, pack.key);
+            }
+        }
+    }
+
+    url-edit := LineEdit {
+        text: pack.url;
+        placeholder-text: "https://… (.zip, .7z or .rar)";
+        edited => Dispatcher.dispatch(Message.SetCompatPackUrl, pack.key + "\n" + self.text);
+    }
+}

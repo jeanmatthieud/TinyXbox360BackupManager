@@ -12,6 +12,15 @@ use std::path::{Path, PathBuf};
 /// Discs sharing a TitleID are told apart by these two bytes.
 const DISC_NUMBER_OFFSET: u64 = 0x366;
 
+/// License table: 16 entries of `{ u64 license ID, u32 license bits, u32
+/// flags }`. The top 16 bits of the ID give its type.
+const LICENSE_TABLE_OFFSET: u64 = 0x22C;
+const LICENSE_ENTRIES: usize = 16;
+const LICENSE_UNRESTRICTED: u16 = 0xFFFF;
+const LICENSE_CONSOLE: u16 = 0xF000;
+const LICENSE_PROFILE_CONSOLE: u16 = 0x0009;
+const LICENSE_PROFILE_WINDOWS: u16 = 0x0003;
+
 /// Bytes needed to cover every field `inspect_reader` reads. The last one is
 /// `title_name` at 0x1691 spanning 0x100 bytes (ends at 0x1791); rounded up.
 /// Used to fetch just the header prefix of a large package (e.g. over FTP)
@@ -33,6 +42,12 @@ pub fn is_stfs_magic(magic: &[u8; 4]) -> bool {
 /// (`Content/0000000000000000/<TitleID>/00000002`).
 pub fn dlc_dir_name() -> String {
     format!("{CONTENT_TYPE_DLC:08X}")
+}
+
+/// Folder name for an installed Arcade (XBLA) game's own package
+/// (`Content/0000000000000000/<TitleID>/000D0000`).
+pub fn arcade_dir_name() -> String {
+    format!("{CONTENT_TYPE_ARCADE:08X}")
 }
 
 /// Folder name for installed title updates, read by the dashboard at boot
@@ -58,6 +73,21 @@ pub struct StfsInfo {
     pub disc_number: u8,
     /// Total number of discs in the set (0 or 1 for single-disc games).
     pub disc_in_set: u8,
+    /// Who the license table restricts the full content to; `None` when it
+    /// plays anywhere.
+    pub license_lock: Option<LicenseLock>,
+}
+
+/// Consoles and profiles a package is licensed to, when its license table
+/// restricts it. The package runs as a trial (or not at all, for DLC) unless
+/// one of them matches, or Dashlaunch's license patches are on. Whether they
+/// match the target console can't be told from here.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct LicenseLock {
+    /// 40-bit console IDs.
+    pub console_ids: Vec<u64>,
+    /// Profile XUIDs.
+    pub xuids: Vec<u64>,
 }
 
 impl StfsInfo {
@@ -113,6 +143,7 @@ pub fn inspect_reader<R: Read + Seek>(
     let disc_in_set = read_u8(reader, DISC_NUMBER_OFFSET + 1)?;
     let display_name = read_utf16_be(reader, 0x411);
     let title_name = read_utf16_be(reader, 0x1691);
+    let license_lock = read_license_lock(reader)?;
 
     Ok(Some(StfsInfo {
         path,
@@ -123,7 +154,37 @@ pub fn inspect_reader<R: Read + Seek>(
         title_name,
         disc_number,
         disc_in_set,
+        license_lock,
     }))
+}
+
+/// Reads the license table. An entry grants something only when its license
+/// bits are set; a single granted unrestricted entry unlocks the package for
+/// everyone, whatever the other entries say. Other types (media flags,
+/// privileges…) bind the package to no console or profile, so they are
+/// ignored.
+fn read_license_lock<R: Read + Seek>(reader: &mut R) -> Result<Option<LicenseLock>> {
+    let mut table = [0u8; LICENSE_ENTRIES * 0x10];
+    reader.seek(SeekFrom::Start(LICENSE_TABLE_OFFSET))?;
+    reader.read_exact(&mut table)?;
+
+    let mut lock = LicenseLock::default();
+    for entry in table.chunks_exact(0x10) {
+        let id = u64::from_be_bytes(entry[..8].try_into().unwrap());
+        let bits = u32::from_be_bytes(entry[8..12].try_into().unwrap());
+        if bits == 0 {
+            continue;
+        }
+        match (id >> 48) as u16 {
+            LICENSE_UNRESTRICTED => return Ok(None),
+            LICENSE_CONSOLE => lock.console_ids.push(id & 0xFF_FFFF_FFFF),
+            LICENSE_PROFILE_CONSOLE | LICENSE_PROFILE_WINDOWS => lock.xuids.push(id),
+            _ => {}
+        }
+    }
+
+    let locked = !lock.console_ids.is_empty() || !lock.xuids.is_empty();
+    Ok(locked.then_some(lock))
 }
 
 /// Reads a 0x100-byte UTF-16 big-endian string field.
@@ -205,10 +266,50 @@ mod tests {
         assert_eq!(info.media_id, "11223344");
         assert_eq!(info.content_type_dir(), "000D0000");
         assert_eq!(info.name(), Some("Castle Crashers"));
+        assert_eq!(info.license_lock, None);
 
         assert_eq!(title_from_dir(&dir), Some("Castle Crashers".to_string()));
 
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    fn license_entry(buf: &mut [u8], index: usize, id: u64, bits: u32) {
+        let at = LICENSE_TABLE_OFFSET as usize + index * 0x10;
+        buf[at..at + 8].copy_from_slice(&id.to_be_bytes());
+        buf[at + 8..at + 12].copy_from_slice(&bits.to_be_bytes());
+    }
+
+    fn license_of(buf: &[u8]) -> Option<LicenseLock> {
+        let mut cursor = std::io::Cursor::new(buf);
+        inspect_reader(&mut cursor, PathBuf::new())
+            .unwrap()
+            .unwrap()
+            .license_lock
+    }
+
+    #[test]
+    fn parses_license_table() {
+        let mut buf = vec![0u8; HEADER_SIZE];
+        buf[..4].copy_from_slice(b"LIVE");
+
+        // Empty table: nothing restricts the package.
+        assert_eq!(license_of(&buf), None);
+
+        license_entry(&mut buf, 0, 0x0009_0000_1234_5678, 1);
+        license_entry(&mut buf, 1, 0xF000_00AB_CDEF_0123, 1);
+        // Granting no bits, so ignored.
+        license_entry(&mut buf, 2, 0xF000_0011_1111_1111, 0);
+        assert_eq!(
+            license_of(&buf),
+            Some(LicenseLock {
+                console_ids: vec![0xAB_CDEF_0123],
+                xuids: vec![0x0009_0000_1234_5678],
+            })
+        );
+
+        // One unrestricted entry unlocks it for everyone.
+        license_entry(&mut buf, 3, u64::MAX, 1);
+        assert_eq!(license_of(&buf), None);
     }
 
     #[test]

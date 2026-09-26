@@ -54,13 +54,15 @@ export component Navbar inherits VerticalLayout {
         // would be a second write in flight (see `crates/core/src/ftp.rs`).
         if UiState.config.target.is-empty: NavbarButton {
             icon: IconSet.Zap;
-            ping: !UiState.creating-badavatar && !UiState.compat-busy;
-            disabled: UiState.creating-badavatar || UiState.compat-busy;
+            ping: !UiState.creating-badavatar && !UiState.compat-busy && !UiState.badavatar-hdd-tool-busy;
+            disabled: UiState.creating-badavatar || UiState.compat-busy || UiState.badavatar-hdd-tool-busy;
             tooltip: UiState.creating-badavatar
                 ? "BadAvatar USB key creation in progress"
                 : UiState.compat-busy
                     ? "Original Xbox compatibility install in progress"
-                    : "Select a target";
+                    : UiState.badavatar-hdd-tool-busy
+                        ? "BadAvatar hard drive install in progress"
+                        : "Select a target";
             clicked => {
                 UiState.selecting-target = true;
             }
@@ -68,7 +70,12 @@ export component Navbar inherits VerticalLayout {
 
         if !UiState.config.target.is-empty: NavbarButton {
             icon: IconSet.Unplug;
-            tooltip: "Disconnect from \{UiState.config.target}";
+            // The hard drive must not be let go while BadAvatar is being
+            // written to it or removed from it.
+            disabled: UiState.badavatar-hdd-busy;
+            tooltip: UiState.badavatar-hdd-busy
+                ? "Wait until BadAvatar is removed from the hard drive"
+                : "Disconnect from \{UiState.config.target}";
             clicked => Dispatcher.dispatch(Message.RequestDisconnect, "");
         }
     }

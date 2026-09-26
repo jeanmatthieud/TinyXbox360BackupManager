@@ -2,7 +2,7 @@
 // SPDX-FileContributor: Modified by Jean-Matthieu Dechriste (TinyXbox360BackupManager)
 // SPDX-License-Identifier: GPL-3.0-only
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 pub const GIB: f32 = 1024. * 1024. * 1024.;
 
@@ -26,7 +26,7 @@ pub struct PickedGame {
     ///   They install *beside* a game (under its TitleID, or under the one of
     ///   each package they carry, the disc's own being a placeholder) and
     ///   merge rather than replace: there is no overwrite to announce.
-    /// - **Archive (.zip/.7z) → `None`, deliberately and permanently.** The
+    /// - **Archive (.zip/.7z/.rar) → `None`, deliberately and permanently.** The
     ///   TitleID sits in the `default.xex`, hundreds of megabytes into an
     ///   image that is itself a multi-gigabyte deflate stream — not seekable,
     ///   so reading it means unpacking a large part of every archive before
@@ -39,22 +39,44 @@ pub struct PickedGame {
     pub installs_title_id: Option<String>,
 }
 
+/// Why a picked file was not accepted by [`should_add_game`].
+pub struct Rejected {
+    /// False when the file is simply not something the app installs (wrong
+    /// type): a recursive folder scan skips those silently, as a folder of
+    /// games is expected to hold other files too.
+    pub invalid: bool,
+    pub reason: &'static str,
+}
+
+impl Rejected {
+    fn unsupported(reason: &'static str) -> Self {
+        Self { invalid: false, reason }
+    }
+
+    fn invalid(reason: &'static str) -> Self {
+        Self { invalid: true, reason }
+    }
+}
+
 /// Quickly checks that a picked file looks like a usable input: an ISO,
-/// an XBLA archive (.7z/.zip) or a bare STFS package (Arcade/DLC/TU).
+/// a game archive (.7z/.zip/.rar) or a bare STFS package (Arcade/DLC/TU).
 /// Games already installed for the same TitleID are still accepted:
 /// re-adding overwrites the existing data, which is the common intent.
-pub fn should_add_game(path: PathBuf) -> Option<PickedGame> {
+pub fn should_add_game(path: PathBuf) -> Result<PickedGame, Rejected> {
     use txbm_core::iso_info::IsoKind;
     use txbm_core::quirks::DiscQuirk;
 
-    let _ = path.file_name()?;
+    if path.file_name().is_none() {
+        return Err(Rejected::unsupported("not a file"));
+    }
 
     if path
         .extension()
         .is_some_and(|ext| ext.eq_ignore_ascii_case("iso"))
     {
         // Cheap validity check: XDVDFS magic must be found by the ISO reader.
-        let info = txbm_core::iso_info::inspect(&path).ok()?;
+        let info = txbm_core::iso_info::inspect(&path)
+            .map_err(|_| Rejected::invalid("not a readable Xbox disc image"))?;
         // A content/bundled disc installs under the TitleID of each package it
         // carries, not under the disc's own (often a placeholder), and merges
         // rather than replaces: no overwrite to announce. A disc's quirk can
@@ -68,7 +90,7 @@ pub fn should_add_game(path: PathBuf) -> Option<PickedGame> {
                 .then_some(info.title_id)
                 .flatten(),
         };
-        return Some(PickedGame {
+        return Ok(PickedGame {
             path,
             installs_title_id,
         });
@@ -78,21 +100,37 @@ pub fn should_add_game(path: PathBuf) -> Option<PickedGame> {
         // The archive content (Arcade package present?) is validated
         // during the conversion itself — and so is the game it installs:
         // see `installs_title_id` for why it stays unknown until then.
-        return txbm_core::archive::looks_valid(&path).then_some(PickedGame {
+        if !txbm_core::archive::looks_valid(&path) {
+            return Err(Rejected::invalid("corrupted or mislabelled archive"));
+        }
+        // Once per volume: a recursive add of a split set is reported as a
+        // batch of rejections rather than as one failed job per volume.
+        if txbm_core::archive::is_rar_volume(&path) {
+            return Err(Rejected::invalid(txbm_core::archive::MULTI_VOLUME_RAR));
+        }
+        return Ok(PickedGame {
             path,
             installs_title_id: None,
         });
     }
 
     // Anything else: accept installable STFS packages.
-    let info = txbm_core::stfs::inspect(&path).ok()??;
-    matches!(
+    let info = match txbm_core::stfs::inspect(&path) {
+        Ok(Some(info)) => info,
+        Ok(None) => return Err(Rejected::unsupported("unsupported file type")),
+        Err(_) => return Err(Rejected::invalid("unreadable file")),
+    };
+    if !matches!(
         info.content_type,
         txbm_core::stfs::CONTENT_TYPE_ARCADE
             | txbm_core::stfs::CONTENT_TYPE_DLC
             | txbm_core::stfs::CONTENT_TYPE_TITLE_UPDATE
-    )
-    .then(|| PickedGame {
+    ) {
+        return Err(Rejected::unsupported(
+            "package is not a game, DLC or title update",
+        ));
+    }
+    Ok(PickedGame {
         // Only an Arcade package is a game in its own right; DLC and title
         // updates land beside an existing install without replacing it.
         installs_title_id: (info.content_type == txbm_core::stfs::CONTENT_TYPE_ARCADE)

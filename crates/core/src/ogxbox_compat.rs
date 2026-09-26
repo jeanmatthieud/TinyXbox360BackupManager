@@ -93,6 +93,7 @@ pub const WORK_SUBDIR: &str = "ogxbox-compat";
 pub const COMPAT_CANCELLED: &str = "compatibility install cancelled";
 
 /// One emulator set offered in the drop-down.
+#[derive(Debug)]
 pub struct CompatPack {
     /// Stable key stored in the config; survives a reordering of the list.
     pub key: &'static str,
@@ -137,13 +138,67 @@ pub const COMPAT_PACKS: &[CompatPack] = &[
     },
 ];
 
-/// The pack a config names, falling back to the first for an empty or unknown
-/// key — a config written by a later version must never stop the tool working.
-pub fn pack_by_key(key: &str) -> &'static CompatPack {
-    COMPAT_PACKS
-        .iter()
-        .find(|p| p.key == key)
-        .unwrap_or(&COMPAT_PACKS[0])
+/// A pack the user added in the settings, offered after the built-in ones.
+/// Only a name and a URL: nothing is known of what it holds, so it carries no
+/// description and no exploit warning.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct CustomPack {
+    /// `custom-N`, stable across renames and removals of the others.
+    pub key: String,
+    pub label: String,
+    pub url: String,
+}
+
+/// Prefix of a [`CustomPack::key`]; the built-in keys never start with it.
+const CUSTOM_KEY_PREFIX: &str = "custom-";
+
+/// Shown for a custom pack left without a name.
+const UNNAMED_PACK: &str = "Unnamed pack";
+
+/// One entry of the drop-down: a built-in pack or one the user added. A
+/// borrowing view, so the built-ins stay `'static` constants and the custom
+/// ones stay in the config.
+#[derive(Debug, Clone, Copy)]
+pub enum Pack<'a> {
+    Builtin(&'static CompatPack),
+    Custom(&'a CustomPack),
+}
+
+impl<'a> Pack<'a> {
+    pub fn key(self) -> &'a str {
+        match self {
+            Self::Builtin(p) => p.key,
+            Self::Custom(p) => &p.key,
+        }
+    }
+
+    pub fn label(self) -> &'a str {
+        match self {
+            Self::Builtin(p) => p.label,
+            Self::Custom(p) if p.label.trim().is_empty() => UNNAMED_PACK,
+            Self::Custom(p) => &p.label,
+        }
+    }
+
+    pub fn url(self) -> &'a str {
+        match self {
+            Self::Builtin(p) => p.url,
+            Self::Custom(p) => p.url.trim(),
+        }
+    }
+
+    /// What the pack is; `None` for a custom one, which nothing is known of.
+    pub fn description(self) -> Option<&'static str> {
+        match self {
+            Self::Builtin(p) => Some(p.description),
+            Self::Custom(_) => None,
+        }
+    }
+
+    pub fn needs_exploit(self) -> bool {
+        matches!(self, Self::Builtin(p) if p.needs_exploit)
+    }
 }
 
 /// Persisted settings for the compatibility tool.
@@ -152,8 +207,14 @@ pub fn pack_by_key(key: &str) -> &'static CompatPack {
 // default — the app must never refuse to start over its own settings file.
 #[serde(default)]
 pub struct OgXboxCompatConfig {
-    /// [`CompatPack::key`] of the chosen pack; empty means the first one.
+    /// Key of the chosen pack (built-in or custom); an empty or unknown one
+    /// means the first built-in.
     pub pack: String,
+    /// Packs added in the settings, after the built-in [`COMPAT_PACKS`], which
+    /// cannot be changed.
+    pub custom_packs: Vec<CustomPack>,
+    /// Override of [`XEFU_CONFIGS_URL`]; `None` follows the built-in one.
+    pub configs_url: Option<String>,
     /// Copy the existing `Compatibility` folder to a local directory first.
     pub backup_first: bool,
     /// Also write the community per-title configs from [`XEFU_CONFIGS_URL`]
@@ -169,6 +230,8 @@ impl Default for OgXboxCompatConfig {
     fn default() -> Self {
         Self {
             pack: String::new(),
+            custom_packs: Vec::new(),
+            configs_url: None,
             backup_first: false,
             update_configs: true,
         }
@@ -176,8 +239,61 @@ impl Default for OgXboxCompatConfig {
 }
 
 impl OgXboxCompatConfig {
-    pub fn pack(&self) -> &'static CompatPack {
-        pack_by_key(&self.pack)
+    /// Every pack, in the drop-down's order: the built-ins, then the user's.
+    pub fn packs(&self) -> impl Iterator<Item = Pack<'_>> {
+        COMPAT_PACKS
+            .iter()
+            .map(Pack::Builtin)
+            .chain(self.custom_packs.iter().map(Pack::Custom))
+    }
+
+    /// The chosen pack, falling back to the first for an empty or unknown key
+    /// — a removed custom pack, or a config written by a later version, must
+    /// never stop the tool working.
+    pub fn pack(&self) -> Pack<'_> {
+        self.packs()
+            .find(|p| p.key() == self.pack)
+            .unwrap_or(Pack::Builtin(&COMPAT_PACKS[0]))
+    }
+
+    /// Appends an empty custom pack, for the user to fill in.
+    pub fn add_custom_pack(&mut self) {
+        let next = self
+            .custom_packs
+            .iter()
+            .filter_map(|p| p.key.strip_prefix(CUSTOM_KEY_PREFIX)?.parse::<u32>().ok())
+            .max()
+            .map_or(1, |n| n + 1);
+        self.custom_packs.push(CustomPack {
+            key: format!("{CUSTOM_KEY_PREFIX}{next}"),
+            ..CustomPack::default()
+        });
+    }
+
+    /// The custom pack `key` names, for editing. `None` for a built-in or an
+    /// unknown key: the built-ins cannot be changed.
+    pub fn custom_pack_mut(&mut self, key: &str) -> Option<&mut CustomPack> {
+        self.custom_packs.iter_mut().find(|p| p.key == key)
+    }
+
+    pub fn remove_custom_pack(&mut self, key: &str) {
+        self.custom_packs.retain(|p| p.key != key);
+        if self.pack == key {
+            self.pack.clear();
+        }
+    }
+
+    /// Back to the built-in list alone.
+    pub fn reset_custom_packs(&mut self) {
+        if self.pack.starts_with(CUSTOM_KEY_PREFIX) {
+            self.pack.clear();
+        }
+        self.custom_packs.clear();
+    }
+
+    /// Effective URL of the per-title configs: the override, or the built-in.
+    pub fn configs_url(&self) -> &str {
+        self.configs_url.as_deref().unwrap_or(XEFU_CONFIGS_URL)
     }
 }
 
@@ -305,14 +421,20 @@ pub fn stage_pack(
     status: &dyn Fn(&str),
 ) -> Result<PathBuf> {
     let pack = cfg.pack();
-    let url = pack.url;
-    // The URLs are pinned constants, so this only ever fires on a bad edit to
-    // `COMPAT_PACKS` — but the archive reader supports nothing else, and a
-    // wrong extension is far clearer said here than as a failed extraction.
+    let url = pack.url();
+    // A custom pack's URL is whatever the user typed, and the archive reader
+    // supports nothing else: a wrong extension is far clearer said here than
+    // as a failed extraction.
+    if url.is_empty() {
+        bail!(
+            "No download URL configured for the “{}” pack. Set one in the settings.",
+            pack.label()
+        );
+    }
     let ext = archive_extension(url).with_context(|| {
         format!(
-            "{}: only .zip and .7z archives are supported (got {url}). Use a .zip/.7z mirror.",
-            pack.label
+            "{}: only .zip, .7z and .rar archives are supported (got {url}).",
+            pack.label()
         )
     })?;
 
@@ -320,11 +442,14 @@ pub fn stage_pack(
 
     check_cancel(cancel)?;
     let archive_path = work.join(format!("pack.{ext}"));
-    status(&format!("Downloading {}…", pack.label));
+    // Named as a pack: the labels alone ("Retail — unmodified") read as
+    // nothing in a status line or an error message.
+    let label = format!("the “{}” pack", pack.label());
+    status(&format!("Downloading {label}…"));
     let res = download::download_to_file(
         url,
         &archive_path,
-        pack.label,
+        &label,
         cancel,
         status,
         COMPAT_CANCELLED,
@@ -333,9 +458,11 @@ pub fn stage_pack(
     // top-level message: the GUI matches on `to_string()`, which returns the
     // outermost context and not the chain, so no `.context()` may wrap it.
     check_cancel(cancel)?;
-    res.with_context(|| format!("downloading {}", pack.label))?;
+    // A failure is a `DownloadError` that already names the pack, and the GUI
+    // looks for it in the chain: no extra context needed.
+    res?;
 
-    extract_and_locate(&archive_path, &work, pack.label, cancel, status)
+    extract_and_locate(&archive_path, &work, pack.label(), cancel, status)
 }
 
 /// Checks the target really has a compatibility partition, and reports whether
@@ -577,22 +704,35 @@ pub fn install_remote(
     res.context("writing the compatibility files")
 }
 
-/// Downloads the community config repository and unpacks it, returning the
-/// local `Configs` folder ready to be copied. Touches no console storage.
+/// Downloads the community config repository from the configured URL and
+/// unpacks it, returning the local `Configs` folder ready to be copied.
+/// Touches no console storage.
 ///
 /// Shares the working directory with [`stage_pack`] without emptying it: both
 /// are staged before anything on the console is touched, and the pack is
 /// staged first.
-pub fn stage_configs(cancel: &AtomicBool, status: &dyn Fn(&str)) -> Result<PathBuf> {
+pub fn stage_configs(
+    cfg: &OgXboxCompatConfig,
+    cancel: &AtomicBool,
+    status: &dyn Fn(&str),
+) -> Result<PathBuf> {
+    let label = "the compatibility configs";
+    let url = cfg.configs_url().trim();
+    if url.is_empty() {
+        bail!("No download URL configured for {label}. Set one in the settings.");
+    }
+    let ext = archive_extension(url).with_context(|| {
+        format!("{label}: only .zip, .7z and .rar archives are supported (got {url}).")
+    })?;
+
     let work = TMP_DIR.join(WORK_SUBDIR);
     fs::create_dir_all(&work).with_context(|| format!("creating {}", work.display()))?;
 
     check_cancel(cancel)?;
-    let archive_path = work.join("configs.zip");
-    let label = "the compatibility configs";
+    let archive_path = work.join(format!("configs.{ext}"));
     status("Downloading the compatibility configs…");
     let res = download::download_to_file(
-        XEFU_CONFIGS_URL,
+        url,
         &archive_path,
         label,
         cancel,
@@ -602,7 +742,7 @@ pub fn stage_configs(cancel: &AtomicBool, status: &dyn Fn(&str)) -> Result<PathB
     // Same rule as in `stage_pack`: the cancellation marker has to stay the
     // error's top-level message for the GUI to recognise it.
     check_cancel(cancel)?;
-    res.with_context(|| format!("downloading {label}"))?;
+    res?;
 
     check_cancel(cancel)?;
     status("Extracting the compatibility configs…");

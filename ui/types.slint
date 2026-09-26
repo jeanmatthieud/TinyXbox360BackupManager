@@ -79,22 +79,38 @@ export struct DisplayedConfig {
     ftp-password: string,
 }
 
+// A known download source a URL field offers as a one-click alternative.
+export struct DisplayedUrlSource {
+    label: string,
+    url: string,
+    // Host the URL points at, shown under the label.
+    host: string,
+}
+
 export struct DisplayedBadAvatarConfig {
     // Effective URLs (user override or built-in default) shown in the fields.
-    abadavatar-url: string,
+    abadavatar-v10-url: string,
+    abadavatar-v13-url: string,
     xeunshackle-url: string,
+    xeunshackle-max-url: string,
     aurora-url: string,
     system-update-url: string,
     // Built-in default URLs, so each field can offer a reset when it differs.
-    abadavatar-default-url: string,
+    abadavatar-v10-default-url: string,
+    abadavatar-v13-default-url: string,
     xeunshackle-default-url: string,
+    xeunshackle-max-default-url: string,
     aurora-default-url: string,
     system-update-default-url: string,
+    // Known sources for Aurora, the default first.
+    aurora-sources: [DisplayedUrlSource],
     include-system-update: bool,
-    // Labels of the known ABadAvatar releases, in the drop-down's own order.
+    // USB key: install XeUnshackle Max, set to boot straight into Aurora,
+    // instead of the stock XeUnshackle.
+    xeunshackle-autostart: bool,
+    // Labels of the ABadAvatar versions, in the drop-down's own order.
     abadavatar-versions: [string],
-    // Row of the ABadAvatar URL in `abadavatar-versions`, or -1 when the user
-    // typed a URL of their own (the drop-down is then hidden until reset).
+    // Row of the version the USB key uses in `abadavatar-versions`.
     abadavatar-version-index: int,
 }
 
@@ -106,6 +122,14 @@ export enum FtpPurpose {
     Compat,
 }
 
+// One emulator pack in the settings list: a built-in one (shown, not
+// editable) or one the user added.
+export struct DisplayedCompatPack {
+    key: string,
+    label: string,
+    url: string,
+}
+
 export struct DisplayedCompatConfig {
     // Labels of the available XeFu packs, in the drop-down's own order.
     packs: [string],
@@ -115,13 +139,57 @@ export struct DisplayedCompatConfig {
     pack-description: string,
     // True when the chosen pack only runs on a JTAG/RGH/XDK console.
     needs-exploit: bool,
-    // Where the chosen pack is downloaded from, opened in the browser by the
-    // card's download button so the user can see its origin.
-    pack-url: string,
+    // Where the per-title configs are downloaded from, and the built-in URL
+    // so the field can offer a reset when the two differ.
+    configs-url: string,
+    configs-default-url: string,
+    // Where the configs come from, as the Toolbox card names it.
+    configs-source: string,
     backup-first: bool,
     // Also fetch the community per-title configs and write them next to the
     // emulator.
     update-configs: bool,
+}
+
+// Dashlaunch's `launch.ini` on the connected target (Device status page).
+// See `txbm_core::dashlaunch`.
+export struct DisplayedDashlaunch {
+    // False until a launch.ini was found: the card stays hidden.
+    found: bool,
+    // Where it was found, as the user knows the path (`Usb0:\launch.ini`).
+    location: string,
+    // Content bought on another console: add-ons, Arcade games, license mask.
+    contpatch: bool,
+    xblapatch: bool,
+    licpatch: bool,
+    // Protections, shown read-only.
+    liveblock: bool,
+    noupdater: bool,
+}
+
+// BadAvatar on the connected console hard drive (Device status page, FATX
+// target only). See `txbm_core::badavatar_hdd`.
+export enum BadAvatarHddState {
+    // Not read yet, or not a console hard drive: the card stays hidden.
+    Unknown,
+    // No trace of BadAvatar: an install is offered.
+    Retail,
+    // Installed by this app.
+    Installed,
+    // Installed by this app, but interrupted or altered since.
+    Incomplete,
+    // Someone else's setup: reported, never touched.
+    Foreign,
+    // Formatted for Bad Storage: BadAvatar cannot start from it.
+    BadStorage,
+}
+
+export struct DisplayedBadAvatarHdd {
+    state: BadAvatarHddState,
+    // What makes a foreign drive non-retail, in console notation.
+    found: [string],
+    // What a removal deletes, in the order it does.
+    removal: [string],
 }
 
 export struct DisplayedRecentLocation {
@@ -220,6 +288,9 @@ export struct DisplayedGameComponent {
     description: string,
     size-gib: float,
     status: ComponentStatus,
+    // Tooltip of the lock icon when the package's license restricts it to
+    // some consoles / profiles; empty when it plays anywhere.
+    license-lock: string,
 }
 
 export struct DisplayedTitleUpdate {
@@ -254,6 +325,8 @@ export struct DisplayedDriveInfo {
     total-gib: float,
     fs-kind: string,
     allocation-granularity: int,
+    // FATX only: formatted for Bad Storage.
+    bad-storage: bool,
 }
 
 // Tone of a notification: picks its icon and accent colour.

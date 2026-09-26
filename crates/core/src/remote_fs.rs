@@ -88,6 +88,10 @@ pub trait RemoteFs {
     /// FATX, several directory walks) and it cannot move while the session is
     /// open, so every caller shares one lookup.
     fn aurora_data_dir_cache(&mut self) -> &mut Option<Option<String>>;
+
+    /// Whether the drive was formatted for Bad Storage, which the console only
+    /// reads once the exploit has run. Only a FATX drive can tell.
+    fn is_bad_storage(&self) -> bool;
 }
 
 impl RemoteFs for FtpSession {
@@ -156,6 +160,10 @@ impl RemoteFs for FtpSession {
 
     fn aurora_data_dir_cache(&mut self) -> &mut Option<Option<String>> {
         &mut self.aurora_data_dir_cache
+    }
+
+    fn is_bad_storage(&self) -> bool {
+        false
     }
 }
 
@@ -257,5 +265,12 @@ impl RemoteFs for RemoteSession {
 
     fn aurora_data_dir_cache(&mut self) -> &mut Option<Option<String>> {
         self.inner().aurora_data_dir_cache()
+    }
+
+    fn is_bad_storage(&self) -> bool {
+        match self {
+            RemoteSession::Ftp(session) => session.is_bad_storage(),
+            RemoteSession::Fatx(session) => session.is_bad_storage(),
+        }
     }
 }

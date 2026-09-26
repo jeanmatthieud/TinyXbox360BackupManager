@@ -18,6 +18,9 @@ pub struct DriveInfo {
     /// itself here.
     pub fs_label: String,
     pub allocation_granularity: u64,
+    /// A FATX drive formatted for Bad Storage (see
+    /// [`crate::remote_fs::RemoteFs::is_bad_storage`]).
+    pub bad_storage: bool,
 }
 
 impl DriveInfo {
@@ -48,6 +51,7 @@ impl DriveInfo {
             fs_label: fs_kind.to_string(),
             fs_kind,
             allocation_granularity,
+            bad_storage: false,
         })
     }
 }

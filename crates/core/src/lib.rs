@@ -5,9 +5,11 @@
 
 pub mod archive;
 pub mod badavatar;
+pub mod badavatar_hdd;
 pub mod config;
 pub mod convert;
 pub mod covers;
+pub mod dashlaunch;
 pub mod data_dir;
 pub mod download;
 pub mod drive_info;

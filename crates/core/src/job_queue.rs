@@ -90,11 +90,7 @@ impl QueuedJob {
         match self {
             // File name only: the full path is too long for the row and its
             // directory is the same for a whole batch anyway.
-            Self::Add { path, .. } => path
-                .file_name()
-                .unwrap_or(path.as_os_str())
-                .to_string_lossy()
-                .into_owned(),
+            Self::Add { path, .. } => crate::util::display_file_name(path),
             Self::Delete(game) => game.title.clone(),
             Self::DeleteContent {
                 game, description, ..

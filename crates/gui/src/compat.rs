@@ -105,13 +105,14 @@ pub fn install(
     // saved, and nothing else. Mixing today's configs into it would leave the
     // user with a partition that is not the one they saved.
     let staged_configs = match cfg.update_configs && restore_zip.is_none() {
-        true => match ogxbox_compat::stage_configs(cancel, status) {
+        true => match ogxbox_compat::stage_configs(cfg, cancel, status) {
             Ok(dir) => Some(dir),
             // The option is on by default, and the configs are an extra on top
             // of the emulator: GitHub being unreachable must not stop an
             // install whose pack already downloaded.
             Err(e) if !e.to_string().contains(ogxbox_compat::COMPAT_CANCELLED) => {
-                outcome.configs_failed = Some(format!("{e:#}"));
+                outcome.configs_failed =
+                    Some(crate::download_errors::compat(&e).unwrap_or_else(|| format!("{e:#}")));
                 None
             }
             // A cancellation is the user stopping the whole thing, and nothing

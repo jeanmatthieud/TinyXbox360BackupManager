@@ -20,4 +20,6 @@ export global MyPalette {
     // Amber, for "this is not an error but you should read it" notices
     // (e.g. a queued game that will overwrite an installed one).
     out property <brush> warning: is-dark ? #e0a33a : #a86a00;
+    // Green, for "all good" confirmations (e.g. a protection that is on).
+    out property <brush> success: is-dark ? #5cbf6a : #1e8a3a;
 }

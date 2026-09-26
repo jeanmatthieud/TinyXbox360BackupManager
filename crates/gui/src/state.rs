@@ -2,7 +2,10 @@
 // SPDX-FileContributor: Modified by Jean-Matthieu Dechriste (TinyXbox360BackupManager)
 // SPDX-License-Identifier: GPL-3.0-only
 
-use crate::{DisplayedGame, DisplayedGameToAdd, DisplayedJob, DisplayedTitleUpdate, Notification};
+use crate::{
+    DisplayedCompatPack, DisplayedGame, DisplayedGameToAdd, DisplayedJob, DisplayedTitleUpdate,
+    Notification,
+};
 use slint::VecModel;
 use std::{
     collections::VecDeque,
@@ -11,7 +14,8 @@ use std::{
     sync::{Arc, atomic::AtomicBool},
 };
 use txbm_core::{
-    config::Config, drive_info::DriveInfo, ftp::FtpConfig, game::Game, job_queue::QueuedJob,
+    badavatar_hdd::HddInspection, config::Config, drive_info::DriveInfo, ftp::FtpConfig,
+    game::Game, job_queue::QueuedJob,
 };
 
 /// Where an original-Xbox compatibility install is headed. The Toolbox tool
@@ -50,6 +54,9 @@ pub struct State {
     pub games_to_add: VecDeque<crate::util::PickedGame>,
     pub displayed_games_to_add: Rc<VecModel<DisplayedGameToAdd>>,
     pub notifications: Rc<VecModel<Notification>>,
+    /// The custom emulator packs listed in the settings. Kept for the life of
+    /// the app and updated in place, see [`crate::config::sync_custom_packs`].
+    pub compat_custom_packs: Rc<VecModel<DisplayedCompatPack>>,
     pub is_job_running: bool,
     /// Additions that succeeded since the queue was last empty. Drives the
     /// confetti burst when it drains, and is reset by a cancellation so an
@@ -77,6 +84,28 @@ pub struct State {
     /// Destination picked for the BadAvatar key, awaiting confirmation in the
     /// modal before the creation thread actually starts.
     pub badavatar_pending_dest: Option<PathBuf>,
+    /// The `launch.ini` shown in the Dashlaunch card, which its switches
+    /// write back to. `None` when the target has none.
+    pub dashlaunch_location: Option<txbm_core::dashlaunch::IniLocation>,
+    /// True from the start of a BadAvatar install on the connected hard
+    /// drive, or of its removal, until it is over. It writes to the target
+    /// outside the job queue, so the queue holds its jobs back meanwhile.
+    pub badavatar_hdd_busy: bool,
+    /// True while the drive picked by the BadAvatar install tool is being
+    /// read, before its confirmation modal can open.
+    pub is_inspecting_badavatar_hdd: bool,
+    /// Drive picked by the BadAvatar install tool, and what was found on it,
+    /// awaiting confirmation in the modal before the install thread actually
+    /// starts.
+    pub badavatar_hdd_pending: Option<(PathBuf, HddInspection)>,
+    /// True while the connected drive's BadAvatar state is being read. One
+    /// read at a time: each opens its own session (a whole FAT read), and
+    /// they share one result slot.
+    pub is_fetching_badavatar_hdd: bool,
+    /// A read of the BadAvatar state was asked for while one was in flight:
+    /// the drive may have changed since that one started, so it is dropped
+    /// and the drive read again.
+    pub badavatar_hdd_refetch: bool,
     pub is_installing_compat: bool,
     /// True while the read-only inspection of a picked console is in flight.
     /// A second one must not start: both threads deposit their answer in the
@@ -100,6 +129,9 @@ pub struct State {
     pub job_cancel: Arc<AtomicBool>,
     /// Flag shared with the BadAvatar creation thread to cancel it.
     pub badavatar_cancel: Arc<AtomicBool>,
+    /// Flag shared with the BadAvatar hard-drive install thread to cancel it,
+    /// honoured until it starts writing.
+    pub badavatar_hdd_cancel: Arc<AtomicBool>,
     /// Flag shared with the compatibility-install thread to cancel it.
     pub compat_cancel: Arc<AtomicBool>,
     /// Raised by the compatibility-install thread once it has started changing
@@ -133,6 +165,7 @@ impl State {
             games_to_add: VecDeque::new(),
             displayed_games_to_add: Rc::new(VecModel::from(Vec::new())),
             notifications: Rc::new(VecModel::from(Vec::new())),
+            compat_custom_packs: Rc::new(VecModel::from(Vec::new())),
             is_job_running: false,
             adds_done: 0,
             jobs_failed: 0,
@@ -142,6 +175,12 @@ impl State {
             rescan_deferred: false,
             is_creating_badavatar: false,
             badavatar_pending_dest: None,
+            dashlaunch_location: None,
+            badavatar_hdd_busy: false,
+            is_inspecting_badavatar_hdd: false,
+            badavatar_hdd_pending: None,
+            is_fetching_badavatar_hdd: false,
+            badavatar_hdd_refetch: false,
             is_installing_compat: false,
             is_inspecting_compat: false,
             compat_pending: None,
@@ -151,6 +190,7 @@ impl State {
             ftp_scan_cancel: Arc::new(AtomicBool::new(false)),
             job_cancel: Arc::new(AtomicBool::new(false)),
             badavatar_cancel: Arc::new(AtomicBool::new(false)),
+            badavatar_hdd_cancel: Arc::new(AtomicBool::new(false)),
             compat_cancel: Arc::new(AtomicBool::new(false)),
             compat_started_writing: Arc::new(AtomicBool::new(false)),
             games_filter: String::new(),

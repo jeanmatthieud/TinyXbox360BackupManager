@@ -7,6 +7,7 @@ use crate::util::GIB;
 use crate::{ComponentStatus, DisplayedGame, DisplayedGameComponent};
 use slint::ToSharedString;
 use txbm_core::game_details::GameDetails;
+use txbm_core::stfs::LicenseLock;
 
 /// One table row per disc and DLC, plus a synthetic "Missing" disc row when
 /// the game is incomplete (only DLC/updates installed, base disc gone).
@@ -26,6 +27,7 @@ pub fn components(details: &GameDetails, game: &DisplayedGame) -> Vec<DisplayedG
             description: slint::format!("{} · {}", disc.description, disc.media_id),
             size_gib: disc.size as f32 / GIB,
             status: status(disc.readable),
+            license_lock: Default::default(),
         });
     }
 
@@ -36,6 +38,7 @@ pub fn components(details: &GameDetails, game: &DisplayedGame) -> Vec<DisplayedG
             description: "Game disc".into(),
             size_gib: 0.0,
             status: ComponentStatus::Missing,
+            license_lock: Default::default(),
         });
     } else if details.discs.is_empty() {
         // Not a disc-based install: the game itself is the single component.
@@ -47,6 +50,7 @@ pub fn components(details: &GameDetails, game: &DisplayedGame) -> Vec<DisplayedG
             description: base_description(game),
             size_gib: game.size_gib,
             status: ComponentStatus::Installed,
+            license_lock: license_tooltip(details.arcade_license_lock.as_ref()),
         });
     }
 
@@ -62,6 +66,7 @@ pub fn components(details: &GameDetails, game: &DisplayedGame) -> Vec<DisplayedG
             description,
             size_gib: dlc.size as f32 / GIB,
             status: status(dlc.readable),
+            license_lock: license_tooltip(dlc.license_lock.as_ref()),
         });
     }
 
@@ -76,6 +81,19 @@ fn base_description(game: &DisplayedGame) -> slint::SharedString {
         "XEX" | "XBE" => "Extracted files".into(),
         _ => "Game files".into(),
     }
+}
+
+/// Tooltip for a license-restricted package, empty when it plays anywhere.
+/// Worded as a possibility: the target console's ID and profiles are unknown,
+/// so the license may well be this console's own.
+fn license_tooltip(lock: Option<&LicenseLock>) -> slint::SharedString {
+    let Some(lock) = lock else {
+        return Default::default();
+    };
+    let mut lines = vec!["Licensed to:".to_string()];
+    lines.extend(lock.console_ids.iter().map(|id| format!("• Console {id:010X}")));
+    lines.extend(lock.xuids.iter().map(|id| format!("• Profile {id:016X}")));
+    lines.join("\n").into()
 }
 
 fn status(readable: bool) -> ComponentStatus {

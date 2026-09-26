@@ -16,7 +16,7 @@ export component NoTarget inherits EmptyState {
     action-icon: IconSet.Zap;
     // Same rule as the navbar: no target picking while a Toolbox tool is
     // busy with a console of its own.
-    action-label: UiState.creating-badavatar || UiState.compat-busy
+    action-label: UiState.creating-badavatar || UiState.compat-busy || UiState.badavatar-hdd-tool-busy
         ? ""
         : "Select a target";
     action => {

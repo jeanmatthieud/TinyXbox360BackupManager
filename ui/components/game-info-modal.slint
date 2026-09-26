@@ -118,9 +118,11 @@ component ContentRow inherits Rectangle {
         }
 
         // Status is icon-only to save space; the label shows as a tooltip.
+        // A license lock, when there is one, sits right after it.
         HorizontalLayout {
             width: col-status;
             alignment: start;
+            spacing: 4px;
             cross-axis-alignment: CrossAxisAlignment.center;
 
             TooltipArea {
@@ -131,6 +133,18 @@ component ContentRow inherits Rectangle {
                 IconDisplay {
                     icon: status-icon(comp.status);
                     stroke: status-color(comp.status);
+                    size: 14px;
+                }
+            }
+
+            if comp.license-lock != "": TooltipArea {
+                width: 18px;
+                height: 18px;
+                tooltip: comp.license-lock;
+
+                IconDisplay {
+                    icon: IconSet.Lock;
+                    stroke: #d9a13b;
                     size: 14px;
                 }
             }
@@ -166,7 +180,9 @@ export component GameInfoModal inherits Modal {
     // Shared column widths so the header and every row line up.
     property <length> col-kind: 72px;
     property <length> col-size: 84px;
-    property <length> col-status: 64px;
+    // Wide enough for the status icon plus a license lock, both clear of
+    // the trash button revealed over the row's right edge.
+    property <length> col-status: 80px;
 
     // Fill the whole card: the shared Modal body uses `alignment: start`,
     // which ignores stretch factors, so wrap our content in a layout pinned

@@ -1,0 +1,69 @@
+// SPDX-License-Identifier: GPL-3.0-only
+
+import { IconSet } from "@lucide";
+import { Spinner } from "std-widgets.slint";
+import { ToolboxCard } from "../toolbox-card.slint";
+import { CardHeader } from "../card-header.slint";
+import { CardActionRow } from "../card-action-row.slint";
+import { HorizontalLine } from "../horizontal-line.slint";
+import { WarningNote } from "../warning-note.slint";
+import { MyPalette } from "../../styling.slint";
+import { UiState } from "../../ui-state.slint";
+import { Message, Dispatcher } from "../../messages.slint";
+
+// Installs BadAvatar on a console's internal hard drive connected to this
+// computer, so the exploit boots with no USB key. Like the USB key, it is a
+// standalone tool: always shown, so users know it exists, but only usable with
+// no target connected — it picks its drive itself. The state of a connected
+// drive, and the removal, live in the Device status page.
+export component BadAvatarHddInstallCard inherits ToolboxCard {
+    private property <bool> target-connected: !UiState.config.target.is-empty;
+
+    // Excludes the other Toolbox tools, as they exclude each other: they share
+    // the status line and its cancel button.
+    disabled: UiState.badavatar-hdd-tool-busy || UiState.creating-badavatar || UiState.compat-busy || target-connected;
+    disabled-tooltip: target-connected
+        ? "Disconnect from the current target first"
+        : UiState.creating-badavatar
+            ? "Wait for the BadAvatar USB key to be written."
+            : UiState.compat-busy
+                ? "Wait for the original Xbox compatibility install to finish."
+                : "";
+
+    CardHeader {
+        icon: IconSet.HardDrive;
+        title: "BadAvatar on a console hard drive";
+
+        if UiState.badavatar-hdd-tool-busy: Spinner {
+            width: 27px;
+            height: 27px;
+            indeterminate: true;
+        }
+    }
+
+    HorizontalLine { }
+
+    Text {
+        text: "Installs BadAvatar on the console's internal hard drive, connected to this computer, so the exploit boots with no USB key plugged in.";
+        wrap: word-wrap;
+    }
+
+    Text {
+        text: "ABadAvatar 1.3-beta, XeUnshackle and a launch.ini starting Aurora — Aurora itself too, when the drive has none.";
+        font-size: 12px;
+        wrap: word-wrap;
+        color: MyPalette.foreground.transparentize(0.35);
+    }
+
+    WarningNote {
+        text: "Check the console first: Settings › System › Console Info must show dashboard 2.0.17559.0. The exploit only works on that version.";
+    }
+
+    HorizontalLine { }
+
+    CardActionRow {
+        icon: IconSet.Hammer;
+        text: !UiState.badavatar-hdd-tool-busy ? "Install BadAvatar on an internal console hard drive" : "Working… see the status bar below.";
+        clicked => Dispatcher.dispatch(Message.InstallBadAvatarHdd, "");
+    }
+}

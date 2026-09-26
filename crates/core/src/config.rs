@@ -21,7 +21,8 @@ impl Config {
     pub fn load() -> Self {
         let path = DATA_DIR.join("config.json");
         let s = fs::read_to_string(&path).unwrap_or_default();
-        let contents = serde_json::from_str(&s).unwrap_or_default();
+        let mut contents: ConfigContents = serde_json::from_str(&s).unwrap_or_default();
+        contents.badavatar.migrate();
 
         Self { path, contents }
     }
