@@ -6044,7 +6044,7 @@ checksum = "9ea3136b675547379c4bd395ca6b938e5ad3c3d20fad76e7fe85f9e0d011419c"
 
 [[package]]
 name = "txbm-core"
-version = "0.15.0"
+version = "0.16.0"
 dependencies = [
  "anyhow",
  "derive_more",
@@ -6071,7 +6071,7 @@ dependencies = [
 
 [[package]]
 name = "txbm-gui"
-version = "0.15.0"
+version = "0.16.0"
 dependencies = [
  "anyhow",
  "lucide-slint",

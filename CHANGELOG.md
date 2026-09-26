@@ -1,3 +1,54 @@
+## [0.16.0](https://github.com/jeanmatthieud/TinyXbox360BackupManager/compare/v0.15.0...v0.16.0) (2026-09-26)
+
+### Features
+
+* Add BadAvatar HDD management and download sources configuration ([b8f0ced](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/b8f0cedc2e597dc0ac695e7ef2865077fe23b257))
+* Add FATX BadStorage compatibility ([2ae1eb8](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/2ae1eb8011b60cdbdf83f5dd84a45dcf92e46e43))
+* Badavatar with XEUNSHACKLE MAX ([1e46039](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/1e46039de67bd8ee90c4f33e0efc14d730997843))
+* Dashlaunch configurable settings ([3053a7f](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/3053a7ffa1fe8043c2be6aebc7aa614b353b318a))
+* Enhance BadAvatar HDD installation ([1abda2e](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/1abda2ec02f569f43ac63e67d6b6982391a88685))
+* Support .rar archives in input handling and update related documentation ([da28993](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/da28993de0a46df03ed4e99df8a763c251cd59e3))
+
+### Bug Fixes
+
+* BadStorage detection and UI tweaks ([aa12649](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/aa1264925b1f9cd6834fa5a6010401d435f1c6df))
+* Copy the whole ABadAvatar payload onto the BadAvatar USB key ([f237a7c](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/f237a7c1be8da81d6de6e0ee31073a8b077bca6a))
+* RAR file management issues ([040ce05](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/040ce052bfb35d1fb0d41445bb65e8b990bc62af))
+
+
+---
+
+
+<a href="https://github.com/sponsors/jeanmatthieud">
+  <img src="https://img.shields.io/badge/GitHub%20Sponsors-Support-ea4aaa?logo=github-sponsors&logoColor=white" alt="GitHub Sponsors">
+</a>
+<a href="https://ko-fi.com/W6I723OON9">
+  <img src="https://img.shields.io/badge/Ko--fi-Support%20Me-ff5e5b?logo=ko-fi&logoColor=white" alt="Ko-fi">
+</a>
+
+
+Between my freelance work and my two little daughters, free time is a rare commodity! I build this tool on my own time, with a lot of late-night coffee.
+
+If TinyXbox360BackupManager saved you time or made you smile, **a donation** (much cheaper than a new game) **helps me keep maintaining and improving it**.
+
+Thanks! 🎮
+
+<hr />
+
+> [!TIP]
+> **:window: Windows installation:**\
+> Most users should download `TinyXbox360BackupManager-vX.X.X-windows-x64.exe`
+
+> [!TIP]
+> **:penguin: Linux installation:**\
+> Most users should download `TinyXbox360BackupManager-vX.X.X-linux-x86_64.AppImage`
+> `chmod +x /path/to/AppImage` after downloading may be required
+
+> [!IMPORTANT]
+> **:apple: macOS installation:**\
+> The app is not notarized, you must allow it manually after installing by running this command in Terminal:\
+> `xattr -rd com.apple.quarantine /Applications/TinyXbox360BackupManager.app`
+
 ## [0.15.0](https://github.com/jeanmatthieud/TinyXbox360BackupManager/compare/v0.14.0...v0.15.0) (2026-09-22)
 
 ### Features
