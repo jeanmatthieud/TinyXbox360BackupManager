@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+    <id>fr.dechriste.TinyXbox360BackupManager</id>
+    <metadata_license>CC0-1.0</metadata_license>
+    <project_license>GPL-3.0-only</project_license>
+    <name>TinyXbox360BackupManager</name>
+    <summary>Manage Xbox 360 game backups</summary>
+    <developer id="fr.dechriste">
+        <name>Jean-Matthieu Dechriste</name>
+    </developer>
+    <description>
+        <p>You have a modded Xbox 360 running the Aurora dashboard and some game backups on your computer. This app copies them onto the console (or onto a USB drive) in the format it understands, without requiring you to know how any of it works.</p>
+        <p>Features</p>
+        <ul>
+            <li>Drop in a game file and it figures out the type and prepares it automatically</li>
+            <li>ISO to GOD conversion, and extraction of original Xbox titles</li>
+            <li>Detects plugged-in USB drives and remote consoles, then suggests where games should go</li>
+            <li>Box art downloaded automatically from XboxUnity</li>
+            <li>Transfers over the network with FTP, straight to a USB drive, or onto the console's own hard drive plugged into the computer</li>
+            <li>Title update and DLC management</li>
+            <li>Native app written in Rust and Slint, no Electron</li>
+        </ul>
+        <p>TinyXbox360BackupManager is intended strictly for legal homebrew use and is not affiliated with or endorsed by Microsoft. Use of TinyXbox360BackupManager for pirated or unauthorized copies of games is strictly prohibited.</p>
+    </description>
+    <launchable type="desktop-id">fr.dechriste.TinyXbox360BackupManager.desktop</launchable>
+    <keywords>
+        <keyword>Game Backup Manager</keyword>
+        <keyword>Xbox 360</keyword>
+        <keyword>Xbox</keyword>
+        <keyword>Aurora</keyword>
+        <keyword>Homebrew</keyword>
+        <keyword>GOD</keyword>
+        <keyword>ISO</keyword>
+        <keyword>FTP</keyword>
+    </keywords>
+    <branding>
+        <color type="primary" scheme_preference="light">#d3d3d3</color>
+        <color type="primary" scheme_preference="dark">#a9a9a9</color>
+    </branding>
+    <content_rating type="oars-1.1"/>
+    <url type="homepage">https://github.com/jeanmatthieud/TinyXbox360BackupManager</url>
+    <url type="bugtracker">https://github.com/jeanmatthieud/TinyXbox360BackupManager/issues</url>
+    <url type="vcs-browser">https://github.com/jeanmatthieud/TinyXbox360BackupManager</url>
+    <url type="donation">https://github.com/sponsors/jeanmatthieud</url>
+    <screenshots>
+        <screenshot type="default">
+            <image>https://raw.githubusercontent.com/jeanmatthieud/TinyXbox360BackupManager/main/assets/screenshot.png</image>
+            <caption>The game library, with covers fetched automatically</caption>
+        </screenshot>
+    </screenshots>
+    <!-- Releases are appended by the release pipeline; keep the newest first. -->
+    <releases>
+        <release version="0.16.0" date="2026-09-26">
+            <url type="details">https://github.com/jeanmatthieud/TinyXbox360BackupManager/releases/tag/v0.15.0</url>
+        </release>
+        <release version="0.15.0" date="2026-09-22">
+            <url type="details">https://github.com/jeanmatthieud/TinyXbox360BackupManager/releases/tag/v0.15.0</url>
+        </release>
+        <release version="0.14.0" date="2026-09-17">
+            <url type="details">https://github.com/jeanmatthieud/TinyXbox360BackupManager/releases/tag/v0.14.0</url>
+        </release>
+        <release version="0.13.0" date="2026-08-29">
+            <url type="details">https://github.com/jeanmatthieud/TinyXbox360BackupManager/releases/tag/v0.13.0</url>
+        </release>
+        <release version="0.12.0" date="2026-08-20">
+            <url type="details">https://github.com/jeanmatthieud/TinyXbox360BackupManager/releases/tag/v0.12.0</url>
+        </release>
+        <release version="0.11.0" date="2026-08-17">
+            <url type="details">https://github.com/jeanmatthieud/TinyXbox360BackupManager/releases/tag/v0.11.0</url>
+        </release>
+        <release version="0.10.0" date="2026-08-01">
+            <url type="details">https://github.com/jeanmatthieud/TinyXbox360BackupManager/releases/tag/v0.10.0</url>
+        </release>
+        <release version="0.9.0" date="2026-07-27">
+            <url type="details">https://github.com/jeanmatthieud/TinyXbox360BackupManager/releases/tag/v0.9.0</url>
+        </release>
+        <release version="0.8.0" date="2026-07-24">
+            <url type="details">https://github.com/jeanmatthieud/TinyXbox360BackupManager/releases/tag/v0.8.0</url>
+        </release>
+        <release version="0.7.0" date="2026-07-24">
+            <url type="details">https://github.com/jeanmatthieud/TinyXbox360BackupManager/releases/tag/v0.7.0</url>
+        </release>
+        <release version="0.6.1" date="2026-07-24">
+            <url type="details">https://github.com/jeanmatthieud/TinyXbox360BackupManager/releases/tag/v0.6.1</url>
+        </release>
+    </releases>
+    <recommends>
+        <control>keyboard</control>
+        <control>pointing</control>
+        <display_length compare="ge">800</display_length>
+    </recommends>
+</component>

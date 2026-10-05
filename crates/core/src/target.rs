@@ -88,9 +88,9 @@ impl Target {
     /// Displayed label (local path, ftp://ip, or the device path).
     pub fn display(&self) -> String {
         match self {
-            Target::Local(path) => path.to_string_lossy().to_string(),
+            Target::Local(path) => crate::util::display_path(path),
             Target::Ftp(ftp) => format!("ftp://{}", ftp.host),
-            Target::Fatx(fatx) => fatx.device.to_string_lossy().to_string(),
+            Target::Fatx(fatx) => crate::util::display_path(&fatx.device),
         }
     }
 
@@ -1684,7 +1684,7 @@ impl Target {
 
     let drive_info = match self {
         Target::Fatx(fatx) => DriveInfo {
-            label: fatx.device.to_string_lossy().to_string(),
+            label: crate::util::display_path(&fatx.device),
             used_bytes: space.map_or(0, |s| s.used_bytes()),
             total_bytes: space.map_or(0, |s| s.total_bytes),
             games_bytes,

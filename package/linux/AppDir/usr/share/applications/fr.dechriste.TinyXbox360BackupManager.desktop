@@ -3,6 +3,7 @@ Categories=Game;Utility;
 Comment=A tiny game backup manager for the Xbox360
 Exec=TinyXbox360BackupManager
 Icon=fr.dechriste.TinyXbox360BackupManager
+Keywords=Xbox360;Xbox;Aurora;Backup;GOD;ISO;Homebrew;
 Name=TinyXbox360BackupManager
 Terminal=false
 Type=Application

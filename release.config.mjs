@@ -35,14 +35,20 @@ export default {
       {
         // Runs during --dry-run too: exports the computed version to the workflow.
         verifyReleaseCmd: 'echo "version=${nextRelease.version}" >> "$GITHUB_OUTPUT"',
-        // Runs only on a real release: bump Cargo.toml + resync Cargo.lock.
+        // Runs only on a real release: bump Cargo.toml, resync Cargo.lock and
+        // record the release in the AppStream metainfo.
         prepareCmd: 'bash scripts/bump-version.sh ${nextRelease.version}',
       },
     ],
     [
       '@semantic-release/git',
       {
-        assets: ['CHANGELOG.md', 'Cargo.toml', 'Cargo.lock'],
+        assets: [
+          'CHANGELOG.md',
+          'Cargo.toml',
+          'Cargo.lock',
+          'package/linux/AppDir/usr/share/metainfo/fr.dechriste.TinyXbox360BackupManager.metainfo.xml',
+        ],
         message: 'chore(release): ${nextRelease.version} [skip ci]\n\n${nextRelease.notes}',
       },
     ],

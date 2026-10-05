@@ -76,7 +76,8 @@ Inspired by [TinyWiiBackupManager](https://github.com/mq1/TinyWiiBackupManager).
   </tr>
   <tr>
     <td>
-      :arrow_right: <a href="https://github.com/jeanmatthieud/TinyXbox360BackupManager/releases/latest">Download AppImage</a>
+      :arrow_right: <a href="https://github.com/jeanmatthieud/TinyXbox360BackupManager/releases/latest">Download AppImage</a> or <a href="https://github.com/jeanmatthieud/TinyXbox360BackupManager/releases/latest">Flatpak bundle</a>
+      (<code>flatpak install ./TinyXbox360BackupManager-vX.X.X-linux-x86_64.flatpak</code>)
     </td>
   </tr>
 </table>

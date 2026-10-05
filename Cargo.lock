@@ -6065,6 +6065,7 @@ dependencies = [
  "sysinfo",
  "ureq",
  "which-fs",
+ "xattr",
  "xdvdfs",
  "zip",
 ]

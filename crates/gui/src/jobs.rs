@@ -220,7 +220,24 @@ fn perform_add(
         &update_progress,
         &set_status,
         &set_phase,
-    )
+    )?;
+
+    // `perform` deletes the source on a best-effort basis. Where that is not
+    // allowed -- a read-only folder, or a file the Flatpak document portal lets
+    // the app read but not remove -- the game is installed all the same, so
+    // this is a notice rather than a failed job.
+    if config.contents.remove_sources_games && in_path.exists() {
+        let text = slint::format!(
+            "{} was added, but its source file could not be deleted",
+            txbm_core::util::display_file_name(in_path)
+        );
+        let _ = weak.upgrade_in_event_loop(move |app| {
+            app.global::<Dispatcher<'_>>()
+                .invoke_dispatch(Message::NotifyInfoSticky, text);
+        });
+    }
+
+    Ok(())
 }
 
 /// Game removed from the target, along with its separate DLC/title-update
