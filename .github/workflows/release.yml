@@ -208,10 +208,8 @@ jobs:
         include:
           - runner: ubuntu-24.04
             arch: x86_64
-            yq_arch: amd64
           - runner: ubuntu-24.04-arm
             arch: aarch64
-            yq_arch: arm64
 
     steps:
       - name: Checkout
@@ -219,15 +217,14 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Install yq
-        run: |
-          curl -fsSL -o /usr/local/bin/yq "https://github.com/mikefarah/yq/releases/latest/download/yq_linux_${{ matrix.yq_arch }}"
-          chmod +x /usr/local/bin/yq
-
+      # sed rather than yq, unlike the other Linux job: this image has no
+      # /usr/local/bin to install it into, and the workspace version is the only
+      # line of Cargo.toml that starts with `version`.
       - name: Set release version
         if: needs.version.outputs.published == 'true'
         run: |
-          yq -i '.workspace.package.version = "${{ needs.version.outputs.version }}"' Cargo.toml
+          sed -i 's/^version = ".*"/version = "${{ needs.version.outputs.version }}"/' Cargo.toml
+          grep -qx 'version = "${{ needs.version.outputs.version }}"' Cargo.toml
           # So the Flatpak ships a metainfo that already lists this release.
           ./scripts/set-metainfo-release.sh "${{ needs.version.outputs.version }}"
 
