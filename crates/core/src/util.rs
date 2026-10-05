@@ -13,6 +13,46 @@ pub fn display_file_name(path: &Path) -> String {
         .into_owned()
 }
 
+/// Whether the app runs inside a Flatpak sandbox: the runtime puts this file at
+/// the root of every sandbox, and nothing else creates it.
+pub fn in_flatpak() -> bool {
+    cfg!(target_os = "linux") && Path::new("/.flatpak-info").exists()
+}
+
+/// `path` as the user knows it, for display only.
+///
+/// Inside a Flatpak, a file picked outside the sandbox's own folders is handed
+/// over by the document portal as `/run/user/<uid>/doc/<id>/<name>`: that is
+/// the path to open, but it means nothing to the user. The portal records
+/// where the file really lives in an extended attribute, which is what gets
+/// shown instead. Never open or store the result: the sandbox cannot reach it.
+pub fn display_path(path: &Path) -> String {
+    #[cfg(target_os = "linux")]
+    if is_portal_document(path)
+        && let Ok(Some(host)) = xattr::get(path, "user.document-portal.host-path")
+    {
+        // The portal NUL-terminates the value.
+        let host = String::from_utf8_lossy(&host);
+        let host = host.trim_end_matches('\0');
+        if !host.is_empty() {
+            return host.to_owned();
+        }
+    }
+
+    path.to_string_lossy().into_owned()
+}
+
+/// Whether `path` sits under the document portal's mount,
+/// `/run/user/<uid>/doc/`.
+#[cfg(target_os = "linux")]
+fn is_portal_document(path: &Path) -> bool {
+    let mut parts = path.components().skip(1).map(|c| c.as_os_str());
+    parts.next() == Some("run".as_ref())
+        && parts.next() == Some("user".as_ref())
+        && parts.next().is_some()
+        && parts.next() == Some("doc".as_ref())
+}
+
 /// SHA1 hex digest of `bytes` (lowercase).
 pub fn sha1_hex(bytes: &[u8]) -> String {
     let mut hasher = Sha1::new();

@@ -268,9 +268,9 @@ impl RecentLocation {
                 .file_name()
                 .map(|n| n.to_string_lossy().to_string())
                 .filter(|n| !n.is_empty())
-                .unwrap_or_else(|| self.mount_point.to_string_lossy().to_string()),
+                .unwrap_or_else(|| crate::util::display_path(&self.mount_point)),
             TargetKind::Ftp => self.console_ip.trim().to_string(),
-            TargetKind::Fatx => self.fatx.device.to_string_lossy().to_string(),
+            TargetKind::Fatx => crate::util::display_path(&self.fatx.device),
         }
     }
 }

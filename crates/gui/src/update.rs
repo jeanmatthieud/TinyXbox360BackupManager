@@ -559,7 +559,8 @@ impl State {
                 };
                 let probe = txbm_core::fatx_dev::probe_path(&path);
                 if !probe.is_usable() {
-                    let text = slint::format!("{}: {}", path.display(), probe.label());
+                    let text =
+                        slint::format!("{}: {}", txbm_core::util::display_path(&path), probe.label());
                     self.notifications.push(Notification::error(text));
                     return;
                 }
@@ -859,7 +860,7 @@ impl State {
                         if !probe.is_usable() {
                             let text = slint::format!(
                                 "{}: {}",
-                                loc.fatx.device.display(),
+                                txbm_core::util::display_path(&loc.fatx.device),
                                 probe.label()
                             );
                             self.notifications.push(Notification::error(text));
@@ -1885,7 +1886,7 @@ impl State {
                             inspection.aurora.clone().unwrap_or_default().to_shared_string(),
                         );
                         ui.set_badavatar_hdd_pending_target(
-                            device.display().to_shared_string(),
+                            txbm_core::util::display_path(&device).to_shared_string(),
                         );
                         self.badavatar_hdd_pending = Some((device, inspection));
                     }
@@ -2167,6 +2168,17 @@ impl State {
                 if app.global::<UiState<'_>>().get_current_page() == Page::Games {
                     let path = PathBuf::from(&payload);
 
+                    // A drop hands over the file's path on the host, which the
+                    // Flatpak sandbox cannot reach: only a file picked through
+                    // a dialog is let in. Said plainly, rather than reported
+                    // as an unsupported file.
+                    if txbm_core::util::in_flatpak() && !path.exists() {
+                        self.notifications.push(Notification::error(
+                            "Dropped files are out of reach of the Flatpak sandbox. Use the Add buttons instead.",
+                        ));
+                        return;
+                    }
+
                     let name = display_file_name(&path);
                     match util::should_add_game(path) {
                         Ok(picked) => self.set_games_to_add(vec![picked], weak),
@@ -2439,7 +2451,7 @@ impl State {
                         .push(Notification::error("This drive is no longer available"));
                     return;
                 }
-                let path_text = dest.to_string_lossy().to_shared_string();
+                let path_text = txbm_core::util::display_path(&dest).to_shared_string();
                 self.badavatar_pending_dest = Some(dest);
                 let app = weak.upgrade().unwrap();
                 app.global::<UiState<'_>>()
@@ -2461,7 +2473,7 @@ impl State {
                     return;
                 };
 
-                let path_text = dest.to_string_lossy().to_shared_string();
+                let path_text = txbm_core::util::display_path(&dest).to_shared_string();
                 self.badavatar_pending_dest = Some(dest);
                 app.global::<UiState<'_>>()
                     .set_badavatar_pending_path(path_text);
@@ -3024,7 +3036,7 @@ impl State {
     fn off_drive_text(&self) -> SharedString {
         slint::format!(
             "That folder is not on the selected drive ({}).\nPick a folder inside it.",
-            self.config.contents.mount_point.display()
+            txbm_core::util::display_path(&self.config.contents.mount_point)
         )
     }
 }

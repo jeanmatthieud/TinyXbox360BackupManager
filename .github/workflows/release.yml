@@ -141,7 +141,10 @@ jobs:
 
       - name: Set release version
         if: needs.version.outputs.published == 'true'
-        run: yq -i '.workspace.package.version = "${{ needs.version.outputs.version }}"' Cargo.toml
+        run: |
+          yq -i '.workspace.package.version = "${{ needs.version.outputs.version }}"' Cargo.toml
+          # So the AppImage ships a metainfo that already lists this release.
+          ./scripts/set-metainfo-release.sh "${{ needs.version.outputs.version }}"
 
       - name: Resolve version name
         id: name
@@ -185,6 +188,87 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: dist-linux-${{ matrix.arch }}
+          path: dist/*
+
+  # Builds the app offline inside the Flatpak sandbox, from explicit sources only,
+  # for both architectures -- the same constraints Flathub builds under. The bundles
+  # are attached to the GitHub Release, along with the generated cargo sources so a
+  # Flathub manifest can reference the exact crate list of a tagged release.
+  build-flatpak:
+    name: Build Flatpak
+    needs: version
+    if: github.event_name == 'pull_request' || needs.version.outputs.published == 'true'
+    runs-on: ${{ matrix.runner }}
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:freedesktop-26.08
+      options: --privileged # flatpak-builder needs to set up its own sandbox
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            arch: x86_64
+            yq_arch: amd64
+          - runner: ubuntu-24.04-arm
+            arch: aarch64
+            yq_arch: arm64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: Install yq
+        run: |
+          curl -fsSL -o /usr/local/bin/yq "https://github.com/mikefarah/yq/releases/latest/download/yq_linux_${{ matrix.yq_arch }}"
+          chmod +x /usr/local/bin/yq
+
+      - name: Set release version
+        if: needs.version.outputs.published == 'true'
+        run: |
+          yq -i '.workspace.package.version = "${{ needs.version.outputs.version }}"' Cargo.toml
+          # So the Flatpak ships a metainfo that already lists this release.
+          ./scripts/set-metainfo-release.sh "${{ needs.version.outputs.version }}"
+
+      - name: Resolve version name
+        id: name
+        run: |
+          if [ "${{ needs.version.outputs.published }}" = "true" ]; then
+            echo "version=${{ needs.version.outputs.version }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      # The Flatpak build sandbox has no network, so every crate must be listed
+      # as an explicit source. This step is the last one with network access.
+      - name: Generate cargo sources
+        run: ./scripts/gen-flatpak-sources.sh
+
+      - name: Build Flatpak bundle
+        uses: flatpak/flatpak-github-actions/flatpak-builder@v6
+        with:
+          bundle: TinyXbox360BackupManager-v${{ steps.name.outputs.version }}-linux-${{ matrix.arch }}.flatpak
+          manifest-path: package/flatpak/fr.dechriste.TinyXbox360BackupManager.yml
+          arch: ${{ matrix.arch }}
+          cache-key: flatpak-builder-${{ matrix.arch }}-${{ hashFiles('package/flatpak/*.yml') }}
+          upload-artifact: false
+
+      - name: Collect distributables
+        run: |
+          mkdir -p dist
+          mv ./*.flatpak dist/
+          # The crate list only depends on Cargo.lock's external packages, so it is
+          # the same for both architectures (and for the release commit, which only
+          # rewrites the workspace's own version): publish it once.
+          if [ "${{ matrix.arch }}" = "x86_64" ]; then
+            cp package/flatpak/cargo-sources.json dist/flatpak-cargo-sources.json
+          fi
+
+      - name: Upload Flatpak distributables
+        uses: actions/upload-artifact@v7
+        with:
+          name: dist-flatpak-${{ matrix.arch }}
           path: dist/*
 
   build-windows:
@@ -402,7 +486,7 @@ jobs:
     name: Create GitHub Release
     if: github.event_name == 'push' && needs.version.outputs.published == 'true'
     runs-on: ubuntu-latest
-    needs: [version, build-linux, build-windows, build-macos, build-macos-universal]
+    needs: [version, build-linux, build-flatpak, build-windows, build-macos, build-macos-universal]
     steps:
       - name: Checkout
         uses: actions/checkout@v6

@@ -23,6 +23,9 @@ Thanks! 🎮
 > **:penguin: Linux installation:**\
 > Most users should download `TinyXbox360BackupManager-vX.X.X-linux-x86_64.AppImage`
 > `chmod +x /path/to/AppImage` after downloading may be required
+>
+> A **Flatpak** bundle is also available (x86_64 and aarch64):\
+> `flatpak install ./TinyXbox360BackupManager-vX.X.X-linux-x86_64.flatpak`
 
 > [!IMPORTANT]
 > **:apple: macOS installation:**\

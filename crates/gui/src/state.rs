@@ -31,7 +31,7 @@ impl CompatTarget {
     /// How the confirmation modal names this console.
     pub fn label(&self) -> String {
         match self {
-            Self::Fatx(device) => device.display().to_string(),
+            Self::Fatx(device) => txbm_core::util::display_path(device),
             Self::Ftp(config) => format!("{}:{}", config.host, config.port),
         }
     }

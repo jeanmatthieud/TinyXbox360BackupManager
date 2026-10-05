@@ -6,6 +6,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 #![recursion_limit = "256"]
 
+mod already_running;
 mod compat;
 mod config;
 mod covers;
@@ -54,13 +55,8 @@ fn main() -> Result<()> {
     let _instance = match txbm_core::instance::lock() {
         txbm_core::instance::InstanceGuard::Acquired(lock) => Some(lock),
         txbm_core::instance::InstanceGuard::AlreadyRunning => {
-            let message = "TinyXbox360BackupManager is already running.";
-            eprintln!("{message}");
-            rfd::MessageDialog::new()
-                .set_level(rfd::MessageLevel::Info)
-                .set_title("TinyXbox360BackupManager")
-                .set_description(message)
-                .show();
+            eprintln!("{}", already_running::MESSAGE);
+            already_running::show();
             return Ok(());
         }
         // No usable lock file: carry on rather than refuse to start.

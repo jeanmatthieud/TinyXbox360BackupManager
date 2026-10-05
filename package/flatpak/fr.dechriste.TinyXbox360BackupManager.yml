@@ -1,0 +1,74 @@
+# SPDX-License-Identifier: GPL-3.0-only
+#
+# Flatpak manifest for the bundle attached to each GitHub Release, and the CI's
+# check that the app builds offline inside the Flatpak sandbox.
+#
+# This is NOT the Flathub manifest: Flathub builds from its own repository
+# (flathub/fr.dechriste.TinyXbox360BackupManager), from a release tag rather
+# than from the working tree, and its policy requires that manifest to be
+# written by hand.
+#
+# Build with:
+#   ./scripts/gen-flatpak-sources.sh
+#   flatpak run org.flatpak.Builder --force-clean --user --install \
+#     --install-deps-from=flathub --repo=target/flatpak-repo \
+#     target/flatpak-build package/flatpak/fr.dechriste.TinyXbox360BackupManager.yml
+id: fr.dechriste.TinyXbox360BackupManager
+runtime: org.freedesktop.Platform
+runtime-version: '26.08'
+sdk: org.freedesktop.Sdk
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.rust-stable
+command: TinyXbox360BackupManager
+
+finish-args:
+  # Slint/winit rendering.
+  - --share=ipc
+  - --socket=wayland
+  - --socket=fallback-x11
+  # Raw access to an Xbox 360 hard drive plugged into this computer (FATX
+  # target): it has no partition table, so it only ever exists as a block
+  # device, which no narrower permission exposes. Also covers DRI.
+  - --device=all
+  # FTP transfers to the console and cover fetching from XboxUnity.
+  - --share=network
+  # No access to the home directory: game backups come in through the
+  # FileChooser portal, one picked file or folder at a time. USB drives are
+  # another matter -- sysinfo has to enumerate them to offer the drive picker,
+  # which the portal cannot do -- hence the usual mount points below.
+  - --filesystem=/run/media
+  - --filesystem=/media
+  - --filesystem=/mnt
+  # The GitHub self-updater is meaningless here: Flatpak owns the update path.
+  # See crates/core/src/updates.rs.
+  - --env=TXBM_DISABLE_UPDATES=1
+
+modules:
+  - name: txbm
+    buildsystem: simple
+    build-options:
+      append-path: /usr/lib/sdk/rust-stable/bin
+      env:
+        # Must match /run/build/<module name>/, where the generated cargo
+        # sources are unpacked.
+        CARGO_HOME: /run/build/txbm/cargo
+    build-commands:
+      - cargo --offline build --release --no-default-features --features rustls
+      - install -Dm755 target/release/txbm-gui /app/bin/TinyXbox360BackupManager
+      - install -Dm644 package/linux/AppDir/usr/share/applications/${FLATPAK_ID}.desktop
+        /app/share/applications/${FLATPAK_ID}.desktop
+      - install -Dm644 package/linux/AppDir/usr/share/metainfo/${FLATPAK_ID}.metainfo.xml
+        /app/share/metainfo/${FLATPAK_ID}.metainfo.xml
+      - |
+        for size in 16 32 48 64 128 256 512; do
+          install -Dm644 "package/linux/AppDir/usr/share/icons/hicolor/${size}x${size}/apps/${FLATPAK_ID}.png" \
+            "/app/share/icons/hicolor/${size}x${size}/apps/${FLATPAK_ID}.png"
+        done
+    sources:
+      - type: dir
+        path: ../..
+        skip:
+          - .git
+          - node_modules
+          - target
+      - cargo-sources.json

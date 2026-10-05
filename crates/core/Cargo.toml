@@ -38,6 +38,11 @@ sevenz-rust2 = { version = "0.21.3", default-features = false }
 rars = "0.9.4"
 zip = { version = "8.6.0", default-features = false, features = ["deflate", "deflate64"] }
 
+# Reads the real location of a file the Flatpak document portal hands over
+# under an opaque `/run/user/<uid>/doc/<id>/` path (see `util::display_path`).
+[target.'cfg(target_os = "linux")'.dependencies]
+xattr = "1.6"
+
 [features]
 default = ["rustls"]
 native-tls = ["ureq/native-tls"]
