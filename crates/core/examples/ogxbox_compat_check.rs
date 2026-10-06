@@ -87,7 +87,7 @@ fn main() -> anyhow::Result<()> {
         &NO_CANCEL,
         &WROTE,
         &mut |_done, _total| {},
-        &mut |_sent, _total, _speed| {},
+        &mut |_sent, _total| {},
     )?;
     session.quit()?;
 
@@ -154,7 +154,7 @@ fn main() -> anyhow::Result<()> {
         &NO_CANCEL,
         &WROTE,
         &mut |_done, _total| {},
-        &mut |_sent, _total, _speed| {},
+        &mut |_sent, _total| {},
     )?;
     session.quit()?;
 
@@ -180,8 +180,8 @@ fn main() -> anyhow::Result<()> {
     )?;
 
     let mut session = open(&image, true)?;
-    ogxbox_compat::install_configs_remote(&mut session, &mine, &NO_CANCEL, &mut |_s, _t, _p| {})?;
-    ogxbox_compat::install_configs_remote(&mut session, &fetched, &NO_CANCEL, &mut |_s, _t, _p| {})?;
+    ogxbox_compat::install_configs_remote(&mut session, &mine, &NO_CANCEL, &mut |_s, _t| {})?;
+    ogxbox_compat::install_configs_remote(&mut session, &fetched, &NO_CANCEL, &mut |_s, _t| {})?;
     session.quit()?;
 
     let mut session = open(&image, false)?;

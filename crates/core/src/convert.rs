@@ -119,8 +119,9 @@ pub fn inspect_input(path: &Path) -> Result<InputKind> {
 }
 
 /// Converts/extracts `in_path` on the target, depending on the image type.
-/// `update_progress` receives a percentage (0-100) and, during the FTP upload
-/// phase, the running average upload speed in megabytes per second.
+/// `update_progress` receives a percentage (0-100) and, while the result is
+/// copied to a console-shaped target, the upload speed in megabytes per second
+/// averaged over the last few seconds (see [`crate::util::RateMeter`]).
 /// `status` receives a short human-readable line that supersedes the progress
 /// display while a non-measurable phase runs (currently the post-cancellation
 /// cleanup); an empty string hands the status line back to `update_progress`.
@@ -221,12 +222,14 @@ pub fn perform(
                 let upload = (|| -> Result<()> {
                     let mut sent_before: u64 = 0;
 
-                    // Maps upload progress to the 50-100% band; the per-file
-                    // average speed (megabytes/s) comes from the FTP layer.
-                    let report = |base: u64, sent: u64, speed: Option<f64>| {
+                    // Maps upload progress to the 50-100% band. The speed is
+                    // measured here over the whole transfer rather than taken
+                    // from the backend, whose figure is per file.
+                    let mut meter = crate::util::RateMeter::new();
+                    let mut report = |base: u64, sent: u64| {
                         let done = base + sent;
                         let pct = 50 + (done * 50 / total.max(1)) as u32;
-                        update_progress(pct, speed);
+                        update_progress(pct, meter.record(done));
                     };
 
                     // Each staging sub-tree is uploaded to its own storage
@@ -279,9 +282,9 @@ pub fn perform(
                                 &entry.path(),
                                 &remote_path,
                                 cancel,
-                                &mut |sent, _, speed| {
+                                &mut |sent, _| {
                                     uploaded.set(sent);
-                                    report(base, sent, speed);
+                                    report(base, sent);
                                 },
                             )?;
                             sent_before += uploaded.get();

@@ -80,7 +80,7 @@ fn main() -> anyhow::Result<()> {
         std::fs::write(staging.join("00007000/data"), vec![7u8; 5 * 1024 * 1024])?;
         let mut session = target.open_remote(true)?;
         let dest = format!("{}/4D530910", storage.god_dir);
-        session.upload_dir(&staging, &dest, &NO_CANCEL, &mut |_, _, _| {})?;
+        session.upload_dir(&staging, &dest, &NO_CANCEL, &mut |_, _| {})?;
         let copied = session.dir_size(&dest, 3);
         session.quit()?;
         let _ = std::fs::remove_dir_all(std::env::temp_dir().join("txbm-bad-storage-staging"));

@@ -523,7 +523,7 @@ fn install_remote(
 
     // 2. The payload, then the copy of GamerProfile.xex read back: it is the
     //    one file that can end up in flash.
-    fs.upload_dir(&root.join(PAYLOAD_DIR), &payload, &never, &mut |_, _, _| {})
+    fs.upload_dir(&root.join(PAYLOAD_DIR), &payload, &never, &mut |_, _| {})
         .context("writing the payload folder")?;
     let written = fs
         .sha1_file(&format!("{payload}/{GAMER_PROFILE}"))
@@ -546,7 +546,7 @@ fn install_remote(
     // 4. Aurora, when the drive had none.
     if let Some(dir) = &manifest.aurora_installed {
         let dest = format!("{hdd}/{dir}");
-        fs.upload_dir(&root.join(dir), &dest, &never, &mut |sent, total, _| {
+        fs.upload_dir(&root.join(dir), &dest, &never, &mut |sent, total| {
             if let Some(percent) = (sent * 100).checked_div(total) {
                 status(&format!("Writing Aurora… {percent}%"));
             }
