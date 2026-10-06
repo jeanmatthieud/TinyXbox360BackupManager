@@ -369,6 +369,8 @@ export component AppWindow inherits Window {
         Text {
             text: UiState.job-kind == JobKind.Add
                 ? "Cancel the conversion of \{UiState.job-label}?\nIts partial output is cleaned up where possible, but anything already written to the target is left in place. The other queued jobs are kept and the next one starts right away."
+                : UiState.job-kind == JobKind.AuroraImport
+                ? "Cancel the preparation of the Aurora game assets?\nThe games already prepared stay ready to import; the remaining ones are skipped. The other queued jobs are kept and the next one starts right away."
                 : "Cancel the deletion of \{UiState.job-label}?\nWhat has already been removed is not restored: it is left partially deleted on the target, and deleting it again finishes the job. The other queued jobs are kept and the next one starts right away.";
             wrap: word-wrap;
         }
@@ -380,6 +382,22 @@ export component AppWindow inherits Window {
         confirmed => {
             Dispatcher.dispatch(Message.CancelJob, "0");
             UiState.confirming-cancel-current = false;
+        }
+    }
+
+    if UiState.confirming-clear-aurora-import: ConfirmationModal {
+        Text {
+            text: "Delete the Aurora game assets to import?\nAurora's import folder is emptied. What Aurora has already imported is kept.";
+            wrap: word-wrap;
+        }
+        destructive: true;
+        btn-icon: IconSet.Trash;
+        cancelled => {
+            UiState.confirming-clear-aurora-import = false;
+        }
+        confirmed => {
+            Dispatcher.dispatch(Message.ClearAuroraImport, "");
+            UiState.confirming-clear-aurora-import = false;
         }
     }
 

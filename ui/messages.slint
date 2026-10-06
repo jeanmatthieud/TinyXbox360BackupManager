@@ -13,6 +13,9 @@ export enum Message {
     SetThemePreference,
     SetAutoReconnect,
     SetCoverSource,
+    SetAuroraImportOnAdd,
+    // Payload: the row of the language in `config.asset-languages`.
+    SetAssetLanguage,
     SetViewAs,
     SetSortBy,
     SetConsoleIp,
@@ -68,6 +71,14 @@ export enum Message {
     FtpScanFinished,
     RestartAurora,
     FetchAuroraPaths,
+    // Queues the writing of Aurora's import folder for the games of the
+    // library that have none yet.
+    PrepareAuroraImport,
+    // Payload: the TitleIDs that already have an import folder on the target,
+    // comma-separated. Refreshes the counts shown on the Aurora card.
+    AuroraImportTitles,
+    // Queues the removal of everything in Aurora's import folder.
+    ClearAuroraImport,
     FetchDashlaunch,
     SetDashlaunch,
     DashlaunchFetched,

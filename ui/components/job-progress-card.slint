@@ -59,6 +59,8 @@ export component JobProgressCard inherits Card {
                     ? "Cancellation already requested"
                     : (UiState.job-kind == JobKind.Add
                         ? "Cancel this conversion"
+                        : UiState.job-kind == JobKind.AuroraImport
+                        ? "Cancel this preparation"
                         : "Cancel this deletion");
                 disabled: UiState.cancelling-current || UiState.cancelling-queue;
                 height: 24px;
@@ -102,6 +104,8 @@ export component JobProgressCard inherits Card {
             text: UiState.cancelling-current && details().is-empty
                 ? (UiState.job-kind == JobKind.Add
                     ? "Cancelling this conversion..."
+                    : UiState.job-kind == JobKind.AuroraImport
+                    ? "Cancelling this preparation..."
                     : "Cancelling this deletion...")
                 : details();
             color: UiState.cancelling-current

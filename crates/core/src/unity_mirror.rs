@@ -11,6 +11,9 @@
 //! (180x120, 300x200 and 900x600); `Large` holds the very files XboxUnity
 //! serves for `size=large`, which is what the cache expects.
 //!
+//! It also archives the titles' icons, `Icons/<TitleID>.png` (64x64), which
+//! [`crate::marketplace`] falls back on.
+//!
 //! Note that files are named `.png` whatever their real format — many are in
 //! fact JPEG. Callers sniff the magic bytes, so this is harmless.
 
@@ -98,4 +101,9 @@ pub fn download_best_cover(title_id: &str) -> Result<Vec<u8>> {
         }
     }
     bail!("no downloadable cover for title {title_id}")
+}
+
+/// URL of the archived icon of a title, a 64x64 PNG.
+pub fn icon_url(title_id: &str) -> String {
+    format!("{RAW_BASE}/Icons/{}.png", title_id.to_uppercase())
 }

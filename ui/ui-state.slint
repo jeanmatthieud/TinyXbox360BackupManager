@@ -176,6 +176,14 @@ export global UiState {
     // Non-empty when the last fetch failed: shown in the card instead of a
     // notification.
     in-out property <string> aurora-paths-error;
+    // Games of the library that carry a TitleID, and how many of them already
+    // have a folder in Aurora's import folder on the target.
+    in-out property <int> aurora-import-total: 0;
+    in-out property <int> aurora-import-ready: 0;
+    // Folders in Aurora's import folder, whatever game they are for.
+    in-out property <int> aurora-import-folders: 0;
+    // True while the "delete the assets to import" confirmation is shown.
+    in-out property <bool> confirming-clear-aurora-import: false;
     // True while the "how to add Aurora scan paths" help modal is shown.
     in-out property <bool> showing-aurora-help: false;
 

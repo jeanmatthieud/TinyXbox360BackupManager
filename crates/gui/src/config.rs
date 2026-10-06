@@ -294,6 +294,17 @@ impl From<&Config> for DisplayedConfig {
             theme_preference: config.contents.theme_preference.to_shared_string(),
             auto_reconnect: config.contents.auto_reconnect.to_shared_string(),
             cover_source: config.contents.cover_source.to_shared_string(),
+            aurora_import_on_add: config.contents.aurora_import_on_add.to_shared_string(),
+            asset_languages: ModelRc::new(VecModel::from(
+                txbm_core::marketplace::LOCALES
+                    .iter()
+                    .map(|(_, name)| name.to_shared_string())
+                    .collect::<Vec<_>>(),
+            )),
+            asset_language_index: txbm_core::marketplace::LOCALES
+                .iter()
+                .position(|(locale, _)| locale.eq_ignore_ascii_case(&config.contents.asset_language))
+                .unwrap_or(0) as i32,
             show_x360: config.contents.show_x360,
             show_arcade: config.contents.show_arcade,
             show_og: config.contents.show_og,

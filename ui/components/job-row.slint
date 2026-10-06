@@ -12,11 +12,12 @@ import { JobKind } from "../types.slint";
 export global JobIcon {
     public pure function icon(kind: JobKind) -> Icon {
         kind == JobKind.Add ? IconSet.ArrowUp
-            : (kind == JobKind.Delete ? IconSet.Trash : IconSet.PackageMinus)
+            : kind == JobKind.AuroraImport ? IconSet.Images
+            : (kind == JobKind.Delete || kind == JobKind.AuroraImportClear ? IconSet.Trash : IconSet.PackageMinus)
     }
 
     public pure function color(kind: JobKind) -> brush {
-        kind == JobKind.Add ? MyPalette.foreground : MyPalette.destructive
+        kind == JobKind.Add || kind == JobKind.AuroraImport ? MyPalette.foreground : MyPalette.destructive
     }
 }
 

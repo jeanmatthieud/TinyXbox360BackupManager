@@ -2,7 +2,7 @@
 // SPDX-FileContributor: Modified by Jean-Matthieu Dechriste (TinyXbox360BackupManager)
 // SPDX-License-Identifier: GPL-3.0-only
 
-import { ScrollView, Palette } from "std-widgets.slint";
+import { ScrollView, Palette, ComboBox } from "std-widgets.slint";
 import { IconSet } from "@lucide";
 import { SettingCard } from "components/setting-card.slint";
 import { PageHeader } from "components/page-header.slint";
@@ -77,6 +77,39 @@ export component SettingsPage inherits VerticalLayout {
                 active-item: UiState.config.cover-source;
                 set-property: Message.SetCoverSource;
                 note: "Switching applies to missing covers only: already-cached covers are kept. Use \"Redownload all covers\" in the Toolbox to refetch everything.";
+            }
+
+            SettingCard {
+                icon: IconSet.Images;
+                label: "Prepare Aurora game assets when adding games";
+                items: [{ value: "false", label: "No" }, { value: "true", label: "Yes (experimental)" }];
+                active-item: UiState.config.aurora-import-on-add;
+                set-property: Message.SetAuroraImportOnAdd;
+                note: "Covers, artwork and descriptions are copied to the target along with each game, so Aurora can show them without the console being connected to the internet. To load them, open Aurora and go to Settings > Assets > Import.\n\nThe language applies to the titles and descriptions the Xbox 360 marketplace had in it (English otherwise). Assets already prepared are kept as they are.";
+
+                HorizontalLayout {
+                    spacing: 10px;
+
+                    VerticalLayout {
+                        alignment: center;
+
+                        Text {
+                            text: "Language of the titles and descriptions:";
+                        }
+                    }
+
+                    ComboBox {
+                        height: 34px;
+                        horizontal-stretch: 1;
+                        model: UiState.config.asset-languages;
+                        // A ComboBox shows whatever `current-index` points at —
+                        // assigning `current-value` does NOT move the selection.
+                        current-index: UiState.config.asset-language-index;
+                        selected => {
+                            Dispatcher.dispatch(Message.SetAssetLanguage, self.current-index);
+                        }
+                    }
+                }
             }
 
             SettingCard {
