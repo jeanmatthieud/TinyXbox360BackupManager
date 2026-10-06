@@ -45,16 +45,18 @@ img{max-width:100%;height:auto;display:block}
 .top{position:sticky;top:0;z-index:20;background:rgba(241,243,242,.86);backdrop-filter:blur(10px);border-bottom:1px solid transparent;transition:border-color .2s}
 .top.stuck{border-bottom-color:var(--edge)}
 .top .wrap{display:flex;align-items:center;gap:18px;height:64px}
-.brand{display:flex;align-items:center;gap:10px;text-decoration:none;font-family:Archivo;font-weight:600;letter-spacing:-.015em}
-.brand img{width:28px;height:28px;border-radius:7px}
-.brand span{font-size:16px}
+.brand{display:flex;align-items:center;gap:10px;min-width:0;text-decoration:none;font-family:Archivo;font-weight:600;letter-spacing:-.015em}
+.brand img{flex:none;width:28px;height:28px;border-radius:7px}
+.brand span{font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .brand b{font-weight:600}
-.top nav{margin-left:auto;display:flex;align-items:center;gap:26px}
+.top nav{margin-left:auto;flex:none;display:flex;align-items:center;gap:26px}
 .top nav a{text-decoration:none;color:var(--ink-2);font-size:15px}
 .top nav a:hover{color:var(--ink)}
 /* the plain-link colour above must not bleed into the button */
 .top nav a.btn,.top nav a.btn:hover{color:#fff}
-@media (max-width:760px){.top nav a.hide-sm{display:none}}
+@media (max-width:860px){.top nav a.hide-sm{display:none}}
+@media (max-width:480px){.top .wrap{gap:12px}.brand span{font-size:14px}}
+@media (max-width:380px){.top .wrap{padding-inline:16px}.brand span{font-size:13px}.top nav a.btn.sm{padding-inline:14px}}
 
 /* ---------- buttons ---------- */
 .btn{
@@ -245,6 +247,7 @@ footer li{margin-bottom:8px}
     <nav>
       <a href="#how" class="hide-sm">How it works</a>
       <a href="#faq" class="hide-sm">Questions</a>
+      <a href="https://github.com/jeanmatthieud/TinyXbox360BackupManager/wiki" class="hide-sm">Modding Guide</a>
       <a href="https://github.com/jeanmatthieud/TinyXbox360BackupManager" class="hide-sm">GitHub</a>
       <a class="btn sm" href="#download">Download</a>
     </nav>
