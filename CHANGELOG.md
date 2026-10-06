@@ -1,3 +1,53 @@
+## [0.17.0](https://github.com/jeanmatthieud/TinyXbox360BackupManager/compare/v0.16.0...v0.17.0) (2026-10-06)
+
+### Features
+
+* Flatpak build ([ffe59e6](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/ffe59e61f276e9b6ab90936ed993314a6c71d8ef))
+* Improved copy speed monitoring ([b58c837](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/b58c837b8bd1f72e3d8e3af9ce33d88b4d85afeb))
+* Improved copy speed monitoring (suite) ([b04c343](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/b04c343f71781e8318c73ae18ec19be6fd0278d9))
+
+### Bug Fixes
+
+* Flatpak font ([8659f84](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/8659f84eb0ecf94380e0911857644fc2cc4fed02))
+* Snackbar top border ([e53cfd3](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/e53cfd3dc7894ec4eb84a5364ef10fa91e8d8ae7))
+
+
+---
+
+
+<a href="https://github.com/sponsors/jeanmatthieud">
+  <img src="https://img.shields.io/badge/GitHub%20Sponsors-Support-ea4aaa?logo=github-sponsors&logoColor=white" alt="GitHub Sponsors">
+</a>
+<a href="https://ko-fi.com/W6I723OON9">
+  <img src="https://img.shields.io/badge/Ko--fi-Support%20Me-ff5e5b?logo=ko-fi&logoColor=white" alt="Ko-fi">
+</a>
+
+
+Between my freelance work and my two little daughters, free time is a rare commodity! I build this tool on my own time, with a lot of late-night coffee.
+
+If TinyXbox360BackupManager saved you time or made you smile, **a donation** (much cheaper than a new game) **helps me keep maintaining and improving it**.
+
+Thanks! 🎮
+
+<hr />
+
+> [!TIP]
+> **:window: Windows installation:**\
+> Most users should download `TinyXbox360BackupManager-vX.X.X-windows-x64.exe`
+
+> [!TIP]
+> **:penguin: Linux installation:**\
+> Most users should download `TinyXbox360BackupManager-vX.X.X-linux-x86_64.AppImage`
+> `chmod +x /path/to/AppImage` after downloading may be required
+>
+> A **Flatpak** bundle is also available (x86_64 and aarch64):\
+> `flatpak install ./TinyXbox360BackupManager-vX.X.X-linux-x86_64.flatpak`
+
+> [!IMPORTANT]
+> **:apple: macOS installation:**\
+> The app is not notarized, you must allow it manually after installing by running this command in Terminal:\
+> `xattr -rd com.apple.quarantine /Applications/TinyXbox360BackupManager.app`
+
 ## [0.16.0](https://github.com/jeanmatthieud/TinyXbox360BackupManager/compare/v0.15.0...v0.16.0) (2026-09-26)
 
 ### Features
