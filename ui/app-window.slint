@@ -75,8 +75,6 @@ export component AppWindow inherits Window {
             Rectangle {
                 background: MyPalette.alternate-background;
                 border-top-left-radius: 10px;
-                border-width: 1px;
-                border-color: MyPalette.border;
 
                 if UiState.current-page == Page.Games && UiState.config.view-as == "Grid": GameGridPage { }
                 if UiState.current-page == Page.Games && UiState.config.view-as == "Table": GameTablePage { }
@@ -85,6 +83,19 @@ export component AppWindow inherits Window {
                 if UiState.current-page == Page.Jobs: JobQueuePage { }
                 if UiState.current-page == Page.Settings: SettingsPage { }
                 if UiState.current-page == Page.About: AboutPage { }
+
+                // The frame is drawn here, after the pages, rather than as the
+                // border of the rectangle above: a rectangle paints its border
+                // beneath its children, so a scrolled page whose cards reach
+                // the bottom edge used to hide the line over the status bar.
+                // No TouchArea: clicks go straight through to the page.
+                Rectangle {
+                    width: parent.width;
+                    height: parent.height;
+                    border-top-left-radius: 10px;
+                    border-width: 1px;
+                    border-color: MyPalette.border;
+                }
             }
 
             if !UiState.status.is-empty: HorizontalLayout {
