@@ -5,13 +5,15 @@ use std::fs::{self, File};
 use std::io::{BufReader, Read, Write};
 use std::path::Path;
 use std::sync::atomic::AtomicBool;
+use std::time::Instant;
 use xdvdfs::blockdev::OffsetWrapper;
 use xdvdfs::layout::DirectoryEntryNode;
 
 /// Extracts all content from an XISO image (original Xbox or Xbox 360)
 /// to `dest_dir`. Pure Rust equivalent of extract-xiso.
 ///
-/// `progress(done, total)` is called at each extracted file.
+/// `progress(done, total)` counts bytes, and is called as each file is copied
+/// (at most every [`crate::util::PROGRESS_DEBOUNCE`]) and when it is done.
 pub fn extract_iso(
     source_iso: &Path,
     dest_dir: &Path,
@@ -126,12 +128,16 @@ fn extract_filtered(
         }
     }
 
+    // Counted in bytes: a game's files range from a few bytes to several
+    // gigabytes, so a file count says little about how far along the copy is.
     let total = tree
         .iter()
         .filter(|(_, node)| !node.node.dirent.is_directory())
-        .count() as u64;
+        .map(|(_, node)| node.node.dirent.data.size() as u64)
+        .sum();
     let mut done: u64 = 0;
     progress(0, total);
+    let mut last_notify = Instant::now();
 
     for (dir, node) in &tree {
         if crate::convert::is_cancelled(cancel) {
@@ -172,14 +178,20 @@ fn extract_filtered(
                 .dirent
                 .seek_to(&mut dev)
                 .map_err(|e| anyhow!("seeking in image: {e}"))?;
-            let copied = copy_cancellable(dev.get_mut(), &mut out, size, cancel)
-                .with_context(|| format!("extracting {relative}"))?;
+            let copied = copy_cancellable(dev.get_mut(), &mut out, size, cancel, &mut |copied| {
+                let now = Instant::now();
+                if now.duration_since(last_notify) >= crate::util::PROGRESS_DEBOUNCE {
+                    last_notify = now;
+                    progress(done + copied, total);
+                }
+            })
+            .with_context(|| format!("extracting {relative}"))?;
             if copied != size {
                 bail!("incomplete extraction of {relative} ({copied}/{size} bytes)");
             }
         }
 
-        done += 1;
+        done += size;
         progress(done, total);
     }
 
@@ -193,12 +205,14 @@ const COPY_CHUNK: usize = 1 << 20;
 
 /// Copies exactly `size` bytes from `reader` to `writer`, bailing out as soon as
 /// `cancel` is raised. Returns the number of bytes copied, which is short of
-/// `size` only if the reader hit EOF early.
+/// `size` only if the reader hit EOF early. `on_chunk` receives the bytes copied
+/// so far after each chunk.
 fn copy_cancellable(
     reader: &mut impl Read,
     writer: &mut impl Write,
     size: u64,
     cancel: &AtomicBool,
+    on_chunk: &mut dyn FnMut(u64),
 ) -> Result<u64> {
     let mut buf = vec![0u8; COPY_CHUNK];
     let mut copied: u64 = 0;
@@ -214,6 +228,7 @@ fn copy_cancellable(
         }
         writer.write_all(&buf[..read])?;
         copied += read as u64;
+        on_chunk(copied);
     }
 
     Ok(copied)

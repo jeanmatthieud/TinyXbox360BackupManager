@@ -5,9 +5,10 @@ use crate::xdvd::XdvdImage;
 use anyhow::{Context, Result};
 use iso2god::{game_list, god};
 use std::fs::{self, File};
-use std::io::{Seek, SeekFrom, Write};
+use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
+use std::time::Instant;
 
 /// Removes the output of a cancelled conversion: the `<mediaID>.data` folder
 /// holding its parts, its CON header, and then — only while they are empty —
@@ -27,11 +28,86 @@ fn cleanup_partial(file_layout: &god::FileLayout<'_>, title_dir: &Path) {
     let _ = fs::remove_dir(title_dir);
 }
 
+/// Image data held by one GOD part.
+const PART_DATA_SIZE: u64 = god::BLOCKS_PER_PART * god::BLOCK_SIZE;
+
+/// Writes part `part_index` of the image: `iso2god`'s `god::write_part`
+/// (v1.8.0), with a cancellation check and a progress report at each subpart.
+///
+/// A part is 170 MB of data written in a single call, so the upstream function
+/// leaves both the progress bar and the Cancel button dead for seconds at a
+/// time on a slow drive. Its structure is kept as is, `io::copy` between the
+/// two files included: on Linux that copy can use `copy_file_range`, which a
+/// wrapper around either file would rule out.
+///
+/// `on_progress` receives the bytes of image data written into this part so
+/// far.
+///
+/// This is a copy, not a call: it must be kept in step with upstream. When
+/// the `iso2god` tag is bumped, diff its `god::write_part` against this one and
+/// carry any change over — the parts must stay byte-identical to what
+/// `iso2god` writes, or the console rejects the container.
+fn write_part(
+    data_volume: &mut File,
+    part_index: u64,
+    part_file: &mut File,
+    cancel: &AtomicBool,
+    on_progress: &mut dyn FnMut(u64),
+) -> Result<()> {
+    data_volume.seek_relative((part_index * PART_DATA_SIZE) as i64)?;
+
+    let mut master_hash_list = god::HashList::new();
+    let master_hash_list_position = part_file.stream_position()?;
+    master_hash_list.write(&mut *part_file)?;
+
+    let mut subpart_buf = Vec::with_capacity(god::SUBPART_SIZE as usize);
+    let mut written: u64 = 0;
+
+    for _ in 0..god::SUBPARTS_PER_PART {
+        if crate::convert::is_cancelled(cancel) {
+            anyhow::bail!(crate::convert::CONVERSION_CANCELLED);
+        }
+
+        // Each subpart is read twice: once to hash its blocks, then again to
+        // copy it after its hash list.
+        (&mut *data_volume)
+            .take(god::SUBPART_SIZE)
+            .read_to_end(&mut subpart_buf)?;
+        if subpart_buf.is_empty() {
+            break;
+        }
+
+        let mut sub_hash_list = god::HashList::new();
+        for block in subpart_buf.chunks(god::BLOCK_SIZE as usize) {
+            sub_hash_list.add_block_hash(block);
+        }
+        sub_hash_list.write(&mut *part_file)?;
+        master_hash_list.add_block_hash(sub_hash_list.bytes());
+
+        data_volume.seek_relative(-(subpart_buf.len() as i64))?;
+        std::io::copy(&mut (&mut *data_volume).take(god::SUBPART_SIZE), part_file)?;
+
+        written += subpart_buf.len() as u64;
+        on_progress(written);
+
+        if subpart_buf.len() < god::SUBPART_SIZE as usize {
+            break;
+        }
+        subpart_buf.clear();
+    }
+
+    part_file.seek(SeekFrom::Start(master_hash_list_position))?;
+    master_hash_list.write(&mut *part_file)?;
+    Ok(())
+}
+
 /// Converts an Xbox 360 game ISO to GOD in `content_dir`
 /// (the `Content/0000000000000000` folder of the target).
 /// Returns the created title folder (`content_dir/<TitleID>`).
 ///
-/// `progress(done, total)` is called at each written part.
+/// `progress(done, total)` counts bytes of the image's data, and is called
+/// while each part is being written (at most every
+/// [`crate::util::PROGRESS_DEBOUNCE`]) as well as when it is done.
 pub fn convert_to_god(
     source_iso: &Path,
     content_dir: &Path,
@@ -84,7 +160,8 @@ pub fn convert_to_god(
 
     let title_dir = content_dir.join(format!("{:08X}", exe_info.title_id));
 
-    progress(0, part_count);
+    progress(0, data_size);
+    let mut last_notify = Instant::now();
 
     for part_index in 0..part_count {
         if crate::convert::is_cancelled(cancel) {
@@ -101,17 +178,40 @@ pub fn convert_to_god(
         let mut iso_data_volume = File::open(source_iso)?;
         iso_data_volume.seek(SeekFrom::Start(root_offset))?;
 
-        let part_file = File::options()
+        let mut part_file = File::options()
             .write(true)
             .create(true)
             .truncate(true)
             .open(file_layout.part_file_path(part_index))
             .context("creating GOD part file")?;
 
-        god::write_part(iso_data_volume, part_index, part_file)
-            .context("writing GOD part file")?;
+        let base = part_index * PART_DATA_SIZE;
+        let res = write_part(
+            &mut iso_data_volume,
+            part_index,
+            &mut part_file,
+            cancel,
+            &mut |written| {
+                let now = Instant::now();
+                if now.duration_since(last_notify) >= crate::util::PROGRESS_DEBOUNCE {
+                    last_notify = now;
+                    progress((base + written).min(data_size), data_size);
+                }
+            },
+        );
+        // Closed before any cleanup: Windows will not delete an open file.
+        drop(part_file);
+        if let Err(e) = res {
+            if crate::convert::is_cancelled(cancel) {
+                cleanup_partial(&file_layout, &title_dir);
+                anyhow::bail!(crate::convert::CONVERSION_CANCELLED);
+            }
+            return Err(e.context("writing GOD part file"));
+        }
 
-        progress(part_index + 1, part_count);
+        // The last part reads up to the end of the file, which may lie past
+        // the trimmed `data_size`.
+        progress(((part_index + 1) * PART_DATA_SIZE).min(data_size), data_size);
     }
 
     // MHT hash chain, from the last part to the first.

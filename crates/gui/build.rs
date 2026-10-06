@@ -5,7 +5,13 @@ use std::{collections::HashMap, env, path::PathBuf};
 
 fn main() {
     println!("cargo::rerun-if-changed=build.rs");
-    println!("cargo::rerun-if-changed=../../ui/**");
+    // The .slint sources need no line here: `slint_build` declares every file
+    // it compiles. The Windows resources below are read by `winresource`,
+    // which declares nothing.
+    println!("cargo::rerun-if-changed=../../package/windows/icon.ico");
+    println!(
+        "cargo::rerun-if-changed=../../package/windows/TinyXbox360BackupManager.exe.manifest"
+    );
 
     let library = HashMap::from([("lucide".to_string(), PathBuf::from(lucide_slint::lib()))]);
     let config = slint_build::CompilerConfiguration::new().with_library_paths(library);

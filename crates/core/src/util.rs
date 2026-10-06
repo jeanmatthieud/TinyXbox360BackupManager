@@ -179,6 +179,10 @@ pub fn human_size(bytes: u64) -> String {
     }
 }
 
+/// Minimum delay between two progress reports within a long copy: often enough
+/// for a smooth progress bar, rarely enough not to flood the UI with updates.
+pub(crate) const PROGRESS_DEBOUNCE: Duration = Duration::from_millis(200);
+
 /// Transfer rate averaged over the last few seconds, for display.
 ///
 /// Fed with the running byte count of a whole transfer, so the figure spans

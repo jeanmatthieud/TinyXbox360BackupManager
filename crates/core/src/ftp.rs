@@ -12,7 +12,7 @@
 //!   must navigate with CWD then only use relative names;
 //! - NLST returns complete LIST lines.
 
-use crate::util::dir_size;
+use crate::util::{PROGRESS_DEBOUNCE, dir_size};
 use anyhow::{Context, Result, bail};
 use std::fs::File;
 use std::io::{BufReader, Read};
@@ -135,10 +135,6 @@ pub fn scan_network(
 
     found.into_inner().unwrap()
 }
-
-/// Minimum delay between two intra-file progress notifications, so the UI
-/// isn't refreshed on every 8 KiB chunk.
-const PROGRESS_DEBOUNCE: Duration = Duration::from_millis(200);
 
 /// Wraps a reader and reports the running byte count on each read, so the
 /// upload of a single (possibly large) file can be tracked as it streams.

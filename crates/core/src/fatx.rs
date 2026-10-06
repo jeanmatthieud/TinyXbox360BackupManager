@@ -18,6 +18,7 @@
 
 use crate::ftp::RemoteEntry;
 use crate::remote_fs::RemoteFs;
+use crate::util::PROGRESS_DEBOUNCE;
 use anyhow::{Context, Result, anyhow, bail};
 use fatx::{FatxFs, FatxFsConfig, FatxFsHandle};
 use serde::{Deserialize, Serialize};
@@ -51,9 +52,6 @@ pub fn volume_for(partition: &str) -> &'static str {
         _ => FATX_VOLUME,
     }
 }
-
-/// How often a long file copy reports its progress.
-const PROGRESS_DEBOUNCE: std::time::Duration = std::time::Duration::from_millis(200);
 
 /// Copy buffer. Each `write` on a FATX file rewrites the file's directory
 /// entry, so copying in large chunks matters: a small buffer would spend most
