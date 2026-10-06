@@ -60,24 +60,6 @@ export component AboutPage inherits Rectangle {
                 }
             }
 
-            HorizontalLayout {
-                spacing: 10px;
-
-                VerticalLayout {
-                    alignment: center;
-
-                    IconDisplay {
-                        icon: IconSet.TriangleAlert;
-                        stroke: MyPalette.foreground;
-                    }
-                }
-
-                Text {
-                    text: "TinyXbox360BackupManager is intended strictly for legal backup use and is not affiliated with or endorsed by Microsoft. Use of TinyXbox360BackupManager for pirated or unauthorized copies of games is strictly prohibited.";
-                    wrap: word-wrap;
-                }
-            }
-
             HorizontalLine { }
 
             HorizontalLayout {
@@ -133,6 +115,7 @@ export component AboutPage inherits Rectangle {
             }
 
             HorizontalLayout {
+                padding-bottom: 6px;
                 spacing: 20px;
                 alignment: start;
 
@@ -146,6 +129,26 @@ export component AboutPage inherits Rectangle {
                     label: "Ko-fi";
                     uri: "https://ko-fi.com/W6I723OON9";
                     icon: IconSet.Coffee;
+                }
+            }
+
+            HorizontalLine { }
+
+            HorizontalLayout {
+                spacing: 10px;
+
+                VerticalLayout {
+                    alignment: center;
+
+                    IconDisplay {
+                        icon: IconSet.TriangleAlert;
+                        stroke: MyPalette.foreground;
+                    }
+                }
+
+                Text {
+                    text: "TinyXbox360BackupManager is intended strictly for legal backup use and is not affiliated with or endorsed by Microsoft. Use of TinyXbox360BackupManager for pirated or unauthorized copies of games is strictly prohibited.";
+                    wrap: word-wrap;
                 }
             }
         }

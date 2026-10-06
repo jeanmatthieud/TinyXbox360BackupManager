@@ -1,0 +1,46 @@
+// SPDX-FileCopyrightText: 2026 Jean-Matthieu Dechriste (TinyXbox360BackupManager)
+// SPDX-License-Identifier: GPL-3.0-only
+
+import { IconDisplay, IconSet } from "@lucide";
+import { MyPalette } from "../styling.slint";
+import { Card } from "card.slint";
+import { Link } from "link.slint";
+
+// Donation reminder shown on the queue page while a job runs, a moment when
+// the user is waiting anyway.
+export component DonationCard inherits Card {
+    background: MyPalette.accent-background.transparentize(0.9);
+    border-color: MyPalette.accent-background.transparentize(0.6);
+    height: row.preferred-height;
+
+    row := HorizontalLayout {
+        padding: 10px;
+        spacing: 12px;
+        cross-axis-alignment: CrossAxisAlignment.center;
+
+        IconDisplay {
+            icon: IconSet.HandHeart;
+            stroke: MyPalette.accent-background;
+            size: 16px;
+        }
+
+        Text {
+            horizontal-stretch: 1;
+            text: "TinyXbox360BackupManager is free and will stay free. A donation helps me keep maintaining it.";
+            vertical-alignment: center;
+            wrap: word-wrap;
+        }
+
+        Link {
+            label: "GitHub Sponsors";
+            uri: "https://github.com/sponsors/jeanmatthieud";
+            icon: IconSet.HandHeart;
+        }
+
+        Link {
+            label: "Ko-fi";
+            uri: "https://ko-fi.com/W6I723OON9";
+            icon: IconSet.Coffee;
+        }
+    }
+}
