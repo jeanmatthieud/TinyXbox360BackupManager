@@ -1,0 +1,15 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      // Rebuilds and restarts the app on Rust changes; .slint changes are reloaded
+      // live by the running app (live preview), so ui/ is not watched.
+      "label": "Watch txbm-gui (live preview)",
+      "type": "shell",
+      "command": "cargo watch -w crates -w Cargo.toml -x 'run --features=live-preview'",
+      "options": { "env": { "SLINT_LIVE_PREVIEW": "1", "RUST_BACKTRACE": "1" } },
+      "isBackground": true,
+      "problemMatcher": ["$rustc-watch"]
+    }
+  ]
+}

@@ -35,3 +35,6 @@ winresource = "0.1"
 default = ["rustls"]
 native-tls = ["txbm-core/native-tls"]
 rustls = ["txbm-core/rustls"]
+# Dev only: with SLINT_LIVE_PREVIEW=1 at build time, the UI is interpreted at
+# runtime and reloaded whenever a .slint file changes.
+live-preview = ["slint/live-preview"]
