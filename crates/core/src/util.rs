@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 use sha1::{Digest, Sha1};
+use std::collections::VecDeque;
 use std::path::Path;
+use std::time::{Duration, Instant};
 
 /// File name of `path` for display (queue rows, confirmations, notices),
 /// falling back to the whole path when it has none. Shared so that the same
@@ -174,6 +176,83 @@ pub fn human_size(bytes: u64) -> String {
         format!("{bytes} o")
     } else {
         format!("{value:.2} {}", UNITS[unit])
+    }
+}
+
+/// Minimum delay between two progress reports within a long copy: often enough
+/// for a smooth progress bar, rarely enough not to flood the UI with updates.
+pub(crate) const PROGRESS_DEBOUNCE: Duration = Duration::from_millis(200);
+
+/// Transfer rate averaged over the last few seconds, for display.
+///
+/// Fed with the running byte count of a whole transfer, so the figure spans
+/// file boundaries: averaging per file instead makes it swing wildly on a tree
+/// of small files, and spike at the start of each large one while the writes
+/// are still landing in a cache. The displayed value only moves once per
+/// [`Self::REFRESH`] so that it can actually be read.
+pub struct RateMeter {
+    /// `(when, bytes transferred so far)`, oldest first, spaced at least
+    /// [`Self::SAMPLE_GAP`] apart.
+    samples: VecDeque<(Instant, u64)>,
+    /// Last value handed out, and when it was computed.
+    shown: Option<(Instant, f64)>,
+}
+
+impl RateMeter {
+    /// How far back the average looks.
+    const WINDOW: Duration = Duration::from_secs(5);
+    /// History needed before a first figure is given.
+    const MIN_SPAN: Duration = Duration::from_secs(1);
+    /// How often the displayed value changes.
+    const REFRESH: Duration = Duration::from_secs(1);
+    /// Callers may report thousands of times per second (one call per small
+    /// file); closer samples than this add nothing to a 5-second average.
+    const SAMPLE_GAP: Duration = Duration::from_millis(100);
+
+    pub fn new() -> Self {
+        Self { samples: VecDeque::new(), shown: None }
+    }
+
+    /// Records that `total_bytes` have been transferred so far, and returns
+    /// the average rate in megabytes per second — `None` until there is
+    /// enough history for a meaningful figure.
+    pub fn record(&mut self, total_bytes: u64) -> Option<f64> {
+        let now = Instant::now();
+        if self
+            .samples
+            .back()
+            .is_none_or(|&(at, _)| now.duration_since(at) >= Self::SAMPLE_GAP)
+        {
+            self.samples.push_back((now, total_bytes));
+        }
+        // Keeps one sample at or beyond the window's edge, so the average
+        // covers the whole window rather than slightly less of it.
+        while self.samples.len() > 1
+            && now.duration_since(self.samples[1].0) >= Self::WINDOW
+        {
+            self.samples.pop_front();
+        }
+
+        if let Some((at, rate)) = self.shown
+            && now.duration_since(at) < Self::REFRESH
+        {
+            return Some(rate);
+        }
+
+        let &(since, bytes_then) = self.samples.front()?;
+        let span = now.duration_since(since);
+        if span < Self::MIN_SPAN {
+            return None;
+        }
+        let rate = total_bytes.saturating_sub(bytes_then) as f64 / 1e6 / span.as_secs_f64();
+        self.shown = Some((now, rate));
+        Some(rate)
+    }
+}
+
+impl Default for RateMeter {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

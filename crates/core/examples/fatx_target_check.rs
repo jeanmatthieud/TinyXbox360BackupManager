@@ -151,7 +151,9 @@ fn main() -> anyhow::Result<()> {
         let dest = format!("{}/4D530910", storage.god_dir);
         for pass in 1..=2 {
             let mut last = 0;
-            session.upload_dir(&staging, &dest, &NO_CANCEL, &mut |sent, total, speed| {
+            let mut meter = txbm_core::util::RateMeter::new();
+            session.upload_dir(&staging, &dest, &NO_CANCEL, &mut |sent, total| {
+                let speed = meter.record(sent);
                 let pct = sent * 100 / total.max(1);
                 if pct != last {
                     last = pct;

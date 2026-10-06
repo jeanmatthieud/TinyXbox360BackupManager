@@ -119,8 +119,11 @@ pub fn inspect_input(path: &Path) -> Result<InputKind> {
 }
 
 /// Converts/extracts `in_path` on the target, depending on the image type.
-/// `update_progress` receives a percentage (0-100) and, during the FTP upload
-/// phase, the running average upload speed in megabytes per second.
+/// `update_progress` receives a percentage (0-100) and, while the game itself
+/// is written to the target, the write speed in megabytes per second averaged
+/// over the last few seconds (see [`crate::util::RateMeter`]): when a GOD
+/// container or an extracted Xbox 360 game is written to a local target, or
+/// when anything is copied to a console-shaped one.
 /// `status` receives a short human-readable line that supersedes the progress
 /// display while a non-measurable phase runs (currently the post-cancellation
 /// cleanup); an empty string hands the status line back to `update_progress`.
@@ -148,9 +151,7 @@ pub fn perform(
                 work_dir: root.clone(),
                 god_layout: storage.god_layout,
             };
-            convert_into(&in_path, &dest, x360_format, cancel, &|p| {
-                update_progress(p, None)
-            }, status, phase)?;
+            convert_into(&in_path, &dest, x360_format, cancel, update_progress, status, phase)?;
         }
         // Console-shaped targets (over the network, or a console hard drive on
         // this computer): convert into a local staging folder first, then copy
@@ -175,7 +176,9 @@ pub fn perform(
                     &ConvertDest::under(&staging),
                     x360_format,
                     cancel,
-                    &|p| update_progress(p * 50 / 100, None),
+                    // The staging folder is not the target: its write speed
+                    // is not the one the user is waiting on.
+                    &|p, _| update_progress(p * 50 / 100, None),
                     status,
                     phase,
                 )?;
@@ -221,12 +224,14 @@ pub fn perform(
                 let upload = (|| -> Result<()> {
                     let mut sent_before: u64 = 0;
 
-                    // Maps upload progress to the 50-100% band; the per-file
-                    // average speed (megabytes/s) comes from the FTP layer.
-                    let report = |base: u64, sent: u64, speed: Option<f64>| {
+                    // Maps upload progress to the 50-100% band. The speed is
+                    // measured here over the whole transfer rather than taken
+                    // from the backend, whose figure is per file.
+                    let mut meter = crate::util::RateMeter::new();
+                    let mut report = |base: u64, sent: u64| {
                         let done = base + sent;
                         let pct = 50 + (done * 50 / total.max(1)) as u32;
-                        update_progress(pct, speed);
+                        update_progress(pct, meter.record(done));
                     };
 
                     // Each staging sub-tree is uploaded to its own storage
@@ -279,9 +284,9 @@ pub fn perform(
                                 &entry.path(),
                                 &remote_path,
                                 cancel,
-                                &mut |sent, _, speed| {
+                                &mut |sent, _| {
                                     uploaded.set(sent);
-                                    report(base, sent, speed);
+                                    report(base, sent);
                                 },
                             )?;
                             sent_before += uploaded.get();
@@ -330,7 +335,7 @@ fn convert_into(
     dest: &ConvertDest,
     x360_format: Xbox360Format,
     cancel: &AtomicBool,
-    update_progress: &dyn Fn(u32),
+    update_progress: &dyn Fn(u32, Option<f64>),
     status: &dyn Fn(&str),
     phase: &dyn Fn(&str),
 ) -> Result<()> {
@@ -338,7 +343,7 @@ fn convert_into(
         InputKind::StfsPackage(package) => {
             phase("Copying the package");
             install_stfs_package(&package, dest, cancel, &mut |done, total| {
-                update_progress((done * 100 / total.max(1)) as u32);
+                update_progress((done * 100 / total.max(1)) as u32, None);
             })?;
             return Ok(());
         }
@@ -404,7 +409,7 @@ fn convert_into(
 
             phase("Extracting the Original Xbox game (XBE)");
             let res = extract::extract_iso(in_path, &game_dir, cancel, &mut |done, total| {
-                update_progress((done * 100 / total.max(1)) as u32);
+                update_progress((done * 100 / total.max(1)) as u32, None);
             });
             // On cancellation, drop the partially-extracted folder — but only
             // when we created it: a pre-existing game must survive the abort.
@@ -428,7 +433,7 @@ fn convert_into(
             let result = (|| -> Result<()> {
                 phase("Extracting the disc");
                 extract::extract_iso(in_path, &tmp, cancel, &mut |done, total| {
-                    update_progress((done * 100 / total.max(1)) as u32);
+                    update_progress((done * 100 / total.max(1)) as u32, None);
                 })?;
 
                 phase("Merging the content");
@@ -457,7 +462,14 @@ fn convert_into(
             result?;
         }
         IsoKind::BundledContent => {
-            install_bundled_content(in_path, dest, cancel, update_progress, status, phase)?;
+            install_bundled_content(
+                in_path,
+                dest,
+                cancel,
+                &|p| update_progress(p, None),
+                status,
+                phase,
+            )?;
         }
     }
 
@@ -473,7 +485,7 @@ fn apply_quirk(
     dest: &ConvertDest,
     x360_format: Xbox360Format,
     cancel: &AtomicBool,
-    update_progress: &dyn Fn(u32),
+    update_progress: &dyn Fn(u32, Option<f64>),
     status: &dyn Fn(&str),
     phase: &dyn Fn(&str),
 ) -> Result<()> {
@@ -484,7 +496,7 @@ fn apply_quirk(
             // then leaves a playable install behind — the packages merge on a
             // re-add rather than replacing anything. The other order would
             // leave content with no game, which a scan reports as `incomplete`.
-            let game_progress = |p: u32| update_progress(p * 50 / 100);
+            let game_progress = |p: u32, speed| update_progress(p * 50 / 100, speed);
             if x360_format == Xbox360Format::Xex {
                 // `install_bundled_content` files the packages at their proper
                 // place right after, so they are kept out of the game folder
@@ -518,7 +530,7 @@ fn apply_quirk(
                 in_path,
                 dest,
                 cancel,
-                &|p| update_progress(50 + p * 50 / 100),
+                &|p| update_progress(50 + p * 50 / 100, None),
                 status,
                 phase,
             )?;
@@ -548,7 +560,7 @@ fn apply_quirk(
                 &game_dir,
                 folders,
                 cancel,
-                &mut |done, total| update_progress((done * 100 / total.max(1)) as u32),
+                &mut |done, total| update_progress((done * 100 / total.max(1)) as u32, None),
             );
             if res.is_err() && is_cancelled(cancel) && !existed {
                 cleanup_dir(&game_dir, CLEANUP_PARTIAL, status);
@@ -623,19 +635,22 @@ fn extract_game_into(
     game_dir: &Path,
     exclude: &[&str],
     cancel: &AtomicBool,
-    update_progress: &dyn Fn(u32),
+    update_progress: &dyn Fn(u32, Option<f64>),
     status: &dyn Fn(&str),
     phase: &dyn Fn(&str),
 ) -> Result<()> {
     let existed = game_dir.exists();
 
     phase("Extracting the Xbox 360 game (XEX)");
+    let mut meter = crate::util::RateMeter::new();
     let res = extract::extract_iso_excluding(
         in_path,
         game_dir,
         exclude,
         cancel,
-        &mut |done, total| update_progress((done * 100 / total.max(1)) as u32),
+        &mut |done, total| {
+            update_progress((done * 100 / total.max(1)) as u32, meter.record(done))
+        },
     );
     // On cancellation, drop the partially-extracted folder — but only when we
     // created it: a pre-existing game must survive the abort.
@@ -690,7 +705,7 @@ fn install_game(
     dest: &ConvertDest,
     x360_format: Xbox360Format,
     cancel: &AtomicBool,
-    update_progress: &dyn Fn(u32),
+    update_progress: &dyn Fn(u32, Option<f64>),
     status: &dyn Fn(&str),
     phase: &dyn Fn(&str),
 ) -> Result<()> {
@@ -718,8 +733,9 @@ fn install_game(
     std::fs::create_dir_all(&content_dir)?;
 
     phase("GOD conversion");
+    let mut meter = crate::util::RateMeter::new();
     god::convert_to_god(in_path, &content_dir, title.as_deref(), cancel, &mut |done, total| {
-        update_progress((done * 100 / total.max(1)) as u32);
+        update_progress((done * 100 / total.max(1)) as u32, meter.record(done));
     })?;
     Ok(())
 }
@@ -873,7 +889,7 @@ fn install_archive(
     dest: &ConvertDest,
     x360_format: Xbox360Format,
     cancel: &AtomicBool,
-    update_progress: &dyn Fn(u32),
+    update_progress: &dyn Fn(u32, Option<f64>),
     status: &dyn Fn(&str),
     phase: &dyn Fn(&str),
 ) -> Result<()> {
@@ -892,7 +908,7 @@ fn install_archive(
         // Extraction: 0-50%.
         phase("Extracting the archive");
         archive::extract_to(in_path, &tmp, cancel, &mut |done, total| {
-            update_progress((done * 50 / total.max(1)) as u32);
+            update_progress((done * 50 / total.max(1)) as u32, None);
         })?;
 
         // Archive wrapping a single ISO: convert it as a normal ISO import
@@ -904,7 +920,7 @@ fn install_archive(
                 dest,
                 x360_format,
                 cancel,
-                &|p| update_progress(50 + p * 50 / 100),
+                &|p, speed| update_progress(50 + p * 50 / 100, speed),
                 status,
                 phase,
             );
@@ -925,9 +941,9 @@ fn install_archive(
         // Installation: 50-100%, weighted by package size.
         phase("Installing the packages");
         install_packages(&packages, dest, cancel, &|p| {
-            update_progress(50 + p * 50 / 100)
+            update_progress(50 + p * 50 / 100, None)
         })?;
-        update_progress(100);
+        update_progress(100, None);
         Ok(())
     })();
 
@@ -1142,7 +1158,7 @@ mod tests {
         zip.finish().unwrap();
 
         let root = dir.join("root");
-        convert_into(&zip_path, &ConvertDest::under(&root), Xbox360Format::God, &AtomicBool::new(false), &|_| {}, &|_| {}, &|_| {}).unwrap();
+        convert_into(&zip_path, &ConvertDest::under(&root), Xbox360Format::God, &AtomicBool::new(false), &|_, _| {}, &|_| {}, &|_| {}).unwrap();
 
         let title_dir = root.join(DEFAULT_GOD_DIR).join("58410889");
         assert!(title_dir.join("000D0000/ArcadeGamePackage").is_file());
@@ -1166,7 +1182,7 @@ mod tests {
         std::fs::write(&package, stfs_package(stfs::CONTENT_TYPE_ARCADE, 0x584108A1)).unwrap();
 
         let root = dir.join("root");
-        convert_into(&package, &ConvertDest::under(&root), Xbox360Format::God, &AtomicBool::new(false), &|_| {}, &|_| {}, &|_| {}).unwrap();
+        convert_into(&package, &ConvertDest::under(&root), Xbox360Format::God, &AtomicBool::new(false), &|_, _| {}, &|_| {}, &|_| {}).unwrap();
         assert!(
             root.join(DEFAULT_GOD_DIR)
                 .join("584108A1/000D0000/SomeArcadeGame")
@@ -1193,7 +1209,7 @@ mod tests {
         zip.finish().unwrap();
 
         let root = dir.join("root");
-        let err = convert_into(&zip_path, &ConvertDest::under(&root), Xbox360Format::God, &AtomicBool::new(false), &|_| {}, &|_| {}, &|_| {}).unwrap_err();
+        let err = convert_into(&zip_path, &ConvertDest::under(&root), Xbox360Format::God, &AtomicBool::new(false), &|_, _| {}, &|_| {}, &|_| {}).unwrap_err();
         assert!(err.to_string().contains("no Arcade package"));
 
         std::fs::remove_dir_all(&dir).unwrap();
@@ -1213,7 +1229,7 @@ mod tests {
             god_layout: GodLayout::NameSlashTitleId,
             ..ConvertDest::under(&root)
         };
-        convert_into(&package, &dest, Xbox360Format::God, &AtomicBool::new(false), &|_| {}, &|_| {}, &|_| {}).unwrap();
+        convert_into(&package, &dest, Xbox360Format::God, &AtomicBool::new(false), &|_, _| {}, &|_| {}, &|_| {}).unwrap();
 
         // The staged package carries no readable name here, so the parent
         // folder falls back to the bundled game list, then to the TitleID.
@@ -1231,7 +1247,7 @@ mod tests {
 
         // Re-adding it while configured flat reuses the nested folder rather
         // than creating a duplicate.
-        convert_into(&package, &ConvertDest::under(&root), Xbox360Format::God, &AtomicBool::new(false), &|_| {}, &|_| {}, &|_| {}).unwrap();
+        convert_into(&package, &ConvertDest::under(&root), Xbox360Format::God, &AtomicBool::new(false), &|_, _| {}, &|_| {}, &|_| {}).unwrap();
         assert!(!god.join("584108A1").exists());
         assert_eq!(crate::game::scan_drive(&root).len(), 1);
 

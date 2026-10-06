@@ -58,14 +58,13 @@ pub trait RemoteFs {
     fn put_bytes(&mut self, dir: &str, file_name: &str, bytes: &[u8]) -> Result<()>;
 
     /// Copies a local directory tree into `dest_dir` (created if needed).
-    /// `progress(sent_bytes, total_bytes, megabytes_per_second)` is called as
-    /// the copy advances.
+    /// `progress(sent_bytes, total_bytes)` is called as the copy advances.
     fn upload_dir(
         &mut self,
         local_dir: &Path,
         dest_dir: &str,
         cancel: &AtomicBool,
-        progress: &mut dyn FnMut(u64, u64, Option<f64>),
+        progress: &mut dyn FnMut(u64, u64),
     ) -> Result<()>;
 
     /// Removes a directory and everything under it.
@@ -136,7 +135,7 @@ impl RemoteFs for FtpSession {
         local_dir: &Path,
         dest_dir: &str,
         cancel: &AtomicBool,
-        progress: &mut dyn FnMut(u64, u64, Option<f64>),
+        progress: &mut dyn FnMut(u64, u64),
     ) -> Result<()> {
         FtpSession::upload_dir(self, local_dir, dest_dir, cancel, progress)
     }
@@ -241,7 +240,7 @@ impl RemoteFs for RemoteSession {
         local_dir: &Path,
         dest_dir: &str,
         cancel: &AtomicBool,
-        progress: &mut dyn FnMut(u64, u64, Option<f64>),
+        progress: &mut dyn FnMut(u64, u64),
     ) -> Result<()> {
         self.inner().upload_dir(local_dir, dest_dir, cancel, progress)
     }

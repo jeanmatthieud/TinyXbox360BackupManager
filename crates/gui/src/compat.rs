@@ -154,7 +154,7 @@ pub fn install(
                 status(&format!("Removing the previous files…  {done}/{total}"));
             }
         },
-        &mut |sent, total, _speed| {
+        &mut |sent, total| {
             if let Some(percent) = (sent * 100).checked_div(total) {
                 status(&format!("Writing the compatibility files…  {percent}%"));
             }
@@ -178,7 +178,7 @@ pub fn install(
             &mut session,
             configs,
             cancel,
-            &mut |sent, total, _speed| {
+            &mut |sent, total| {
                 if let Some(percent) = (sent * 100).checked_div(total) {
                     status(&format!("Writing the compatibility configs…  {percent}%"));
                 }

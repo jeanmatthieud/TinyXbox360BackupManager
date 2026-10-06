@@ -18,6 +18,7 @@
 
 use crate::ftp::RemoteEntry;
 use crate::remote_fs::RemoteFs;
+use crate::util::PROGRESS_DEBOUNCE;
 use anyhow::{Context, Result, anyhow, bail};
 use fatx::{FatxFs, FatxFsConfig, FatxFsHandle};
 use serde::{Deserialize, Serialize};
@@ -51,9 +52,6 @@ pub fn volume_for(partition: &str) -> &'static str {
         _ => FATX_VOLUME,
     }
 }
-
-/// How often a long file copy reports its progress.
-const PROGRESS_DEBOUNCE: std::time::Duration = std::time::Duration::from_millis(200);
 
 /// Copy buffer. Each `write` on a FATX file rewrites the file's directory
 /// entry, so copying in large chunks matters: a small buffer would spend most
@@ -317,7 +315,7 @@ impl FatxSession {
         cancel: &AtomicBool,
         base: u64,
         total: u64,
-        progress: &mut dyn FnMut(u64, u64, Option<f64>),
+        progress: &mut dyn FnMut(u64, u64),
     ) -> Result<u64> {
         let resolved = self.resolve_or_err(dest_path)?;
         let mut source = std::fs::File::open(local_path)
@@ -326,8 +324,7 @@ impl FatxSession {
 
         let mut buf = vec![0u8; COPY_BUFFER];
         let mut copied: u64 = 0;
-        let started = Instant::now();
-        let mut last_notify = started;
+        let mut last_notify = Instant::now();
 
         loop {
             if cancel.load(Ordering::Relaxed) {
@@ -346,9 +343,7 @@ impl FatxSession {
             let now = Instant::now();
             if now.duration_since(last_notify) >= PROGRESS_DEBOUNCE {
                 last_notify = now;
-                let secs = started.elapsed().as_secs_f64();
-                let speed = (secs > 0.0).then(|| copied as f64 / 1e6 / secs);
-                progress(base + copied, total, speed);
+                progress(base + copied, total);
             }
         }
 
@@ -357,9 +352,7 @@ impl FatxSession {
         // user may unplug it as soon as the job ends.
         dest.flush().with_context(|| format!("flushing {dest_path}"))?;
 
-        let secs = started.elapsed().as_secs_f64();
-        let speed = (secs > 0.0).then(|| copied as f64 / 1e6 / secs);
-        progress(base + copied, total, speed);
+        progress(base + copied, total);
         Ok(copied)
     }
 
@@ -370,7 +363,7 @@ impl FatxSession {
         cancel: &AtomicBool,
         sent: &mut u64,
         total: u64,
-        progress: &mut dyn FnMut(u64, u64, Option<f64>),
+        progress: &mut dyn FnMut(u64, u64),
     ) -> Result<()> {
         self.ensure_dir(dest_dir)?;
 
@@ -556,12 +549,12 @@ impl RemoteFs for FatxSession {
         local_dir: &Path,
         dest_dir: &str,
         cancel: &AtomicBool,
-        progress: &mut dyn FnMut(u64, u64, Option<f64>),
+        progress: &mut dyn FnMut(u64, u64),
     ) -> Result<()> {
         self.ensure_writable()?;
         let total = crate::util::dir_size(local_dir);
         let mut sent: u64 = 0;
-        progress(0, total, None);
+        progress(0, total);
         let result = self.copy_dir_inner(local_dir, dest_dir, cancel, &mut sent, total, progress);
         // Whether the copy finished or was interrupted, what did reach the
         // disk must be described correctly on it.

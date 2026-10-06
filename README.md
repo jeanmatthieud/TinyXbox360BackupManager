@@ -391,17 +391,31 @@ sudo apt-get install -y build-essential pkg-config libfontconfig1-dev
 
 The binary is generated in `target/release`.
 
-## :computer: Technologies
+## :heart: Credits
 
-Pure Rust, no runtime external dependencies:
+This app would not exist without the work of many passionate people. Thank you to:
 
-- [Slint](https://slint.dev) — graphical interface
-- [iso2god-rs](https://github.com/iliazeus/iso2god-rs) — ISO → GOD conversion
-- [xdvdfs](https://crates.io/crates/xdvdfs) — reading/extraction of XDVDFS images ([extract-xiso](https://github.com/XboxDev/extract-xiso) equivalent)
-- [suppaftp](https://crates.io/crates/suppaftp) — FTP client
-- [XboxUnity](https://www.xboxunity.net) — Xbox360 covers and title updates
-- [MobCats](https://github.com/MobCat/MobCats-original-xbox-game-list) — Xbox covers
-- [FATX](https://github.com/jeanmatthieud/fatx/tree/feat-rust-write) — FATX library, forked from [mborgerson](https://github.com/mborgerson/fatx), to read and write FATX360 filesystem.
+- [Manuel Quarneti](https://github.com/mq1) for [TinyWiiBackupManager](https://github.com/mq1/TinyWiiBackupManager), which this app is based on.
+- [iliazeus](https://github.com/iliazeus/iso2god-rs) for iso2god-rs (ISO → GOD conversion).
+- [antangelo](https://github.com/antangelo/xdvdfs) for [xdvdfs](https://crates.io/crates/xdvdfs) (reading/extraction of XDVDFS images, an [extract-xiso](https://github.com/XboxDev/extract-xiso) equivalent).
+- [mborgerson](https://github.com/mborgerson/fatx) for fatx, which [our fork](https://github.com/jeanmatthieud/fatx/tree/feat-rust-write) builds on to read and write the FATX360 filesystem.
+- [suppaftp](https://crates.io/crates/suppaftp) for the FTP client.
+- [rars](https://crates.io/crates/rars) for RAR extraction, in pure Rust.
+- [shutterbug2000](https://github.com/shutterbug2000/ABadAvatar) for ABadAvatar 1.0.
+- [bibarub](https://github.com/bibarub/Xbox360BadUpdate) for ABadAvatar 1.3.
+- [Byrom90](https://github.com/Byrom90/XeUnshackle) for XeUnshackle, and [klofi](https://github.com/klofi/XeUnshackle-Max) for XeUnshackle Max.
+- The [Phoenix team](https://phoenix.xboxunity.net) for the Aurora dashboard.
+- [XboxUnity](https://www.xboxunity.net) for the Xbox 360 covers and title updates database.
+- [UncreativeXenon](https://github.com/UncreativeXenon/XboxUnity-Scraper) for the XboxUnity archive (alternative cover source).
+- [MobCat](https://github.com/MobCat/MobCats-original-xbox-game-list) for the original Xbox game covers.
+- The [ConsoleMods wiki](https://consolemods.org/wiki/Xbox_360:Original_Xbox_Games) and its contributors for the original Xbox emulator packs and compatibility list, and [Goatman13](https://github.com/Goatman13/xefu) for the per-game emulator configs.
+
+## :coffee: Support the project
+
+TinyXbox360BackupManager is free and will stay free. Donations are what make it possible for me to keep working on it — new features, fixes, and testing on real hardware.
+
+- [GitHub Sponsors](https://github.com/sponsors/jeanmatthieud)
+- [Ko-fi](https://ko-fi.com/W6I723OON9)
 
 ## :scroll: License
 

@@ -1,4 +1,5 @@
-// SPDX-FileCopyrightText: 2026 Manuel Quarneti <mq1@ik.me>
+// SPDX-FileCopyrightText: 2026 Manuel Quarneti <mq1@ik.me> (TinyWiiBackupManager)
+// SPDX-FileContributor: Modified by Jean-Matthieu Dechriste (TinyXbox360BackupManager)
 // SPDX-License-Identifier: GPL-3.0-only
 
 import { ScrollView } from "std-widgets.slint";
@@ -9,6 +10,7 @@ import { Card } from "components/card.slint";
 import { IconButton, IconButtonKind } from "components/icon-button.slint";
 import { JobRow } from "components/job-row.slint";
 import { JobProgressCard } from "components/job-progress-card.slint";
+import { DonationCard } from "components/donation-card.slint";
 import {
     JobQueueToolbar,
 } from "components/job-queue-toolbar.slint";
@@ -103,6 +105,8 @@ export component JobQueuePage inherits VerticalLayout {
 
             // Live progress of the job running right now.
             if UiState.job-running: JobProgressCard { }
+
+            if UiState.job-running: DonationCard { }
 
             if UiState.job-queue.length > first-pending: Card {
                 clip: true;

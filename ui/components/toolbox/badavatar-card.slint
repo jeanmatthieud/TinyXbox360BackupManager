@@ -75,7 +75,7 @@ export component BadAvatarCard inherits ToolboxCard {
     }
 
     CheckBox {
-        text: "Also download and add the official system update";
+        text: "Download and add the official system update";
         checked: UiState.badavatar.include-system-update;
         toggled => {
             Dispatcher.dispatch(Message.ToggleBadAvatarSystemUpdate, "");

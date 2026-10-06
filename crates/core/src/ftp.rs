@@ -12,7 +12,7 @@
 //!   must navigate with CWD then only use relative names;
 //! - NLST returns complete LIST lines.
 
-use crate::util::dir_size;
+use crate::util::{PROGRESS_DEBOUNCE, dir_size};
 use anyhow::{Context, Result, bail};
 use std::fs::File;
 use std::io::{BufReader, Read};
@@ -135,10 +135,6 @@ pub fn scan_network(
 
     found.into_inner().unwrap()
 }
-
-/// Minimum delay between two intra-file progress notifications, so the UI
-/// isn't refreshed on every 8 KiB chunk.
-const PROGRESS_DEBOUNCE: Duration = Duration::from_millis(200);
 
 /// Wraps a reader and reports the running byte count on each read, so the
 /// upload of a single (possibly large) file can be tracked as it streams.
@@ -533,11 +529,11 @@ impl FtpSession {
         local_dir: &Path,
         remote_dir: &str,
         cancel: &AtomicBool,
-        progress: &mut dyn FnMut(u64, u64, Option<f64>),
+        progress: &mut dyn FnMut(u64, u64),
     ) -> Result<()> {
         let total = dir_size(local_dir);
         let mut sent: u64 = 0;
-        progress(0, total, None);
+        progress(0, total);
         self.upload_dir_inner(local_dir, remote_dir, cancel, &mut sent, total, progress)
     }
 
@@ -548,7 +544,7 @@ impl FtpSession {
         cancel: &AtomicBool,
         sent: &mut u64,
         total: u64,
-        progress: &mut dyn FnMut(u64, u64, Option<f64>),
+        progress: &mut dyn FnMut(u64, u64),
     ) -> Result<()> {
         self.cwd_create(remote_dir)
             .with_context(|| format!("creating {remote_dir}"))?;
@@ -573,11 +569,8 @@ impl FtpSession {
                     .with_context(|| format!("opening {}", local_path.display()))?;
                 let size = file.metadata().map(|m| m.len()).unwrap_or(0);
 
-                // Average speed for THIS file: bytes streamed so far divided by
-                // the time elapsed since this file started uploading.
                 let base = *sent;
-                let file_start = Instant::now();
-                let mut last_notify = file_start;
+                let mut last_notify = Instant::now();
                 let res = {
                     let mut reader = ProgressReader {
                         inner: BufReader::new(file),
@@ -586,9 +579,7 @@ impl FtpSession {
                             let now = Instant::now();
                             if now.duration_since(last_notify) >= PROGRESS_DEBOUNCE {
                                 last_notify = now;
-                                let secs = file_start.elapsed().as_secs_f64();
-                                let speed = (secs > 0.0).then(|| file_sent as f64 / 1e6 / secs);
-                                progress(base + file_sent, total, speed);
+                                progress(base + file_sent, total);
                             }
                         },
                         cancel,
@@ -608,9 +599,7 @@ impl FtpSession {
                 }
 
                 *sent = base + size;
-                let secs = file_start.elapsed().as_secs_f64();
-                let speed = (secs > 0.0).then(|| size as f64 / 1e6 / secs);
-                progress(*sent, total, speed);
+                progress(*sent, total);
             }
         }
         Ok(())

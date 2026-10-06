@@ -26,7 +26,7 @@ export component SettingsPage inherits VerticalLayout {
 
             SettingCard {
                 icon: IconSet.Trash;
-                label: "Delete source ISOs when adding games";
+                label: "Delete source file when adding games";
                 items: [{ value: "false", label: "No (recommended)" }, { value: "true", label: "Yes" }];
                 active-item: UiState.config.remove-sources-games;
                 set-property: Message.SetRemoveSourcesGames;

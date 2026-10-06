@@ -55,6 +55,7 @@ modules:
     build-commands:
       - cargo --offline build --release --no-default-features --features rustls
       - install -Dm755 target/release/txbm-gui /app/bin/TinyXbox360BackupManager
+      - install -Dm644 package/flatpak/fonts-local.conf /app/etc/fonts/local.conf
       - install -Dm644 package/linux/AppDir/usr/share/applications/${FLATPAK_ID}.desktop
         /app/share/applications/${FLATPAK_ID}.desktop
       - install -Dm644 package/linux/AppDir/usr/share/metainfo/${FLATPAK_ID}.metainfo.xml

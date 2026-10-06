@@ -674,7 +674,7 @@ pub fn install_remote(
     cancel: &AtomicBool,
     started_writing: &AtomicBool,
     delete_progress: &mut dyn FnMut(u64, u64),
-    progress: &mut dyn FnMut(u64, u64, Option<f64>),
+    progress: &mut dyn FnMut(u64, u64),
 ) -> Result<()> {
     ensure_compat_volume(fs)?;
     check_cancel(cancel)?;
@@ -805,7 +805,7 @@ pub fn install_configs_remote(
     fs: &mut dyn RemoteFs,
     staged: &Path,
     cancel: &AtomicBool,
-    progress: &mut dyn FnMut(u64, u64, Option<f64>),
+    progress: &mut dyn FnMut(u64, u64),
 ) -> Result<()> {
     check_cancel(cancel)?;
     let res = fs.upload_dir(staged, CONFIGS_PATH, cancel, progress);
