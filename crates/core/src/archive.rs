@@ -15,6 +15,10 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 /// ([`is_rar_volume`]) and again at extraction.
 pub const MULTI_VOLUME_RAR: &str = "multi-volume RAR archives are not supported yet";
 
+/// Why a RAR with encrypted headers or members is refused: `rars` is built
+/// without its `encryption` feature, and the app never asks for a password.
+pub const ENCRYPTED_RAR: &str = "password-protected RAR archives are not supported";
+
 /// True if the extension is a supported game archive format (.7z / .zip /
 /// .rar). Multi-volume RAR sets are not supported yet: see [`is_rar_volume`].
 pub fn is_supported_archive(path: &Path) -> bool {
@@ -79,7 +83,9 @@ fn rar_is_volume(archive: &rars::Archive) -> bool {
 /// large solid archives still show smooth progress.
 ///
 /// `cancel` is polled per chunk, so a multi-gigabyte archive stops within a
-/// megabyte of the request instead of running to completion.
+/// megabyte of the request instead of running to completion. RAR relays both
+/// every [`RAR_POLL_INTERVAL`] instead, and can hold progress back for a
+/// while: see [`extract_rar`].
 pub fn extract_to(
     path: &Path,
     dest: &Path,
@@ -215,29 +221,43 @@ fn extract_7z(
 /// `rars` asks for one writer per entry and takes ownership of it (a
 /// `Box<dyn Write>` is `'static`), so the writer cannot borrow `cancel` or
 /// `progress`. The decoding therefore runs on a scoped thread, while this one
-/// relays in both directions through shared atomics: it mirrors `cancel`
-/// into a flag the writer checks on every write, and reports the byte count
-/// the writer keeps. That keeps a single multi-gigabyte ISO responsive, where
-/// servicing both only between entries would freeze the progress bar and
-/// ignore the cancel button until the very end.
+/// relays in both directions: it mirrors `cancel` into a `rars`
+/// [`ReadCancellation`](rars::ReadCancellation), which the decoder polls as it
+/// goes, and reports the byte count the writer keeps. That keeps a single
+/// multi-gigabyte ISO responsive, where servicing both only between entries
+/// would freeze the progress bar and ignore the cancel button until the very
+/// end.
 ///
 /// One exception: a compressed RAR 5 member of up to 512 MiB is decoded
 /// whole in memory before `rars` writes any of it, so for such a member (an
-/// XBLA package, typically) progress and cancellation only take effect once
-/// it is decoded. Lowering that limit through `ArchiveReadOptions` is not an
-/// option: above it, `rars` refuses filtered members instead of streaming
-/// them, which would turn a slow extraction into a failed one.
+/// XBLA package, typically) progress only moves once it is decoded. The
+/// token still stops it midway, since `rars` checks it inside that decoding
+/// too. Lowering that limit through `ArchiveReadOptions` is not an option:
+/// above it, `rars` refuses filtered members instead of streaming them, which
+/// would turn a slow extraction into a failed one.
 fn extract_rar(
     path: &Path,
     dest: &Path,
     cancel: &AtomicBool,
     progress: &mut dyn FnMut(u64, u64),
 ) -> Result<()> {
-    let archive = rars::ArchiveReader::read_path(path).context("reading rar archive")?;
+    let archive = match rars::ArchiveReader::read_path(path) {
+        Ok(archive) => archive,
+        // Encrypted headers: the only `rars` feature a read can miss.
+        Err(e) if matches!(e.root_cause(), rars::Error::FeatureDisabled { .. }) => {
+            bail!(ENCRYPTED_RAR)
+        }
+        Err(e) => return Err(e).context("reading rar archive"),
+    };
     // Already refused at pick time; checked again for the Toolbox, whose
     // downloads are never picked.
     if rar_is_volume(&archive) {
         bail!(MULTI_VOLUME_RAR);
+    }
+    // Refused up front rather than when `rars` reaches the first encrypted
+    // member, which may come after others were already written.
+    if archive.members().any(|m| m.meta.is_encrypted) {
+        bail!(ENCRYPTED_RAR);
     }
     let total: u64 = archive
         .members()
@@ -245,17 +265,16 @@ fn extract_rar(
         .map(|m| m.meta.unpacked_size)
         .sum();
     let done = Arc::new(AtomicU64::new(0));
-    let stop = Arc::new(AtomicBool::new(false));
+    // A clone shares the flag, so the writers can hold their own copy.
+    let stop = rars::ReadCancellation::new();
+    let options = rars::ArchiveReadOptions::new().with_cancellation(&stop);
     progress(0, total);
 
     let result = std::thread::scope(|scope| {
         let worker = scope.spawn(|| {
-            archive.extract_to(None, |meta| {
-                // Surfaced as an error, like in `extract_7z`, so that stopping
-                // does not look like a successful extraction. Rewritten below.
-                if stop.load(Ordering::Relaxed) {
-                    return Err(io::Error::other(CONVERSION_CANCELLED).into());
-                }
+            // `rars` checks the token before opening each entry and while
+            // decoding it; the writer checks it again on every write.
+            archive.extract_to_with_options(options, |meta| {
                 let name = meta.name_lossy();
                 let rel = sanitized_relative_path(&name)
                     .ok_or_else(|| io::Error::other(format!("unsafe path in archive: {name}")))?;
@@ -270,13 +289,13 @@ fn extract_rar(
                 Ok(Box::new(CountingWriter {
                     file: File::create(&out)?,
                     written: Arc::clone(&done),
-                    stop: Arc::clone(&stop),
+                    stop: stop.clone(),
                 }))
             })
         });
         while !worker.is_finished() {
             if is_cancelled(cancel) {
-                stop.store(true, Ordering::Relaxed);
+                stop.cancel();
             }
             progress(done.load(Ordering::Relaxed), total);
             std::thread::sleep(RAR_POLL_INTERVAL);
@@ -285,9 +304,12 @@ fn extract_rar(
             .join()
             .unwrap_or_else(|panic| std::panic::resume_unwind(panic))
     });
-    // A cancellation comes back wrapped in `rars`' I/O error; report it with
-    // the bare marker the callers match on instead.
-    if stop.load(Ordering::Relaxed) || is_cancelled(cancel) {
+    // A cancellation comes back as `rars::Error::Cancelled`, or wrapped in its
+    // I/O error when the writer saw it first; report it with the bare marker
+    // the callers match on instead. Only for a failed run: an extraction that
+    // completed just as Cancel was pressed is kept: the callers check `cancel`
+    // themselves and stop at their next step.
+    if result.is_err() && (stop.is_cancelled() || is_cancelled(cancel)) {
         bail!(CONVERSION_CANCELLED);
     }
     result.context("extracting rar archive")?;
@@ -301,16 +323,16 @@ const RAR_POLL_INTERVAL: std::time::Duration = std::time::Duration::from_millis(
 
 /// A file writer that adds what it writes to a counter shared with
 /// [`extract_rar`], which owns no other view of the bytes going out, and
-/// fails as soon as that function raises `stop`.
+/// fails as soon as that function cancels `stop`.
 struct CountingWriter {
     file: File,
     written: Arc<AtomicU64>,
-    stop: Arc<AtomicBool>,
+    stop: rars::ReadCancellation,
 }
 
 impl Write for CountingWriter {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        if self.stop.load(Ordering::Relaxed) {
+        if self.stop.is_cancelled() {
             return Err(io::Error::other(CONVERSION_CANCELLED));
         }
         let n = self.file.write(buf)?;
