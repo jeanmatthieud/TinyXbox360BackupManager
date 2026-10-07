@@ -617,6 +617,39 @@ impl FtpSession {
         Ok(())
     }
 
+    /// Writes a file of `len` zero bytes, streamed rather than held in memory.
+    /// Used to reserve room on the console, see
+    /// [`crate::ogxbox_compat::check_room`].
+    ///
+    /// `cancel` stops it mid-file, the way it stops an upload: the session is
+    /// then unusable, and a partial file may be left behind for the caller to
+    /// remove over a fresh one.
+    pub fn put_zeros(
+        &mut self,
+        remote_dir: &str,
+        file_name: &str,
+        len: u64,
+        cancel: &AtomicBool,
+    ) -> Result<()> {
+        self.cwd_create(remote_dir)
+            .with_context(|| format!("creating {remote_dir}"))?;
+        let mut reader = ProgressReader {
+            inner: std::io::repeat(0).take(len),
+            sent: 0,
+            on_read: |_| {},
+            cancel,
+        };
+        if let Err(e) = self.stream.put_file(file_name, &mut reader) {
+            if cancel.load(Ordering::Relaxed) {
+                self.poisoned = true;
+                bail!(crate::convert::CONVERSION_CANCELLED);
+            }
+            return Err(anyhow::Error::new(e))
+                .with_context(|| format!("sending {remote_dir}/{file_name}"));
+        }
+        Ok(())
+    }
+
     /// Ensures a remote directory exists, creating every missing level.
     pub fn ensure_dir(&mut self, remote_dir: &str) -> Result<()> {
         self.cwd_create(remote_dir)

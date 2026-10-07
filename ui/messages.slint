@@ -14,6 +14,8 @@ export enum Message {
     SetAutoReconnect,
     SetCoverSource,
     SetAuroraImportOnAdd,
+    // Payload: "true" or "false".
+    SetExpertMode,
     // Payload: the row of the language in `config.asset-languages`.
     SetAssetLanguage,
     SetViewAs,
@@ -129,6 +131,7 @@ export enum Message {
     ToggleBadAvatarAutostart,
     InstallCompat,
     RestoreCompat,
+    FormatCompat,
     SelectCompatDrive,
     SelectCompatFtp,
     CompatTargetReady,

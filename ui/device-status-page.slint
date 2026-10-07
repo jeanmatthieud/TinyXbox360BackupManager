@@ -68,7 +68,7 @@ export component DeviceStatusPage inherits VerticalLayout {
 
             // BadAvatar booted from the console's own hard drive: only for a
             // drive connected here, once it has been read.
-            if UiState.config.target-kind == TargetKind.Fatx && UiState.badavatar-hdd.state != BadAvatarHddState.Unknown: BadAvatarHddCard { }
+            if UiState.config.expert-mode && UiState.config.target-kind == TargetKind.Fatx && UiState.badavatar-hdd.state != BadAvatarHddState.Unknown: BadAvatarHddCard { }
         }
     }
 }

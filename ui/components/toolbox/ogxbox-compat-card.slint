@@ -11,52 +11,10 @@ import { WarningNote } from "../warning-note.slint";
 import { UiState } from "../../ui-state.slint";
 import { Message, Dispatcher } from "../../messages.slint";
 
-// Card offering to write the original-Xbox emulator onto a console's
-// compatibility partition. Like the BadAvatar card it is a standalone tool: it
-// picks its own console (over the network, or its hard drive on this computer)
-// and is therefore unusable while a target is connected — which is also what
-// keeps it clear of the job queue's single-writer rule.
-export component OgXboxCompatCard inherits ToolboxCard {
-    private property <bool> target-connected: !UiState.config.target.is-empty;
-
-    // The two Toolbox tools exclude each other: they share the status line and
-    // the toolbar's cancel button, so running both at once makes progress and
-    // cancellation unreadable.
-    disabled: UiState.compat-busy || UiState.creating-badavatar || UiState.badavatar-hdd-tool-busy || target-connected;
-    disabled-tooltip: target-connected
-        ? "Disconnect from the current target first"
-        : UiState.creating-badavatar
-            ? "Wait for the BadAvatar USB key to be written."
-            : UiState.badavatar-hdd-tool-busy
-                ? "Wait for BadAvatar to be written to the hard drive."
-                : "";
-
-    CardHeader {
-        icon: IconSet.Gamepad2;
-        title: "Original Xbox compatibility";
-
-        if UiState.installing-compat: Spinner {
-            width: 27px;
-            height: 27px;
-            indeterminate: true;
-        }
-
-        // Puts a backup this tool wrote earlier back on a console, instead of
-        // one of the published packs.
-        if !UiState.installing-compat: IconButton {
-            icon: IconSet.Upload;
-            width: self.height;
-            tooltip: "Restore a compatibility backup (.zip)";
-            clicked => Dispatcher.dispatch(Message.RestoreCompat, "");
-        }
-    }
-
-    HorizontalLine { }
-
-    Text {
-        text: "Installs Xbox emulator files to HddX to expand original Xbox game compatibility.";
-        wrap: word-wrap;
-    }
+// Expert body of the card: any pack, including the user's own, and every
+// option left to the user.
+component CompatExpertBody inherits VerticalLayout {
+    spacing: 10px;
 
     // WarningNote {
     //     text: "Experimental: replaces the partition required to boot original Xbox games.";
@@ -145,4 +103,96 @@ export component OgXboxCompatCard inherits ToolboxCard {
             : "Working… see the status bar below.";
         clicked => Dispatcher.dispatch(Message.InstallCompat, "");
     }
+
+    // Hard drive only: lays a blank filesystem over the partition, or creates
+    // it on a drive that has none. Asks which once the drive is picked.
+    if !UiState.installing-compat: CardActionRow {
+        icon: IconSet.HardDrive;
+        text: "Create / format the compatibility partition (🧪 boldly experimental)";
+        clicked => Dispatcher.dispatch(Message.FormatCompat, "");
+    }
+}
+
+// Simple body of the card (expert mode off): the two packs a non-expert needs,
+// one button each. The backup is always made, and the per-title configs always
+// come with the patch: both are forced on the Rust side
+// (`State::compat_run_config`), never written to the saved settings.
+component CompatSimpleBody inherits VerticalLayout {
+    spacing: 10px;
+
+    Text {
+        text: "The current files are saved to a zip file first: you pick where before anything is written.";
+        font-size: 12px;
+        wrap: word-wrap;
+    }
+
+    HorizontalLine { }
+
+    CardActionRow {
+        icon: IconSet.Undo2;
+        text: "Restore retail (as a factory drive carries it)";
+        clicked => Dispatcher.dispatch(Message.InstallCompat, "retail");
+    }
+
+    CardActionRow {
+        icon: IconSet.Hammer;
+        text: "Apply patch (no whitelist, with HUD)";
+        clicked => Dispatcher.dispatch(Message.InstallCompat, "hacked_hud");
+    }
+
+    WarningNote {
+        text: "The patch requires Aurora + BadUpdate/BadAvatar/RGH to run.";
+    }
+}
+
+// Card offering to write the original-Xbox emulator onto a console's
+// compatibility partition. Like the BadAvatar card it is a standalone tool: it
+// picks its own console (over the network, or its hard drive on this computer)
+// and is therefore unusable while a target is connected — which is also what
+// keeps it clear of the job queue's single-writer rule.
+export component OgXboxCompatCard inherits ToolboxCard {
+    private property <bool> target-connected: !UiState.config.target.is-empty;
+
+    // The two Toolbox tools exclude each other: they share the status line and
+    // the toolbar's cancel button, so running both at once makes progress and
+    // cancellation unreadable.
+    disabled: UiState.compat-busy || UiState.creating-badavatar || UiState.badavatar-hdd-tool-busy || target-connected;
+    disabled-tooltip: target-connected
+        ? "Disconnect from the current target first"
+        : UiState.creating-badavatar
+            ? "Wait for the BadAvatar USB key to be written."
+            : UiState.badavatar-hdd-tool-busy
+                ? "Wait for BadAvatar to be written to the hard drive."
+                : "";
+
+    CardHeader {
+        icon: IconSet.Gamepad2;
+        title: "Original Xbox compatibility";
+
+        if UiState.installing-compat: Spinner {
+            width: 27px;
+            height: 27px;
+            indeterminate: true;
+        }
+
+        // Puts a backup this tool wrote earlier back on a console, instead of
+        // one of the published packs.
+        if !UiState.installing-compat: IconButton {
+            icon: IconSet.Upload;
+            width: self.height;
+            tooltip: "Restore a compatibility backup (.zip)";
+            clicked => Dispatcher.dispatch(Message.RestoreCompat, "");
+        }
+    }
+
+    HorizontalLine { }
+
+    Text {
+        text: "Installs Xbox emulator files to HddX to expand original Xbox game compatibility.";
+        wrap: word-wrap;
+    }
+
+    if UiState.config.expert-mode: CompatExpertBody { }
+
+    if !UiState.config.expert-mode: CompatSimpleBody { }
 }

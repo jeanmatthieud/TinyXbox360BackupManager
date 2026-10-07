@@ -25,6 +25,32 @@ export component SettingsPage inherits VerticalLayout {
             alignment: start;
 
             SettingCard {
+                icon: IconSet.FlaskConical;
+                label: "Expert mode";
+                items: [
+                    { value: "false", label: "Off" },
+                    { value: "true", label: "On" }
+                ];
+                active-item: UiState.config.expert-mode ? "true" : "false";
+                set-property: Message.SetExpertMode;
+                note: "Shows the advanced tools and settings: console hard drive access, title updates, Dashlaunch options, download sources, and more!";
+                // Turning it off would hide the card of a tool still at work,
+                // its status line and Cancel button with it.
+                disabled: UiState.job-queue.length > 0
+                    || UiState.compat-busy
+                    || UiState.creating-badavatar
+                    || UiState.badavatar-hdd-tool-busy
+                    // Expert mode decides what a connected target shows, so
+                    // it is only switched with none connected.
+                    || !UiState.config.target.is-empty;
+                disabled-tooltip: UiState.job-queue.length > 0
+                    ? "Unavailable while the queue is running"
+                    : !UiState.config.target.is-empty
+                        ? "Unavailable while connected to a target"
+                        : "Unavailable while a Toolbox tool is running";
+            }
+
+            SettingCard {
                 icon: IconSet.Trash;
                 label: "Delete source file when adding games";
                 items: [{ value: "false", label: "No (recommended)" }, { value: "true", label: "Yes" }];
@@ -34,7 +60,7 @@ export component SettingsPage inherits VerticalLayout {
                 disabled-tooltip: "Unavailable while the queue is running";
             }
 
-            SettingCard {
+            if UiState.config.expert-mode: SettingCard {
                 icon: IconSet.Package;
                 label: "Xbox 360 storage format";
                 items: [
@@ -67,7 +93,7 @@ export component SettingsPage inherits VerticalLayout {
                 }
             }
 
-            SettingCard {
+            if UiState.config.expert-mode: SettingCard {
                 icon: IconSet.Image;
                 label: "Xbox 360 cover source";
                 items: [
@@ -82,7 +108,7 @@ export component SettingsPage inherits VerticalLayout {
             SettingCard {
                 icon: IconSet.Images;
                 label: "Prepare Aurora game assets when adding games";
-                items: [{ value: "false", label: "No" }, { value: "true", label: "Yes (experimental)" }];
+                items: [{ value: "false", label: "No" }, { value: "true", label: "Yes (🧪 experimental)" }];
                 active-item: UiState.config.aurora-import-on-add;
                 set-property: Message.SetAuroraImportOnAdd;
                 note: "Covers, artwork and descriptions are copied to the target along with each game, so Aurora can show them without the console being connected to the internet. To load them, open Aurora and go to Settings > Assets > Import.\n\nThe language applies to the titles and descriptions the Xbox 360 marketplace had in it (English otherwise). Assets already prepared are kept as they are.";
@@ -125,9 +151,9 @@ export component SettingsPage inherits VerticalLayout {
                 set-property: Message.SetAutoReconnect;
             }
 
-            if !UiState.config.target.is-empty: CoversCacheCard { }
+            if UiState.config.expert-mode && !UiState.config.target.is-empty: CoversCacheCard { }
 
-            DownloadSourcesCard { }
+            if UiState.config.expert-mode: DownloadSourcesCard { }
         }
     }
 }

@@ -15,7 +15,7 @@ use std::{
 };
 use txbm_core::{
     badavatar_hdd::HddInspection, config::Config, drive_info::DriveInfo, ftp::FtpConfig,
-    game::Game, job_queue::QueuedJob,
+    game::Game, job_queue::QueuedJob, ogxbox_compat::OgXboxCompatConfig,
 };
 
 /// Where an original-Xbox compatibility install is headed. The Toolbox tool
@@ -35,6 +35,18 @@ impl CompatTarget {
             Self::Ftp(config) => format!("{}:{}", config.host, config.port),
         }
     }
+}
+
+/// Which of the compatibility tool's two writes the run being prepared is
+/// heading for. Both share the console picker, the inspection, the backup and
+/// the confirmation modal; they part ways only once confirmed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum CompatAction {
+    /// Write a pack, or put a backup back, into the `Compatibility` folder.
+    #[default]
+    Install,
+    /// Create the partition itself, or format it — hard drive only.
+    Format,
 }
 
 pub struct State {
@@ -119,6 +131,11 @@ pub struct State {
     /// same slot, and the confirmation modal would end up pairing one
     /// console's summary with the other's name.
     pub is_inspecting_compat: bool,
+    /// What the compatibility run being prepared will do once confirmed.
+    pub compat_action: CompatAction,
+    /// A format of a damaged partition: its backup must not stop it, see
+    /// `crate::compat::backup_is_best_effort`.
+    pub compat_backup_best_effort: bool,
     /// Console picked for the original-Xbox compatibility install, awaiting
     /// confirmation in the modal before the install thread actually starts.
     pub compat_pending: Option<CompatTarget>,
@@ -128,6 +145,10 @@ pub struct State {
     /// A backup the user picked to put back, instead of one of the published
     /// packs. `None` for an ordinary install.
     pub compat_restore_zip: Option<PathBuf>,
+    /// Settings of the compatibility run being prepared: the saved ones in
+    /// expert mode, otherwise those the simple card forces. Never written back
+    /// to the config, so expert mode finds its own choices untouched.
+    pub compat_run: Option<OgXboxCompatConfig>,
     /// Flag shared with the scan thread to cancel it.
     pub scan_cancel: Arc<AtomicBool>,
     /// Flag shared with the network-discovery thread (FTP modal) to cancel it.
@@ -192,9 +213,12 @@ impl State {
             badavatar_hdd_refetch: false,
             is_installing_compat: false,
             is_inspecting_compat: false,
+            compat_action: CompatAction::Install,
+            compat_backup_best_effort: false,
             compat_pending: None,
             compat_backup_zip: None,
             compat_restore_zip: None,
+            compat_run: None,
             scan_cancel: Arc::new(AtomicBool::new(false)),
             ftp_scan_cancel: Arc::new(AtomicBool::new(false)),
             job_cancel: Arc::new(AtomicBool::new(false)),

@@ -26,8 +26,9 @@ component ContentRow inherits Rectangle {
     callback delete-requested();
 
     // Rows without a stored file name (the synthetic "Missing" and "Game"
-    // rows) have nothing to delete on their own.
-    property <bool> deletable: comp.id != "";
+    // rows) have nothing to delete on their own. Deleting a single disc or
+    // add-on is expert only: "Delete game" covers the common case.
+    property <bool> deletable: comp.id != "" && UiState.config.expert-mode;
 
     pure function kind-icon(k: string) -> Icon {
         if k == "DLC" {
@@ -442,7 +443,7 @@ export component GameInfoModal inherits Modal {
                 spacing: 10px;
 
                 // - TODO : Proper title update listing
-                if false && UiState.current-game.is-x360 && !UiState.current-game.id.is-empty: IconButton {
+                if false && UiState.config.expert-mode && UiState.current-game.is-x360 && !UiState.current-game.id.is-empty: IconButton {
                     label: "Title Updates";
                     icon: IconSet.Download;
                     kind: IconButtonKind.Secondary;

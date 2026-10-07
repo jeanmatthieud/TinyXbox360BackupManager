@@ -23,12 +23,20 @@ enum CompatChoice {
 // FTP modal, which owns the network scan and the credentials — see
 // `UiState.ftp-target-purpose`.
 export component CompatTargetModal inherits Modal {
+    // Opened straight on the drive list, which then needs its first scan.
+    init => {
+        if UiState.compat-formatting {
+            Dispatcher.dispatch(Message.RefreshFatxDrives, "");
+        }
+    }
+
     min-w: 480px;
     min-h: 0px;
     max-h: min(620px, root.height - 75px);
 
-    // Step 2 shows the detected Xbox 360 hard drives.
-    property <bool> picking-fatx: false;
+    // Step 2 shows the detected Xbox 360 hard drives. A format has no step 1:
+    // it is for a hard drive on this computer only.
+    property <bool> picking-fatx: UiState.compat-formatting;
     property <CompatChoice> choice: CompatChoice.none;
     // Index into UiState.fatx-drives, -1 until the user picks one.
     property <int> selected-drive: -1;
@@ -69,6 +77,9 @@ export component CompatTargetModal inherits Modal {
         }
 
         if picking-fatx: FatxDrivePicker {
+            title: UiState.compat-formatting
+                ? "Which drive's compatibility partition?"
+                : "Select an Xbox 360 hard drive";
             selected-drive <=> root.selected-drive;
         }
     }
@@ -82,13 +93,15 @@ export component CompatTargetModal inherits Modal {
             padding: 10px;
             spacing: 8px;
 
-            if !picking-fatx: IconButton {
+            if !picking-fatx || UiState.compat-formatting: IconButton {
                 label: "Close";
                 clicked => {
                     UiState.selecting-compat-target = false;
+                    // The run prepared on the card goes no further.
+                    Dispatcher.dispatch(Message.CancelInstallCompat, "");
                 }
             }
-            if picking-fatx: IconButton {
+            if picking-fatx && !UiState.compat-formatting: IconButton {
                 label: "Previous";
                 clicked => {
                     picking-fatx = false;

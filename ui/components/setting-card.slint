@@ -25,7 +25,9 @@ export component SettingCard inherits Card {
 
     callback changed();
 
-    width: 100%;
+    // No `width: 100%`: the page's layout stretches the card already, and
+    // under an `if` Slint resolves that percentage against the wrong width
+    // when computing the card's height — wrapped text then overflows it.
 
     VerticalLayout {
         padding: 10px;

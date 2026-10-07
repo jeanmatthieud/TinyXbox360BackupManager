@@ -14,7 +14,9 @@ export component ToolboxCard inherits Card {
     in property <bool> disabled: false;
     in property <string> disabled-tooltip;
 
-    width: 100%;
+    // No `width: 100%`: the page's layout stretches the card already, and
+    // under an `if` Slint resolves that percentage against the wrong width
+    // when computing the card's height — wrapped text then overflows it.
 
     VerticalLayout {
         padding: 10px;

@@ -243,17 +243,26 @@ export component AppWindow inherits Window {
 
     if UiState.compat-pending-target != "": ConfirmationModal {
         Text {
-            text: UiState.compat-restoring
-                ? "Restore from backup"
-                : "Install Xbox OG compatibility pack";
+            text: UiState.compat-formatting
+                ? (UiState.compat-creating
+                    ? "Create the compatibility partition"
+                    : "Format the compatibility partition")
+                : UiState.compat-restoring
+                    ? "Restore from backup"
+                    : "Install Xbox OG compatibility pack";
             font-size: 18px;
         }
 
         Rectangle { height: 5px; } // Spacing
 
-        Text {
+        if !UiState.compat-formatting: Text {
             text: (UiState.compat-restoring ? "Backup selected: " : "Pack selected: ")
                 + UiState.compat-pending-source;
+            wrap: word-wrap;
+        }
+
+        if UiState.compat-creating: Text {
+            text: "This drive has no compatibility partition. It is created in the space the console reserves for it, in front of the games partition, which is left untouched.";
             wrap: word-wrap;
         }
 

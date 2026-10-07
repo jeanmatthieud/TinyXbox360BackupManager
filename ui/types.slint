@@ -67,6 +67,8 @@ export struct DisplayedConfig {
     target: string,
     target-kind: TargetKind,
     mount-point: string,
+    // Shows the advanced tools and settings (see `ConfigContents::expert_mode`).
+    expert-mode: bool,
     remove-sources-games: string,
     xbox360-format: string,
     sort-by: string,
@@ -206,6 +208,10 @@ export struct DisplayedRecentLocation {
     // console hard drive connected here).
     name: string,
     kind: TargetKind,
+    // Position in the config's list, which is what the connect and remove
+    // messages carry: the displayed list may skip entries (a console hard
+    // drive is hidden out of expert mode).
+    index: int,
 }
 
 // A raw disk offered in the FATX target picker. See `txbm_core::fatx_dev`.

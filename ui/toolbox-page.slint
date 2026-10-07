@@ -7,6 +7,7 @@ import { PageHeader } from "components/page-header.slint";
 import { BadAvatarCard } from "components/toolbox/badavatar-card.slint";
 import { OgXboxCompatCard } from "components/toolbox/ogxbox-compat-card.slint";
 import { BadAvatarHddInstallCard } from "components/toolbox/badavatar-hdd-install-card.slint";
+import { UiState } from "ui-state.slint";
 
 export component ToolboxPage inherits VerticalLayout {
     PageHeader {
@@ -26,7 +27,7 @@ export component ToolboxPage inherits VerticalLayout {
             
             BadAvatarCard { }
 
-            BadAvatarHddInstallCard { }
+            if UiState.config.expert-mode: BadAvatarHddInstallCard { }
 
             OgXboxCompatCard { }
         }
