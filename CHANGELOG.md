@@ -1,3 +1,33 @@
+## [0.17.0](https://github.com/jeanmatthieud/TinyXbox360BackupManager/compare/v0.16.0...v0.17.0) (2026-10-06)
+
+### Features
+
+* Flatpak build ([ffe59e6](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/ffe59e61f276e9b6ab90936ed993314a6c71d8ef))
+* Improved copy speed monitoring ([b58c837](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/b58c837b8bd1f72e3d8e3af9ce33d88b4d85afeb))
+* Improved copy speed monitoring (suite) ([b04c343](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/b04c343f71781e8318c73ae18ec19be6fd0278d9))
+
+### Bug Fixes
+
+* Flatpak font ([8659f84](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/8659f84eb0ecf94380e0911857644fc2cc4fed02))
+* Snackbar top border ([e53cfd3](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/e53cfd3dc7894ec4eb84a5364ef10fa91e8d8ae7))
+
+## [0.16.0](https://github.com/jeanmatthieud/TinyXbox360BackupManager/compare/v0.15.0...v0.16.0) (2026-09-26)
+
+### Features
+
+* Add BadAvatar HDD management and download sources configuration ([b8f0ced](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/b8f0cedc2e597dc0ac695e7ef2865077fe23b257))
+* Add FATX BadStorage compatibility ([2ae1eb8](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/2ae1eb8011b60cdbdf83f5dd84a45dcf92e46e43))
+* Badavatar with XEUNSHACKLE MAX ([1e46039](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/1e46039de67bd8ee90c4f33e0efc14d730997843))
+* Dashlaunch configurable settings ([3053a7f](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/3053a7ffa1fe8043c2be6aebc7aa614b353b318a))
+* Enhance BadAvatar HDD installation ([1abda2e](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/1abda2ec02f569f43ac63e67d6b6982391a88685))
+* Support .rar archives in input handling and update related documentation ([da28993](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/da28993de0a46df03ed4e99df8a763c251cd59e3))
+
+### Bug Fixes
+
+* BadStorage detection and UI tweaks ([aa12649](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/aa1264925b1f9cd6834fa5a6010401d435f1c6df))
+* Copy the whole ABadAvatar payload onto the BadAvatar USB key ([f237a7c](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/f237a7c1be8da81d6de6e0ee31073a8b077bca6a))
+* RAR file management issues ([040ce05](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/040ce052bfb35d1fb0d41445bb65e8b990bc62af))
+
 ## [0.15.0](https://github.com/jeanmatthieud/TinyXbox360BackupManager/compare/v0.14.0...v0.15.0) (2026-09-22)
 
 ### Features
@@ -11,40 +41,6 @@
 
 * List GOD games whose title folder is not named after the TitleID. ([a7efa31](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/a7efa31315d4a4fb50d5a5a2c3e291c2b1fff486))
 * UI missing padding ([43f87a5](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/43f87a5609e9ba4eb792f10b80772f60691e6b21))
-
-
----
-
-
-<a href="https://github.com/sponsors/jeanmatthieud">
-  <img src="https://img.shields.io/badge/GitHub%20Sponsors-Support-ea4aaa?logo=github-sponsors&logoColor=white" alt="GitHub Sponsors">
-</a>
-<a href="https://ko-fi.com/W6I723OON9">
-  <img src="https://img.shields.io/badge/Ko--fi-Support%20Me-ff5e5b?logo=ko-fi&logoColor=white" alt="Ko-fi">
-</a>
-
-
-Between my freelance work and my two little daughters, free time is a rare commodity! I build this tool on my own time, with a lot of late-night coffee.
-
-If TinyXbox360BackupManager saved you time or made you smile, **a donation** (much cheaper than a new game) **helps me keep maintaining and improving it**.
-
-Thanks! 🎮
-
-<hr />
-
-> [!TIP]
-> **:window: Windows installation:**\
-> Most users should download `TinyXbox360BackupManager-vX.X.X-windows-x64.exe`
-
-> [!TIP]
-> **:penguin: Linux installation:**\
-> Most users should download `TinyXbox360BackupManager-vX.X.X-linux-x86_64.AppImage`
-> `chmod +x /path/to/AppImage` after downloading may be required
-
-> [!IMPORTANT]
-> **:apple: macOS installation:**\
-> The app is not notarized, you must allow it manually after installing by running this command in Terminal:\
-> `xattr -rd com.apple.quarantine /Applications/TinyXbox360BackupManager.app`
 
 ## [0.14.0](https://github.com/jeanmatthieud/TinyXbox360BackupManager/compare/v0.13.0...v0.14.0) (2026-09-17)
 
@@ -64,79 +60,11 @@ Thanks! 🎮
 * Update fatx dependency to specific commit ([d9c861c](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/d9c861c18690f38124e4699ac1c77de55757baa7))
 * Update target architecture names and dependencies in configuration files ([b7bbdcf](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/b7bbdcfec3aba1457268d2997d5b1a7717edbf59))
 
-
----
-
-
-<a href="https://github.com/sponsors/jeanmatthieud">
-  <img src="https://img.shields.io/badge/GitHub%20Sponsors-Support-ea4aaa?logo=github-sponsors&logoColor=white" alt="GitHub Sponsors">
-</a>
-<a href="https://ko-fi.com/W6I723OON9">
-  <img src="https://img.shields.io/badge/Ko--fi-Support%20Me-ff5e5b?logo=ko-fi&logoColor=white" alt="Ko-fi">
-</a>
-
-
-Between my freelance work and my two little daughters, free time is a rare commodity! I build this tool on my own time, with a lot of late-night coffee.
-
-If TinyXbox360BackupManager saved you time or made you smile, **a donation** (much cheaper than a new game) **helps me keep maintaining and improving it**.
-
-Thanks! 🎮
-
-<hr />
-
-> [!TIP]
-> **:window: Windows installation:**\
-> Most users should download `TinyXbox360BackupManager-vX.X.X-windows-x64.exe`
-
-> [!TIP]
-> **:penguin: Linux installation:**\
-> Most users should download `TinyXbox360BackupManager-vX.X.X-linux-x86_64.AppImage`
-> `chmod +x /path/to/AppImage` after downloading may be required
-
-> [!IMPORTANT]
-> **:apple: macOS installation:**\
-> The app is not notarized, you must allow it manually after installing by running this command in Terminal:\
-> `xattr -rd com.apple.quarantine /Applications/TinyXbox360BackupManager.app`
-
 ## [0.13.0](https://github.com/jeanmatthieud/TinyXbox360BackupManager/compare/v0.12.0...v0.13.0) (2026-08-29)
 
 ### Features
 
 * Add ABadAvatar version selection with ABadAvatar v1.3-beta! ([9ab3575](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/9ab357598d74fd59ec2902d22a36cc9d92f17b37))
-
-
----
-
-
-<a href="https://github.com/sponsors/jeanmatthieud">
-  <img src="https://img.shields.io/badge/GitHub%20Sponsors-Support-ea4aaa?logo=github-sponsors&logoColor=white" alt="GitHub Sponsors">
-</a>
-<a href="https://ko-fi.com/W6I723OON9">
-  <img src="https://img.shields.io/badge/Ko--fi-Support%20Me-ff5e5b?logo=ko-fi&logoColor=white" alt="Ko-fi">
-</a>
-
-
-Between my freelance work and my two little daughters, free time is a rare commodity! I build this tool on my own time, with a lot of late-night coffee.
-
-If TinyXbox360BackupManager saved you time or made you smile, **a donation** (much cheaper than a new game) **helps me keep maintaining and improving it**.
-
-Thanks! 🎮
-
-<hr />
-
-> [!TIP]
-> **:window: Windows installation:**\
-> Most users should download `TinyXbox360BackupManager-vX.X.X-windows-x64.exe`
-
-> [!TIP]
-> **:penguin: Linux installation:**\
-> Most users should download `TinyXbox360BackupManager-vX.X.X-linux-x86_64.AppImage`
-> `chmod +x /path/to/AppImage` after downloading may be required
-
-> [!IMPORTANT]
-> **:apple: macOS installation:**\
-> The app is not notarized, you must allow it manually after installing by running this command in Terminal:\
-> `xattr -rd com.apple.quarantine /Applications/TinyXbox360BackupManager.app`
 
 ## [0.12.0](https://github.com/jeanmatthieud/TinyXbox360BackupManager/compare/v0.11.0...v0.12.0) (2026-08-20)
 
@@ -150,40 +78,6 @@ Thanks! 🎮
 ### Bug Fixes
 
 * Update navbar buttons ([ef172cf](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/ef172cfc375a2fa5f971355b1b9e5b15be996483))
-
-
----
-
-
-<a href="https://github.com/sponsors/jeanmatthieud">
-  <img src="https://img.shields.io/badge/GitHub%20Sponsors-Support-ea4aaa?logo=github-sponsors&logoColor=white" alt="GitHub Sponsors">
-</a>
-<a href="https://ko-fi.com/W6I723OON9">
-  <img src="https://img.shields.io/badge/Ko--fi-Support%20Me-ff5e5b?logo=ko-fi&logoColor=white" alt="Ko-fi">
-</a>
-
-
-Between my freelance work and my two little daughters, free time is a rare commodity! I build this tool on my own time, with a lot of late-night coffee.
-
-If TinyXbox360BackupManager saved you time or made you smile, **a donation** (much cheaper than a new game) **helps me keep maintaining and improving it**.
-
-Thanks! 🎮
-
-<hr />
-
-> [!TIP]
-> **:window: Windows installation:**\
-> Most users should download `TinyXbox360BackupManager-vX.X.X-windows-x64.exe`
-
-> [!TIP]
-> **:penguin: Linux installation:**\
-> Most users should download `TinyXbox360BackupManager-vX.X.X-linux-x86_64.AppImage`
-> `chmod +x /path/to/AppImage` after downloading may be required
-
-> [!IMPORTANT]
-> **:apple: macOS installation:**\
-> The app is not notarized, you must allow it manually after installing by running this command in Terminal:\
-> `xattr -rd com.apple.quarantine /Applications/TinyXbox360BackupManager.app`
 
 ## [0.11.0](https://github.com/jeanmatthieud/TinyXbox360BackupManager/compare/v0.10.0...v0.11.0) (2026-08-17)
 
@@ -203,79 +97,11 @@ Thanks! 🎮
 * Allow storage config modal to shrink to content by removing minimum height constraint ([64f58e2](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/64f58e2bc9dcd964a9355fee70c07f77b8bc5358))
 * Update stack size configuration for Windows targets in build scripts ([3bbc58b](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/3bbc58b41917fa39a436d2f62f5ff1ab02333465))
 
-
----
-
-
-<a href="https://github.com/sponsors/jeanmatthieud">
-  <img src="https://img.shields.io/badge/GitHub%20Sponsors-Support-ea4aaa?logo=github-sponsors&logoColor=white" alt="GitHub Sponsors">
-</a>
-<a href="https://ko-fi.com/W6I723OON9">
-  <img src="https://img.shields.io/badge/Ko--fi-Support%20Me-ff5e5b?logo=ko-fi&logoColor=white" alt="Ko-fi">
-</a>
-
-
-Between my freelance work and my two little daughters, free time is a rare commodity! I build this tool on my own time, with a lot of late-night coffee.
-
-If TinyXbox360BackupManager saved you time or made you smile, **a donation** (much cheaper than a new game) **helps me keep maintaining and improving it**.
-
-Thanks! 🎮
-
-<hr />
-
-> [!TIP]
-> **:window: Windows installation:**\
-> Most users should download `TinyXbox360BackupManager-vX.X.X-windows-x64.exe`
-
-> [!TIP]
-> **:penguin: Linux installation:**\
-> Most users should download `TinyXbox360BackupManager-vX.X.X-linux-x86_64.AppImage`
-> `chmod +x /path/to/AppImage` after downloading may be required
-
-> [!IMPORTANT]
-> **:apple: macOS installation:**\
-> The app is not notarized, you must allow it manually after installing by running this command in Terminal:\
-> `xattr -rd com.apple.quarantine /Applications/TinyXbox360BackupManager.app`
-
 ## [0.10.0](https://github.com/jeanmatthieud/TinyXbox360BackupManager/compare/v0.9.0...v0.10.0) (2026-08-01)
 
 ### Features
 
 * Enhance conversion process and GUI ([566f954](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/566f9543185e06194fb9bd8f6a3beb445e34f108))
-
-
----
-
-
-<a href="https://github.com/sponsors/jeanmatthieud">
-  <img src="https://img.shields.io/badge/GitHub%20Sponsors-Support-ea4aaa?logo=github-sponsors&logoColor=white" alt="GitHub Sponsors">
-</a>
-<a href="https://ko-fi.com/W6I723OON9">
-  <img src="https://img.shields.io/badge/Ko--fi-Support%20Me-ff5e5b?logo=ko-fi&logoColor=white" alt="Ko-fi">
-</a>
-
-
-Between my freelance work and my two little daughters, free time is a rare commodity! I build this tool on my own time, with a lot of late-night coffee.
-
-If TinyXbox360BackupManager saved you time or made you smile, **a donation** (much cheaper than a new game) **helps me keep maintaining and improving it**.
-
-Thanks! 🎮
-
-<hr />
-
-> [!TIP]
-> **:window: Windows installation:**\
-> Most users should download `TinyXbox360BackupManager-vX.X.X-windows-x64.exe`
-
-> [!TIP]
-> **:penguin: Linux installation:**\
-> Most users should download `TinyXbox360BackupManager-vX.X.X-linux-x86_64.AppImage`
-> `chmod +x /path/to/AppImage` after downloading may be required
-
-> [!IMPORTANT]
-> **:apple: macOS installation:**\
-> The app is not notarized, you must allow it manually after installing by running this command in Terminal:\
-> `xattr -rd com.apple.quarantine /Applications/TinyXbox360BackupManager.app`
 
 ## [0.9.0](https://github.com/jeanmatthieud/TinyXbox360BackupManager/compare/v0.8.0...v0.9.0) (2026-07-27)
 
@@ -290,40 +116,6 @@ Thanks! 🎮
 * Enhance cancellation handling and user feedback during conversion processes ([e94bd92](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/e94bd923c4107b80cd163634aa786fad6fa33272))
 * Implement case-insensitive file detection for extracted game directories (Xbox360 XEX) ([6e80efb](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/6e80efb4f03d003b2af173ff532953a5c0e8c7bb))
 
-
----
-
-
-<a href="https://github.com/sponsors/jeanmatthieud">
-  <img src="https://img.shields.io/badge/GitHub%20Sponsors-Support-ea4aaa?logo=github-sponsors&logoColor=white" alt="GitHub Sponsors">
-</a>
-<a href="https://ko-fi.com/W6I723OON9">
-  <img src="https://img.shields.io/badge/Ko--fi-Support%20Me-ff5e5b?logo=ko-fi&logoColor=white" alt="Ko-fi">
-</a>
-
-
-Between my freelance work and my two little daughters, free time is a rare commodity! I build this tool on my own time, with a lot of late-night coffee.
-
-If TinyXbox360BackupManager saved you time or made you smile, **a donation** (much cheaper than a new game) **helps me keep maintaining and improving it**.
-
-Thanks! 🎮
-
-<hr />
-
-> [!TIP]
-> **:window: Windows installation:**\
-> Most users should download `TinyXbox360BackupManager-vX.X.X-windows-x64.exe`
-
-> [!TIP]
-> **:penguin: Linux installation:**\
-> Most users should download `TinyXbox360BackupManager-vX.X.X-linux-x86_64.AppImage`
-> `chmod +x /path/to/AppImage` after downloading may be required
-
-> [!IMPORTANT]
-> **:apple: macOS installation:**\
-> The app is not notarized, you must allow it manually after installing by running this command in Terminal:\
-> `xattr -rd com.apple.quarantine /Applications/TinyXbox360BackupManager.app`
-
 ## [0.8.0](https://github.com/jeanmatthieud/TinyXbox360BackupManager/compare/v0.7.0...v0.8.0) (2026-07-24)
 
 ### Features
@@ -335,40 +127,6 @@ Thanks! 🎮
 
 * Improve thumbnail freshness check ([f586e8e](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/f586e8e5e114dd7d0f89dade54da889512fa910f))
 
-
----
-
-
-<a href="https://github.com/sponsors/jeanmatthieud">
-  <img src="https://img.shields.io/badge/GitHub%20Sponsors-Support-ea4aaa?logo=github-sponsors&logoColor=white" alt="GitHub Sponsors">
-</a>
-<a href="https://ko-fi.com/W6I723OON9">
-  <img src="https://img.shields.io/badge/Ko--fi-Support%20Me-ff5e5b?logo=ko-fi&logoColor=white" alt="Ko-fi">
-</a>
-
-
-Between my freelance work and my two little daughters, free time is a rare commodity! I build this tool on my own time, with a lot of late-night coffee.
-
-If TinyXbox360BackupManager saved you time or made you smile, **a donation** (much cheaper than a new game) **helps me keep maintaining and improving it**.
-
-Thanks! 🎮
-
-<hr />
-
-> [!TIP]
-> **:window: Windows installation:**\
-> Most users should download `TinyXbox360BackupManager-vX.X.X-windows-x64.exe`
-
-> [!TIP]
-> **:penguin: Linux installation:**\
-> Most users should download `TinyXbox360BackupManager-vX.X.X-linux-x86_64.AppImage`
-> `chmod +x /path/to/AppImage` after downloading may be required
-
-> [!IMPORTANT]
-> **:apple: macOS installation:**\
-> The app is not notarized, you must allow it manually after installing by running this command in Terminal:\
-> `xattr -rd com.apple.quarantine /Applications/TinyXbox360BackupManager.app`
-
 ## [0.7.0](https://github.com/jeanmatthieud/TinyXbox360BackupManager/compare/v0.6.1...v0.7.0) (2026-07-24)
 
 ### Features
@@ -377,37 +135,3 @@ Thanks! 🎮
 * Enhance game info modal to display stored components with status and improved layout ([c6aaa48](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/c6aaa481f7a20c7b47c45a17021124de0422c8ec))
 * Implement content deletion functionality for game components with confirmation modal ([bd44cb7](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/bd44cb7ee3120d7eb5489990e85365487e516be7))
 * Implement thumbnail caching and ensure downscaled images for covers ([71921cd](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/71921cd40da89dae38a09da275242e0f31543fb5))
-
-
----
-
-
-<a href="https://github.com/sponsors/jeanmatthieud">
-  <img src="https://img.shields.io/badge/GitHub%20Sponsors-Support-ea4aaa?logo=github-sponsors&logoColor=white" alt="GitHub Sponsors">
-</a>
-<a href="https://ko-fi.com/W6I723OON9">
-  <img src="https://img.shields.io/badge/Ko--fi-Support%20Me-ff5e5b?logo=ko-fi&logoColor=white" alt="Ko-fi">
-</a>
-
-
-Between my freelance work and my two little daughters, free time is a rare commodity! I build this tool on my own time, with a lot of late-night coffee.
-
-If TinyXbox360BackupManager saved you time or made you smile, **a donation** (much cheaper than a new game) **helps me keep maintaining and improving it**.
-
-Thanks! 🎮
-
-<hr />
-
-> [!TIP]
-> **:window: Windows installation:**\
-> Most users should download `TinyXbox360BackupManager-vX.X.X-windows-x64.exe`
-
-> [!TIP]
-> **:penguin: Linux installation:**\
-> Most users should download `TinyXbox360BackupManager-vX.X.X-linux-x86_64.AppImage`
-> `chmod +x /path/to/AppImage` after downloading may be required
-
-> [!IMPORTANT]
-> **:apple: macOS installation:**\
-> The app is not notarized, you must allow it manually after installing by running this command in Terminal:\
-> `xattr -rd com.apple.quarantine /Applications/TinyXbox360BackupManager.app`

@@ -18,7 +18,7 @@
             <li>Box art downloaded automatically from XboxUnity</li>
             <li>Transfers over the network with FTP, straight to a USB drive, or onto the console's own hard drive plugged into the computer</li>
             <li>Title update and DLC management</li>
-            <li>Native app written in Rust and Slint, no Electron</li>
+            <li>Native app written in Rust and Slint</li>
         </ul>
         <p>TinyXbox360BackupManager is intended strictly for legal homebrew use and is not affiliated with or endorsed by Microsoft. Use of TinyXbox360BackupManager for pirated or unauthorized copies of games is strictly prohibited.</p>
     </description>
@@ -44,44 +44,159 @@
     <url type="donation">https://github.com/sponsors/jeanmatthieud</url>
     <screenshots>
         <screenshot type="default">
-            <image>https://raw.githubusercontent.com/jeanmatthieud/TinyXbox360BackupManager/main/assets/screenshot.png</image>
-            <caption>The game library, with covers fetched automatically</caption>
+            <image>https://raw.githubusercontent.com/jeanmatthieud/TinyXbox360BackupManager/main/assets/screenshot-games-light.png</image>
+            <caption>The game library</caption>
+        </screenshot>
+        <screenshot>
+            <image>https://raw.githubusercontent.com/jeanmatthieud/TinyXbox360BackupManager/main/assets/screenshot-queue.png</image>
+            <caption>The upload queue</caption>
+        </screenshot>
+        <screenshot>
+            <image>https://raw.githubusercontent.com/jeanmatthieud/TinyXbox360BackupManager/main/assets/screenshot-toolbox.png</image>
+            <caption>Toolbox page</caption>
+        </screenshot>
+        <screenshot>
+            <image>https://raw.githubusercontent.com/jeanmatthieud/TinyXbox360BackupManager/main/assets/screenshot-settings.png</image>
+            <caption>Settings page</caption>
         </screenshot>
     </screenshots>
     <!-- Releases are appended by the release pipeline; keep the newest first. -->
     <releases>
+        <release version="0.17.0" date="2026-10-06">
+            <url type="details">https://github.com/jeanmatthieud/TinyXbox360BackupManager/releases/tag/v0.17.0</url>
+            <description>
+                <p>This release brings a Flatpak build for Linux, much more accurate transfer speed and progress reporting, and a reworked About page.</p>
+            </description>
+        </release>
         <release version="0.16.0" date="2026-09-26">
-            <url type="details">https://github.com/jeanmatthieud/TinyXbox360BackupManager/releases/tag/v0.15.0</url>
+            <url type="details">https://github.com/jeanmatthieud/TinyXbox360BackupManager/releases/tag/v0.16.0</url>
+            <description>
+                <p>This release adds BadAvatar installation on the console's hard drive, a Dashlaunch settings card, RAR support, and configurable download sources.</p>
+                <ul>
+                    <li>Experimental 🧪: BadAvatar on the console's hard drive</li>
+                    <li>XeUnshackle Max</li>
+                    <li>Dashlaunch settings</li>
+                    <li>Download sources</li>
+                    <li>RAR archives</li>
+                    <li>Game info</li>
+                    <li>Bug fixes</li>
+                </ul>
+            </description>
         </release>
         <release version="0.15.0" date="2026-09-22">
             <url type="details">https://github.com/jeanmatthieud/TinyXbox360BackupManager/releases/tag/v0.15.0</url>
+            <description>
+                <p>This release introduces major features focused on Original Xbox backward compatibility, game conversion reliability for edge cases, and improved library scanning.</p>
+                <ul>
+                    <li>Xbox OG Compatibility Partition Management</li>
+                    <li>Game-Specific Quirks Handling</li>
+                    <li>Improved Games on Demand (GOD) Recognition</li>
+                </ul>
+            </description>
         </release>
         <release version="0.14.0" date="2026-09-17">
             <url type="details">https://github.com/jeanmatthieud/TinyXbox360BackupManager/releases/tag/v0.14.0</url>
+            <description>
+                <p>This release brings highly requested features regarding native Xbox 360 storage support, along with various stability and UI improvements.</p>
+                <ul>
+                    <li>Native FATX Drive Support</li>
+                    <li>Temporary File Cleanup (Directory Sweeping)</li>
+                </ul>
+            </description>
         </release>
         <release version="0.13.0" date="2026-08-29">
             <url type="details">https://github.com/jeanmatthieud/TinyXbox360BackupManager/releases/tag/v0.13.0</url>
+            <description>
+                <p>Add ABadAvatar version selection with ABadAvatar v1.3-beta!</p>
+            </description>
         </release>
         <release version="0.12.0" date="2026-08-20">
             <url type="details">https://github.com/jeanmatthieud/TinyXbox360BackupManager/releases/tag/v0.12.0</url>
+            <description>
+                <p>Features</p>
+                <ul>
+                    <li>Add games buttons on the queue page</li>
+                    <li>Enhance conversion queue management by skipping duplicates and notifying users</li>
+                    <li>Implement cover source selection for Xbox 360 covers with fallback options</li>
+                    <li>Refactor conversion queue to job queue (to properly manage deletions)</li>
+                </ul>
+                <p>Bug Fixes</p>
+                <ul>
+                    <li>Update navbar buttons</li>
+                </ul>
+            </description>
         </release>
         <release version="0.11.0" date="2026-08-17">
             <url type="details">https://github.com/jeanmatthieud/TinyXbox360BackupManager/releases/tag/v0.11.0</url>
+            <description>
+                <p>Features</p>
+                <ul>
+                    <li>Add disabled state and tooltip support to ToolboxCard and BadAvatarCard</li>
+                    <li>Add support for additional directory structure in local Aurora path resolution</li>
+                    <li>Add support for configurable GOD storage layouts</li>
+                    <li>Enhance conversion process with progress tracking and UI updates</li>
+                    <li>Enhance game deletion and storage configuration</li>
+                    <li>Implement game overwrite warnings and enhance conversion queue management</li>
+                    <li>Implement sorting functionality for game table and enhance UI components</li>
+                    <li>Refactor game content management and enhance game details display</li>
+                </ul>
+                <p>Bug Fixes</p>
+                <ul>
+                    <li>Allow storage config modal to shrink to content by removing minimum height constraint</li>
+                    <li>Update stack size configuration for Windows targets in build scripts</li>
+                </ul>
+            </description>
         </release>
         <release version="0.10.0" date="2026-08-01">
             <url type="details">https://github.com/jeanmatthieud/TinyXbox360BackupManager/releases/tag/v0.10.0</url>
+            <description>
+                <p>Features</p>
+                <ul>
+                    <li>Enhance conversion process and GUI</li>
+                </ul>
+            </description>
         </release>
         <release version="0.9.0" date="2026-07-27">
             <url type="details">https://github.com/jeanmatthieud/TinyXbox360BackupManager/releases/tag/v0.9.0</url>
+            <description>
+                <p>Features</p>
+                <ul>
+                    <li>Implement cancellation handling for conversion queue with user confirmation</li>
+                    <li>Implement cancellation handling for file uploads and extraction processes</li>
+                </ul>
+                <p>Bug Fixes</p>
+                <ul>
+                    <li>Add tooltip support for CardActionRow and update BadAvatarCard behavior based on target connection</li>
+                    <li>Enhance cancellation handling and user feedback during conversion processes</li>
+                    <li>Implement case-insensitive file detection for extracted game directories (Xbox360 XEX)</li>
+                </ul>
+            </description>
         </release>
         <release version="0.8.0" date="2026-07-24">
             <url type="details">https://github.com/jeanmatthieud/TinyXbox360BackupManager/releases/tag/v0.8.0</url>
+            <description>
+                <p>Features</p>
+                <ul>
+                    <li>Add support for displaying Aurora installation directory and enhance thumbnail caching mechanism</li>
+                    <li>Update target selection button behavior during BadAvatar USB key creation</li>
+                </ul>
+                <p>Bug Fixes</p>
+                <ul>
+                    <li>Improve thumbnail freshness check</li>
+                </ul>
+            </description>
         </release>
         <release version="0.7.0" date="2026-07-24">
             <url type="details">https://github.com/jeanmatthieud/TinyXbox360BackupManager/releases/tag/v0.7.0</url>
-        </release>
-        <release version="0.6.1" date="2026-07-24">
-            <url type="details">https://github.com/jeanmatthieud/TinyXbox360BackupManager/releases/tag/v0.6.1</url>
+            <description>
+                <p>Features</p>
+                <ul>
+                    <li>Add notification for clearing covers cache</li>
+                    <li>Enhance game info modal to display stored components with status and improved layout</li>
+                    <li>Implement content deletion functionality for game components with confirmation modal</li>
+                    <li>Implement thumbnail caching and ensure downscaled images for covers</li>
+                </ul>
+            </description>
         </release>
     </releases>
     <recommends>
