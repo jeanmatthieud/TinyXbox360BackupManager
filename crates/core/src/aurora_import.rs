@@ -436,7 +436,8 @@ const COVER_SIZE: (u32, u32) = (900, 600);
 /// (downloaded into it first when missing), brought to [`COVER_SIZE`] when
 /// it is not already. A picture of about that shape is stretched to it —
 /// XboxUnity's odd 897x600 — while any other (the portrait box fronts of
-/// original Xbox games, 300x420) is fitted inside and centred on black.
+/// original Xbox games, 300x420) is fitted inside, on black, against the
+/// right edge where the front of a full cover sits.
 fn cover(title_id: &str, is_x360: bool, source: CoverSource) -> Option<(String, Vec<u8>)> {
     let covers_dir = DATA_DIR.join("covers");
     // A failed download just means no cover: the cache check below decides.
@@ -464,7 +465,9 @@ fn cover(title_id: &str, is_x360: bool, source: CoverSource) -> Option<(String, 
     } else {
         let fitted = img.resize(w, h, filter);
         let mut canvas = image::RgbaImage::from_pixel(w, h, image::Rgba([0, 0, 0, 255]));
-        let x = i64::from((w - fitted.width()) / 2);
+        // Against the right edge: a full box scan reads back, spine, front,
+        // so a portrait picture is a front, and belongs where the front sits.
+        let x = i64::from(w - fitted.width());
         let y = i64::from((h - fitted.height()) / 2);
         image::imageops::overlay(&mut canvas, &fitted.to_rgba8(), x, y);
         image::DynamicImage::ImageRgba8(canvas)
