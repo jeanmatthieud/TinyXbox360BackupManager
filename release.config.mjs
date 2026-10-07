@@ -10,12 +10,17 @@
 //   3. The real run generates CHANGELOG.md, bumps Cargo.toml/Cargo.lock, commits,
 //      tags `vX.Y.Z` and creates the GitHub Release with the built assets.
 //
-// The static footer (donation links + install instructions) is appended to the
-// generated release notes from package/release-body.md.
+// The static footer (donation links + install instructions) from
+// package/release-body.md is appended to the GitHub Release body only, so it
+// stays out of CHANGELOG.md and the release commit message.
 
 import { readFileSync } from 'node:fs';
 
 const footer = '\n\n---\n\n' + readFileSync('./package/release-body.md', 'utf8');
+// releaseBodyTemplate is a lodash template: the footer must hold no delimiter.
+if (/<%|\$\{/.test(footer)) {
+  throw new Error('package/release-body.md must not contain "<%" or "${"');
+}
 
 export default {
   branches: ['main'],
@@ -24,10 +29,7 @@ export default {
     ['@semantic-release/commit-analyzer', { preset: 'conventionalcommits' }],
     [
       '@semantic-release/release-notes-generator',
-      {
-        preset: 'conventionalcommits',
-        writerOpts: { footerPartial: footer },
-      },
+      { preset: 'conventionalcommits' },
     ],
     ['@semantic-release/changelog', { changelogFile: 'CHANGELOG.md' }],
     [
@@ -52,6 +54,12 @@ export default {
         message: 'chore(release): ${nextRelease.version} [skip ci]\n\n${nextRelease.notes}',
       },
     ],
-    ['@semantic-release/github', { assets: [{ path: 'dist/**' }] }],
+    [
+      '@semantic-release/github',
+      {
+        assets: [{ path: 'dist/**' }],
+        releaseBodyTemplate: '<%= nextRelease.notes %>' + footer,
+      },
+    ],
   ],
 };
