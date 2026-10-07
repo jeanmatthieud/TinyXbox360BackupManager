@@ -147,7 +147,7 @@ You confirm (or adjust) the three folders, and the app writes a small **`.txbm.j
 - **Xbox360 over FTP (Aurora):** the game list is read from the console, added games are converted locally then pushed to the console; deletion is done remotely. Only **one FTP connection at a time** is used, as required by the console's FTP server.
 - **Console hard drive (FATX360), experimental:** the drive is opened as a raw device and its `data` partition — the one the console calls `Hdd1` — is read and written directly, so folders, the game list, the `.txbm.json` configuration and Aurora's own databases are the very same ones the console sees. Added games are converted locally then copied across. The drive is opened **read-only unless a write is actually taking place**, and only one session at a time. See [Using the console's hard drive](#electric_plug-using-the-consoles-hard-drive) for the disk permissions this needs.
 
-The drive's other partitions are left alone, with one exception: the [Original Xbox compatibility](#space_invader-original-xbox-compatibility-toolbox) tool in the Toolbox writes the emulator partition (`HddX`). It is a standalone tool, usable only while no target is connected, so it can never write beside a game transfer.
+The drive's other partitions are left alone, with one exception: the [Original Xbox compatibility](#space_invader-original-xbox-compatibility-toolbox) tool in the Toolbox writes the emulator partition (`HddX`) — and, in expert mode, can create or format it. It is a standalone tool, usable only while no target is connected, so it can never write beside a game transfer.
 
 ### Aurora
 
@@ -179,7 +179,8 @@ which the console calls **`HddX`** and which holds a single `Compatibility` fold
 
 That partition is only ever created when a drive is formatted at the Microsoft factory. So a
 third-party drive, a reformatted one, or one whose partition was lost simply cannot launch an
-original Xbox title — whatever the dashboard shows. The **Toolbox** page can put it back.
+original Xbox title — whatever the dashboard shows. The **Toolbox** page can put the emulator back
+and, on a drive plugged into this computer, [create or repair the partition itself](#creating-or-formatting-the-partition-expert-mode).
 
 > [!WARNING]
 > **Experimental.** This replaces the partition your console needs to boot original Xbox games,
@@ -201,6 +202,44 @@ exactly where it comes from and keep a copy of what gets installed.
 | **Hacked — no whitelist** | The same, with every restriction and the game whitelist removed, plus the four emulators found in Xbox One/Series releases and the per-game config loader. | JTAG / RGH / XDK only |
 | **Hacked — with HUD** | As above, but the Xbox 360 guide stays available while a game runs. Uses more memory, so a few games behave worse. | JTAG / RGH / XDK only |
 
+### Checked before anything is deleted
+
+The existing files are only removed once the new set is known to fit — the per-title configs
+included when *"Update the per-title configs"* is ticked: titles that need one do not run without
+it, so a config that cannot be downloaded or written fails the install like the emulator would.
+After the downloads, and before the backup:
+
+- **Hard drive on this computer:** the partition is audited (unreadable directory entries, broken
+  or lost clusters) and the free room is counted exactly. A damaged partition, or one that is
+  missing, is refused with a short message.
+- **Over the network:** the console reveals neither its filesystem nor its free space, so if the
+  set needs more room than the current files free up, a scratch file of the missing size is
+  written to `HddX` and removed straight away. Usually nothing is written (a pack replaces one of
+  about the same size); at worst it takes a few seconds, and *Cancel* stops it. If there is no
+  room, the install stops and nothing is touched.
+
+This matters on second-hand drives: some carry a compatibility partition created over a disk that
+held something else, whose leftovers read as used space. It looks healthy, then fills up halfway
+through an install — after the previous emulator was deleted.
+
+### Creating or formatting the partition (expert mode)
+
+With **Expert mode** on (*Settings*), the card gains a **Create / format the compatibility
+partition** button (experimental). It works on a console hard drive plugged into this computer
+only: over the network there is no way to lay a filesystem down.
+
+- It looks at the drive first, then asks you to confirm: *create* when the drive has no
+  compatibility partition, *format* when it has one (everything on it is erased).
+- Files that can be read are offered a backup first. On a **damaged** partition the backup is a
+  best effort: if it cannot be completed, the format goes on and says so afterwards.
+- The partition has a fixed place on a console drive — 256 MiB right in front of the games
+  partition — so creating it never touches a game. The format is refused unless the games
+  partition is found where a console puts it. An existing partition keeps its serial number.
+- It writes a blank filesystem; it does not erase the data area, only what points at it.
+
+Expert mode cannot be switched on or off while a target is connected. Out of expert mode, a
+console hard drive is neither listed among the recent locations nor reopened at startup.
+
 ### Putting a backup back
 
 The **upload icon** in the card's top-right corner takes a zip this tool wrote earlier and puts
@@ -213,9 +252,9 @@ a different source rather than a mode of its own.
 
 Two things this tool deliberately does **not** do:
 
-- **It never creates the partition.** If `HddX` is missing it says so and points you at the
-  *HDD Compatibility Partition Fixer* homebrew (run on the console) or FATXplorer. Come back
-  once it exists.
+- **It does not create the partition over the network.** On a drive plugged into this computer it
+  can (see above); otherwise, if `HddX` is missing, plug the drive in, or use the
+  *HDD Compatibility Partition Fixer* homebrew on the console, or FATXplorer.
 - **It does not install the April 2018 title update** (build 5832) for the emulator. A stock
   console fetches it from Xbox Live on its own, and the hacked packs neither need nor want it.
 

@@ -129,7 +129,9 @@ export component SelectTargetModal inherits Modal {
                     }
                 }
 
-                SelectableCard {
+                // Expert only: it takes the drive out of the console and raw
+                // disk privileges on this computer.
+                if UiState.config.expert-mode: SelectableCard {
                     icon: IconSet.HardDrive;
                     title: "Xbox 360 Internal Hard Drive (FATX)";
                     subtitle: "Connect the console's own drive to this computer.";
@@ -169,8 +171,8 @@ export component SelectTargetModal inherits Modal {
                     history-list := VerticalLayout {
                         spacing: 10px;
 
-                        for loc[i] in UiState.recent-locations: Rectangle {
-                            property <bool> selected: choice == TargetChoice.history && history-index == i;
+                        for loc in UiState.recent-locations: Rectangle {
+                            property <bool> selected: choice == TargetChoice.history && history-index == loc.index;
 
                             height: 40px;
                             border-radius: 8px;
@@ -185,7 +187,7 @@ export component SelectTargetModal inherits Modal {
                             row-ta := TouchArea {
                                 clicked => {
                                     choice = TargetChoice.history;
-                                    history-index = i;
+                                    history-index = loc.index;
                                 }
                             }
 
@@ -218,7 +220,7 @@ export component SelectTargetModal inherits Modal {
                                     alignment: center;
                                     OutlineDeleteButton {
                                         clicked => {
-                                            Dispatcher.dispatch(Message.RemoveRecentLocation, i);
+                                            Dispatcher.dispatch(Message.RemoveRecentLocation, loc.index);
                                         }
                                     }
                                 }

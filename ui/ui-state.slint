@@ -269,6 +269,11 @@ export global UiState {
     in-out property <string> compat-pending-source: "";
     // True when that source is a backup rather than a published pack.
     in-out property <bool> compat-restoring: false;
+    // True when the run being prepared creates or formats the partition itself
+    // (hard drive only) rather than writing files into it.
+    in-out property <bool> compat-formatting: false;
+    // True when that run creates a partition the drive does not have yet.
+    in-out property <bool> compat-creating: false;
     // True from the moment the compatibility tool picks a console until it is
     // done with it: the install it is heading for writes outside the job queue,
     // so no target may be connected (and no second tool started) in between.

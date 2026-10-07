@@ -7,7 +7,7 @@ use crate::{
     DisplayedGameToAdd, DisplayedJob, DisplayedStoragePath, DisplayedTitleUpdate, JobKind, Message,
     Notification, Page,
     PendingQueueAction, UiState, covers, dialogs, game_details, jobs::perform_job,
-    state::{CompatTarget, State},
+    state::{CompatAction, CompatTarget, State},
     title_updates, util,
 };
 use slint::{ComponentHandle, Model, ModelRc, SharedString, ToSharedString, VecModel, Weak};
@@ -24,7 +24,7 @@ use txbm_core::{
     config::TargetKind, fatx::FatxConfig,
     dashlaunch::{LICENSE_PATCHES, LaunchIni}, data_dir::DATA_DIR, drive_info::DriveInfo,
     ftp::FtpSession, game::Game, game_details::ContentKind, job_queue::QueuedJob,
-    target::{StorageConfig, Target, TargetAnalysis}, util::display_file_name,
+    ogxbox_compat::{CompatPartition, OgXboxCompatConfig}, target::{StorageConfig, Target, TargetAnalysis}, util::display_file_name,
 };
 
 /// Shown once per console drive, the first time it is opened directly. Writing
@@ -44,8 +44,7 @@ static ANALYSIS_RESULT: Mutex<Option<anyhow::Result<TargetAnalysis>>> = Mutex::n
 
 /// Result of reading the console's compatibility partition, deposited by the
 /// inspection thread then retrieved in CompatTargetReady.
-/// Whether the picked console already holds compatibility files.
-static COMPAT_INSPECTION: Mutex<Option<anyhow::Result<bool>>> = Mutex::new(None);
+static COMPAT_INSPECTION: Mutex<Option<anyhow::Result<CompatPartition>>> = Mutex::new(None);
 
 /// Result of reading (`false`) or rewriting (`true`) the target's `launch.ini`,
 /// tagged with the [`Target::remote_key`] it came from, so an answer that
@@ -352,37 +351,42 @@ impl State {
         message_queue.push_back((Message::StartTargetAnalysis, SharedString::new()));
     }
 
+    /// Settings for a compatibility run. The simple card (expert mode off)
+    /// names its pack in `pack_key` and always backs the partition up first;
+    /// expert mode, or an empty key, keeps the saved settings as they are.
+    fn compat_run_config(&self, pack_key: &str) -> OgXboxCompatConfig {
+        let mut cfg = self.config.contents.ogxbox_compat.clone();
+        if !self.config.contents.expert_mode() && !pack_key.is_empty() {
+            cfg.pack = pack_key.to_string();
+            cfg.backup_first = true;
+            // Only the hacked packs carry the per-game config loader: on a
+            // retail one the configs would be dead files, on a partition meant
+            // to be left as the factory made it.
+            cfg.update_configs = cfg.pack().needs_exploit();
+        }
+        cfg
+    }
+
     /// Starts the read-only inspection of a console picked by the Toolbox
-    /// compatibility tool, after asking for a backup folder when one is wanted.
-    /// The confirmation modal opens once the inspection comes back.
+    /// compatibility tool. What it finds decides what comes next — a refusal,
+    /// the backup's save dialog, the confirmation modal — in
+    /// `Message::CompatTargetReady`.
     fn start_compat_inspection(&mut self, target: CompatTarget, weak: &Weak<AppWindow>) {
         let app = weak.upgrade().unwrap();
+        // Every entry point sets the run before it gets here.
+        let run = self
+            .compat_run
+            .as_ref()
+            .unwrap_or(&self.config.contents.ogxbox_compat);
+        let pack_label = run.pack().label().to_shared_string();
 
-        // The backup option belongs to installing a pack. Offering to save the
-        // partition while the user is already restoring a saved copy of it asks
-        // them to sort out two archives at once, for no gain.
-        let backup_wanted =
-            self.config.contents.ogxbox_compat.backup_first && self.compat_restore_zip.is_none();
-        if backup_wanted {
-            let window_handle = app.window().window_handle();
-            let Some(path) = dialogs::save_compat_backup(&window_handle) else {
-                // No file, no backup — and no install either: the user asked
-                // for one, so going ahead without it would be a surprise.
-                self.notifications.push(Notification::info(
-                    "Install cancelled — no destination picked for the backup",
-                ));
-                return;
-            };
-            self.compat_backup_zip = Some(path);
-        } else {
-            self.compat_backup_zip = None;
-        }
-
+        self.compat_backup_zip = None;
         self.compat_pending = Some(target.clone());
         self.is_inspecting_compat = true;
         let ui_state = app.global::<UiState<'_>>();
         // What the confirmation modal will name as the source. A restore knows
-        // it by file name; an install by the pack the drop-down is showing.
+        // it by file name; an install by the pack the drop-down is showing; a
+        // format writes no file at all.
         match &self.compat_restore_zip {
             Some(zip) => {
                 ui_state.set_compat_restoring(true);
@@ -392,9 +396,7 @@ impl State {
             }
             None => {
                 ui_state.set_compat_restoring(false);
-                ui_state.set_compat_pending_source(
-                    self.config.contents.ogxbox_compat.pack().label().to_shared_string(),
-                );
+                ui_state.set_compat_pending_source(pack_label);
             }
         }
         ui_state.set_inspecting_compat(true);
@@ -409,6 +411,125 @@ impl State {
                     .invoke_dispatch(Message::CompatTargetReady, SharedString::new());
             });
         });
+    }
+
+    /// Marks the compatibility tool as at work and hands back the flags its
+    /// thread shares with the UI: the cancel request, and the "partition has
+    /// started changing" mark. Shared by the install and the format.
+    fn begin_compat_work(&mut self, weak: &Weak<AppWindow>) -> (Arc<AtomicBool>, Arc<AtomicBool>) {
+        self.is_installing_compat = true;
+        self.compat_cancel
+            .store(false, std::sync::atomic::Ordering::Relaxed);
+        self.compat_started_writing
+            .store(false, std::sync::atomic::Ordering::Relaxed);
+        weak.upgrade()
+            .unwrap()
+            .global::<UiState<'_>>()
+            .set_installing_compat(true);
+        (
+            self.compat_cancel.clone(),
+            self.compat_started_writing.clone(),
+        )
+    }
+
+    /// Runs a confirmed create/format of a hard drive's compatibility partition
+    /// on its own thread, with the install's busy state, status line and
+    /// cancel button.
+    fn start_compat_format(
+        &mut self,
+        device: PathBuf,
+        backup_zip: Option<PathBuf>,
+        backup_best_effort: bool,
+        weak: &Weak<AppWindow>,
+    ) {
+        let (cancel, started_writing) = self.begin_compat_work(weak);
+
+        let weak = weak.clone();
+        std::thread::spawn(move || {
+            let status = compat_status_line(&weak);
+
+            let res = crate::compat::format(
+                &device,
+                backup_zip.as_deref(),
+                backup_best_effort,
+                &cancel,
+                &started_writing,
+                &status,
+            );
+            let partition_touched = started_writing.load(std::sync::atomic::Ordering::Relaxed);
+
+            let _ = weak.upgrade_in_event_loop(move |app| {
+                let dispatcher = app.global::<Dispatcher<'_>>();
+                dispatcher.invoke_dispatch(Message::SetStatus, SharedString::new());
+                dispatcher.invoke_dispatch(Message::CompatInstalled, SharedString::new());
+
+                match res {
+                    Ok(outcome) => {
+                        if outcome.backup_was_empty {
+                            dispatcher.invoke_dispatch(
+                                Message::NotifyInfoSticky,
+                                "No backup was written — the compatibility partition held no \
+                                 file to save."
+                                    .to_shared_string(),
+                            );
+                        }
+                        if let Some(why) = outcome.backup_failed {
+                            dispatcher.invoke_dispatch(
+                                Message::NotifyInfoSticky,
+                                slint::format!(
+                                    "The damaged partition could not be backed up and was \
+                                     formatted anyway: {why}"
+                                ),
+                            );
+                        }
+                        dispatcher.invoke_dispatch(
+                            Message::NotifySuccessSticky,
+                            if outcome.created {
+                                "Compatibility partition created"
+                            } else {
+                                "Compatibility partition formatted"
+                            }
+                            .to_shared_string(),
+                        );
+                    }
+                    // Only the backup honours a cancellation, and it runs
+                    // before anything is written.
+                    Err(e) if crate::compat::is_cancelled(&e) => {
+                        dispatcher.invoke_dispatch(
+                            Message::NotifyInfo,
+                            "Format cancelled".to_shared_string(),
+                        );
+                    }
+                    Err(e) => {
+                        let text = if partition_touched {
+                            slint::format!(
+                                "Failed to format the compatibility partition: {e:#}\n\n\
+                                 It may be unusable until it is formatted again."
+                            )
+                        } else {
+                            slint::format!("Failed to format the compatibility partition: {e:#}")
+                        };
+                        dispatcher.invoke_dispatch(Message::NotifyError, text);
+                    }
+                }
+            });
+        });
+    }
+
+    /// Drops the compatibility run being prepared, whatever step it reached,
+    /// and closes its modal.
+    fn abandon_compat_run(&mut self, weak: &Weak<AppWindow>) {
+        self.compat_pending = None;
+        self.compat_backup_zip = None;
+        self.compat_restore_zip = None;
+        self.compat_run = None;
+        self.compat_action = CompatAction::Install;
+        self.compat_backup_best_effort = false;
+        let app = weak.upgrade().unwrap();
+        let ui_state = app.global::<UiState<'_>>();
+        ui_state.set_compat_pending_target(SharedString::new());
+        ui_state.set_compat_formatting(false);
+        ui_state.set_compat_creating(false);
     }
 
     /// Switches the target to the local drive mounted at `path`, records it in
@@ -656,6 +777,30 @@ impl State {
 
                 message_queue.push_back((Message::SyncConfig, SharedString::new()));
             }
+            Message::SetExpertMode => {
+                // Turning it off would hide the card of a tool still at work
+                // (its status line and Cancel with it): the switch is veiled
+                // meanwhile, and this guards against a click slipping through.
+                if !self.job_queue.is_empty()
+                    || self.is_installing_compat
+                    || self.is_inspecting_compat
+                    || self.compat_pending.is_some()
+                    || self.is_creating_badavatar
+                    || self.badavatar_hdd_tool_busy()
+                {
+                    return;
+                }
+                // Not while a target is connected, whichever kind: expert mode
+                // decides which cards and settings the connected target shows,
+                // and the app should not change them under it. Disconnect
+                // first.
+                if Target::from_config(&self.config.contents).is_some() {
+                    return;
+                }
+                self.config.contents.expert_mode = Some(payload == "true");
+
+                message_queue.push_back((Message::SyncConfig, SharedString::new()));
+            }
             Message::SetAuroraImportOnAdd => {
                 let value = payload.parse().unwrap();
                 self.config.contents.aurora_import_on_add = value;
@@ -870,6 +1015,11 @@ impl State {
                 let Some(loc) = self.config.contents.recent_locations.get(i).cloned() else {
                     return;
                 };
+                // Console hard drive access is expert only; the list hides such
+                // an entry out of expert mode, and this guards the rest.
+                if loc.kind == TargetKind::Fatx && !self.config.contents.expert_mode() {
+                    return;
+                }
 
                 match loc.kind {
                     TargetKind::Local => {
@@ -2734,13 +2884,46 @@ impl State {
                 // This is the "install a published pack" entry point, so any
                 // backup left pending by an abandoned restore is not ours.
                 self.compat_restore_zip = None;
+                self.compat_action = CompatAction::Install;
+                // Payload: the pack the simple card asked for; empty from the
+                // expert card, which installs the one its drop-down shows.
+                self.compat_run = Some(self.compat_run_config(payload.as_str()));
 
                 // The modal opens on its "which console?" step; probing every
                 // disk of the machine is slow, so its FATX branch asks for the
                 // refresh itself when the user actually goes that way.
                 let app = weak.upgrade().unwrap();
-                app.global::<UiState<'_>>()
-                    .set_selecting_compat_target(true);
+                let ui_state = app.global::<UiState<'_>>();
+                ui_state.set_compat_formatting(false);
+                ui_state.set_selecting_compat_target(true);
+            }
+            Message::FormatCompat => {
+                // Same guards as an install: a format is a write of the same
+                // partition, outside the job queue, by the same tool.
+                if self.is_installing_compat
+                    || self.is_inspecting_compat
+                    || self.is_creating_badavatar
+                    || self.compat_pending.is_some()
+                    || self.badavatar_hdd_tool_busy()
+                {
+                    return;
+                }
+                if Target::from_config(&self.config.contents).is_some() {
+                    return;
+                }
+
+                self.compat_restore_zip = None;
+                self.compat_action = CompatAction::Format;
+                // Expert mode only, so the saved settings decide the backup.
+                self.compat_run = Some(self.compat_run_config(""));
+
+                // Hard drive only: over FTP the console offers no way to lay a
+                // filesystem down. The modal opens straight on the drive list,
+                // which asks for its own refresh.
+                let app = weak.upgrade().unwrap();
+                let ui_state = app.global::<UiState<'_>>();
+                ui_state.set_compat_formatting(true);
+                ui_state.set_selecting_compat_target(true);
             }
             Message::RestoreCompat => {
                 // Same guards as an ordinary install: this ends in the very
@@ -2784,8 +2967,11 @@ impl State {
                 }
 
                 self.compat_restore_zip = Some(zip);
-                app.global::<UiState<'_>>()
-                    .set_selecting_compat_target(true);
+                self.compat_action = CompatAction::Install;
+                self.compat_run = Some(self.compat_run_config(""));
+                let ui_state = app.global::<UiState<'_>>();
+                ui_state.set_compat_formatting(false);
+                ui_state.set_selecting_compat_target(true);
             }
             Message::SelectCompatDrive => {
                 if self.is_installing_compat || self.is_inspecting_compat {
@@ -2796,7 +2982,10 @@ impl State {
                 self.start_compat_inspection(CompatTarget::Fatx(device), weak);
             }
             Message::SelectCompatFtp => {
-                if self.is_installing_compat || self.is_inspecting_compat {
+                if self.is_installing_compat
+                    || self.is_inspecting_compat
+                    || self.compat_action == CompatAction::Format
+                {
                     return;
                 }
                 // The FTP modal was opened by this tool rather than to connect
@@ -2819,46 +3008,75 @@ impl State {
                 self.is_inspecting_compat = false;
                 ui_state.set_inspecting_compat(false);
 
-                match result {
-                    Some(Ok(present)) => {
-                        // Only now does the confirmation modal appear: showing
-                        // it before the console answered would ask the user to
-                        // confirm against a blank summary.
-                        ui_state.set_compat_pending_summary(
-                            crate::compat::summarize(present).to_shared_string(),
-                        );
-                        let label = self
-                            .compat_pending
-                            .as_ref()
-                            .map(CompatTarget::label)
-                            .unwrap_or_default();
-                        ui_state.set_compat_pending_target(label.to_shared_string());
-                    }
-                    Some(Err(e)) => {
-                        self.compat_pending = None;
-                        self.compat_backup_zip = None;
-                        self.compat_restore_zip = None;
-                        ui_state.set_compat_pending_target(SharedString::new());
+                let (found, target) = match (result, self.compat_pending.clone()) {
+                    (Some(Ok(found)), Some(target)) => (found, target),
+                    (Some(Err(e)), _) => {
+                        self.abandon_compat_run(weak);
                         self.notifications
                             .push(Notification::error(slint::format!("{e:#}")));
+                        return;
                     }
                     // Nothing to show, so nothing to confirm either: leaving a
                     // pending target behind would make `InstallCompat` return
                     // early for the rest of the run, on a card that still looks
                     // enabled and a modal that never opens.
-                    None => {
-                        self.compat_pending = None;
-                        self.compat_backup_zip = None;
+                    _ => {
+                        self.abandon_compat_run(weak);
+                        return;
                     }
+                };
+
+                let formatting = self.compat_action == CompatAction::Format;
+                // Refused before the backup's save dialog: picking a file for
+                // an install that was never going to run is a step for nothing.
+                if !formatting
+                    && let Some(why) = crate::compat::install_blocker(&target, &found)
+                {
+                    self.abandon_compat_run(weak);
+                    self.notifications.push(Notification::error(why));
+                    return;
                 }
+
+                // The backup option belongs to replacing what is there, so it
+                // is only offered when there is something to read: a partition
+                // with no file, or too damaged to list, has nothing to save.
+                // Nor while the user is already restoring a saved copy: that
+                // would ask them to sort out two archives at once, for no gain.
+                self.compat_backup_best_effort =
+                    formatting && crate::compat::backup_is_best_effort(&found);
+                let backup_wanted = crate::compat::has_backable_files(&found)
+                    && self.compat_restore_zip.is_none()
+                    && self.compat_run.as_ref().is_some_and(|run| run.backup_first);
+                if backup_wanted {
+                    let window_handle = app.window().window_handle();
+                    let Some(path) = dialogs::save_compat_backup(&window_handle) else {
+                        // No file, no backup — and no write either: the user
+                        // asked for one, so going ahead without it would be a
+                        // surprise.
+                        self.abandon_compat_run(weak);
+                        self.notifications.push(Notification::info(if formatting {
+                            "Format cancelled — no destination picked for the backup"
+                        } else {
+                            "Install cancelled — no destination picked for the backup"
+                        }));
+                        return;
+                    };
+                    self.compat_backup_zip = Some(path);
+                }
+
+                // Only now does the confirmation modal appear: showing it
+                // before the console answered would ask the user to confirm
+                // against a blank summary.
+                let summary = match formatting {
+                    true => crate::compat::format_summary(&found),
+                    false => crate::compat::install_summary(&found).to_string(),
+                };
+                ui_state.set_compat_creating(formatting && found == CompatPartition::Missing);
+                ui_state.set_compat_pending_summary(summary.to_shared_string());
+                ui_state.set_compat_pending_target(target.label().to_shared_string());
             }
             Message::CancelInstallCompat => {
-                self.compat_pending = None;
-                self.compat_backup_zip = None;
-                self.compat_restore_zip = None;
-                let app = weak.upgrade().unwrap();
-                app.global::<UiState<'_>>()
-                    .set_compat_pending_target(SharedString::new());
+                self.abandon_compat_run(weak);
             }
             Message::ConfirmInstallCompat => {
                 if self.is_installing_compat || self.is_creating_badavatar {
@@ -2886,25 +3104,27 @@ impl State {
                     return;
                 }
 
-                let cfg = self.config.contents.ogxbox_compat.clone();
-                self.is_installing_compat = true;
-                self.compat_cancel
-                    .store(false, std::sync::atomic::Ordering::Relaxed);
-                let cancel = self.compat_cancel.clone();
-                self.compat_started_writing
-                    .store(false, std::sync::atomic::Ordering::Relaxed);
-                let started_writing = self.compat_started_writing.clone();
-                app.global::<UiState<'_>>().set_installing_compat(true);
+                if self.compat_action == CompatAction::Format {
+                    let best_effort = std::mem::take(&mut self.compat_backup_best_effort);
+                    self.compat_action = CompatAction::Install;
+                    self.compat_run = None;
+                    app.global::<UiState<'_>>().set_compat_formatting(false);
+                    // The picker offers nothing else in this mode.
+                    if let CompatTarget::Fatx(device) = target {
+                        self.start_compat_format(device, backup_zip, best_effort, weak);
+                    }
+                    return;
+                }
+
+                let cfg = self
+                    .compat_run
+                    .take()
+                    .unwrap_or_else(|| self.config.contents.ogxbox_compat.clone());
+                let (cancel, started_writing) = self.begin_compat_work(weak);
 
                 let weak = weak.clone();
                 std::thread::spawn(move || {
-                    let weak_status = weak.clone();
-                    let status = move |line: &str| {
-                        let text = SharedString::from(line);
-                        let _ = weak_status.upgrade_in_event_loop(move |app| {
-                            app.global::<UiState<'_>>().set_status(text);
-                        });
-                    };
+                    let status = compat_status_line(&weak);
 
                     status(if restoring {
                         "Restoring the compatibility files…"
@@ -2944,18 +3164,6 @@ impl State {
                                             .to_shared_string(),
                                     );
                                 }
-                                // The emulator is in place; only the extra
-                                // per-title configs are missing. Said plainly,
-                                // and without calling the install failed.
-                                if let Some(why) = outcome.configs_failed {
-                                    dispatcher.invoke_dispatch(
-                                        Message::NotifyInfoSticky,
-                                        slint::format!(
-                                            "The emulator was installed, but the per-title \
-                                             configs were not updated: {why}"
-                                        ),
-                                    );
-                                }
                                 // The write takes minutes, so the user is
                                 // likely looking elsewhere when it lands.
                                 dispatcher.invoke_dispatch(
@@ -2969,11 +3177,7 @@ impl State {
                                 );
                                 app.global::<UiState<'_>>().set_celebrating(true);
                             }
-                            Err(e)
-                                if e.to_string().contains(
-                                    txbm_core::ogxbox_compat::COMPAT_CANCELLED,
-                                ) =>
-                            {
+                            Err(e) if crate::compat::is_cancelled(&e) => {
                                 // Stopping before the partition was touched is
                                 // a true no-op; stopping after it leaves the
                                 // console without a usable emulator, and saying
@@ -3038,6 +3242,18 @@ impl State {
             #[cfg(not(windows))]
             Message::SetWindowColorLight | Message::SetWindowColorDark => {}
         }
+    }
+}
+
+/// A status-line writer for a compatibility thread: pushes each line to the UI
+/// from wherever it is called.
+fn compat_status_line(weak: &Weak<AppWindow>) -> impl Fn(&str) + Send + 'static {
+    let weak = weak.clone();
+    move |line: &str| {
+        let text = SharedString::from(line);
+        let _ = weak.upgrade_in_event_loop(move |app| {
+            app.global::<UiState<'_>>().set_status(text);
+        });
     }
 }
 

@@ -21,8 +21,17 @@ impl Config {
     pub fn load() -> Self {
         let path = DATA_DIR.join("config.json");
         let s = fs::read_to_string(&path).unwrap_or_default();
-        let mut contents: ConfigContents = serde_json::from_str(&s).unwrap_or_default();
+        let parsed = serde_json::from_str::<ConfigContents>(&s);
+        // A config that does not parse starts over from the defaults, simple
+        // mode included: it says nothing about what its owner was using.
+        let from_older_build = parsed.is_ok();
+        let mut contents: ConfigContents = parsed.unwrap_or_default();
         contents.badavatar.migrate();
+        // A readable config written before expert mode existed belongs to
+        // someone who may already use the advanced tools: they must not vanish
+        // on upgrade. Only a fresh install, or a lost config, starts in simple
+        // mode.
+        contents.expert_mode.get_or_insert(from_older_build);
 
         Self { path, contents }
     }
@@ -62,6 +71,10 @@ impl Config {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct ConfigContents {
+    /// Shows the advanced tools and settings. `None` only until
+    /// [`Config::load`] resolves it; read it through
+    /// [`ConfigContents::expert_mode`].
+    pub expert_mode: Option<bool>,
     pub target_kind: TargetKind,
     pub mount_point: PathBuf,
     pub remove_sources_games: bool,
@@ -104,6 +117,7 @@ pub struct ConfigContents {
 impl Default for ConfigContents {
     fn default() -> Self {
         Self {
+            expert_mode: None,
             target_kind: TargetKind::Local,
             mount_point: PathBuf::new(),
             remove_sources_games: false,
@@ -132,6 +146,10 @@ impl Default for ConfigContents {
 }
 
 impl ConfigContents {
+    pub fn expert_mode(&self) -> bool {
+        self.expert_mode.unwrap_or(false)
+    }
+
     pub fn ftp_config(&self) -> crate::ftp::FtpConfig {
         crate::ftp::FtpConfig {
             host: self.console_ip.trim().to_string(),
@@ -157,6 +175,10 @@ impl ConfigContents {
                 matches!(self.target_kind, TargetKind::Local | TargetKind::Fatx)
             }
         };
+
+        // Console hard drive access is expert only: out of expert mode the
+        // drive is not reopened, whatever the policy says.
+        let keep = keep && (self.target_kind != TargetKind::Fatx || self.expert_mode());
 
         if !keep {
             self.target_kind = TargetKind::Local;

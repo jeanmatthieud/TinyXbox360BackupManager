@@ -30,7 +30,7 @@ export component ConsoleCard inherits ToolboxCard {
 
     HorizontalLine { }
 
-    CardActionRow {
+    if UiState.config.expert-mode: CardActionRow {
         icon: IconSet.Cable;
         text: "Test the FTP connection";
         clicked => Dispatcher.dispatch(Message.TestFtp, "");

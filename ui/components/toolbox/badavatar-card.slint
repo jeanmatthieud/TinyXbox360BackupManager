@@ -49,8 +49,9 @@ export component BadAvatarCard inherits ToolboxCard {
     }
 
     // Version picker for the ABadAvatar boot chain. Where each version is
-    // downloaded from is set in the Settings page.
-    HorizontalLayout {
+    // downloaded from is set in the Settings page. Expert only: the default
+    // version is the one to use unless you know why not.
+    if UiState.config.expert-mode: HorizontalLayout {
         spacing: 8px;
 
         VerticalLayout {
@@ -82,7 +83,7 @@ export component BadAvatarCard inherits ToolboxCard {
         }
     }
 
-    CheckBox {
+    if UiState.config.expert-mode: CheckBox {
         text: "Auto start Aurora without delay (XeUnshackle Max)";
         checked: UiState.badavatar.xeunshackle-autostart;
         toggled => {

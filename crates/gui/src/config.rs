@@ -158,15 +158,21 @@ pub fn sync_custom_packs(model: &VecModel<DisplayedCompatPack>, config: &Config)
     }
 }
 
-/// Builds the model backing `UiState.recent-locations` from the config.
+/// Builds the model backing `UiState.recent-locations` from the config. A
+/// console hard drive is left out of expert mode, like the FATX target card:
+/// it stays in the config, and reappears with expert mode.
 pub fn recent_locations(config: &Config) -> Vec<DisplayedRecentLocation> {
+    let expert = config.contents.expert_mode();
     config
         .contents
         .recent_locations
         .iter()
-        .map(|l| DisplayedRecentLocation {
+        .enumerate()
+        .filter(|(_, l)| expert || l.kind != txbm_core::config::TargetKind::Fatx)
+        .map(|(i, l)| DisplayedRecentLocation {
             name: l.display_name().to_shared_string(),
             kind: l.kind.into(),
+            index: i as i32,
         })
         .collect()
 }
@@ -287,6 +293,7 @@ impl From<&Config> for DisplayedConfig {
                 .mount_point
                 .to_string_lossy()
                 .to_shared_string(),
+            expert_mode: config.contents.expert_mode(),
             remove_sources_games: config.contents.remove_sources_games.to_shared_string(),
             xbox360_format: config.contents.xbox360_format.to_shared_string(),
             sort_by: config.contents.sort_by.to_shared_string(),
