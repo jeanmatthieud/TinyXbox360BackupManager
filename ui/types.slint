@@ -20,6 +20,10 @@ export enum JobKind {
     Delete,
     // One stored component (a disc package, a DLC file) removed from a game.
     DeleteContent,
+    // Aurora's import folder written for the games that have none yet.
+    AuroraImport,
+    // Aurora's import folder emptied.
+    AuroraImportClear,
 }
 
 // One entry of the job queue, as shown on the queue page.
@@ -70,6 +74,11 @@ export struct DisplayedConfig {
     theme-preference: string,
     auto-reconnect: string,
     cover-source: string,
+    aurora-import-on-add: string,
+    // Names of the languages the Aurora game assets can be prepared in
+    // (`marketplace::LOCALES`, same order), and the row of the chosen one.
+    asset-languages: [string],
+    asset-language-index: int,
     show-x360: bool,
     show-arcade: bool,
     show-og: bool,

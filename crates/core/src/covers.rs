@@ -122,7 +122,13 @@ pub fn download_cover(
         "png"
     };
     std::fs::create_dir_all(covers_dir)?;
-    std::fs::write(covers_dir.join(format!("{title_id}.{ext}")), bytes)?;
+    // Written whole or not at all: another thread may be reading the cache
+    // meanwhile (the Aurora import preparation runs beside the cover
+    // download after a scan), and a half-written file would pass for a cover.
+    let path = covers_dir.join(format!("{title_id}.{ext}"));
+    let tmp = covers_dir.join(format!("{title_id}.{ext}.tmp"));
+    std::fs::write(&tmp, bytes)?;
+    std::fs::rename(&tmp, &path)?;
     Ok(true)
 }
 

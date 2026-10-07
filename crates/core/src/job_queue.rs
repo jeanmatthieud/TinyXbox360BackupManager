@@ -2,7 +2,7 @@
 // SPDX-FileContributor: Modified by Jean-Matthieu Dechriste (TinyXbox360BackupManager)
 // SPDX-License-Identifier: GPL-3.0-only
 
-use crate::{game::Game, game_details::ContentKind};
+use crate::{aurora_import::ImportTitle, game::Game, game_details::ContentKind};
 use std::path::{Path, PathBuf};
 
 /// Family a queued job belongs to. Mirrors `JobKind` in `ui/types.slint`
@@ -13,6 +13,8 @@ pub enum JobKind {
     Add,
     Delete,
     DeleteContent,
+    AuroraImport,
+    AuroraImportClear,
 }
 
 /// One unit of work in the queue. Everything that writes to the target goes
@@ -46,6 +48,18 @@ pub enum QueuedJob {
         /// the queue row can name it: `file_name` alone is opaque.
         description: String,
     },
+    /// Aurora's import folder written for the games of `titles` that have
+    /// none yet — see [`crate::aurora_import`]. Not tied to one game.
+    AuroraImport {
+        titles: Vec<ImportTitle>,
+        /// Queued by the app itself after an addition (the "prepare game info
+        /// for Aurora" setting) rather than asked for from the Aurora card:
+        /// it then stays quiet when there was nothing to do.
+        auto: bool,
+    },
+    /// Aurora's import folder emptied (see
+    /// [`crate::target::Target::clear_aurora_import`]).
+    AuroraImportClear,
 }
 
 impl QueuedJob {
@@ -54,18 +68,22 @@ impl QueuedJob {
             Self::Add { .. } => JobKind::Add,
             Self::Delete(_) => JobKind::Delete,
             Self::DeleteContent { .. } => JobKind::DeleteContent,
+            Self::AuroraImport { .. } => JobKind::AuroraImport,
+            Self::AuroraImportClear => JobKind::AuroraImportClear,
         }
     }
 
     /// File this entry works on: the input image for an addition, the
     /// installed game folder for a deletion. Used to tell whether a freshly
     /// picked file — or a game the user just asked to delete — is already
-    /// waiting in the queue.
+    /// waiting in the queue. The import preparation works on no file of its
+    /// own: its empty path matches no pick and no game.
     pub fn path(&self) -> &Path {
         match self {
             Self::Add { path, .. } => path,
             Self::Delete(game) => &game.path,
             Self::DeleteContent { game, .. } => &game.path,
+            Self::AuroraImport { .. } | Self::AuroraImportClear => Path::new(""),
         }
     }
 
@@ -80,6 +98,8 @@ impl QueuedJob {
         let id = match self {
             Self::Add { title_id, .. } => title_id.as_deref()?,
             Self::Delete(game) | Self::DeleteContent { game, .. } => game.id.as_str(),
+            // Only touches Aurora's own folder, never a game's.
+            Self::AuroraImport { .. } | Self::AuroraImportClear => return None,
         };
         (!id.is_empty()).then_some(id)
     }
@@ -95,6 +115,8 @@ impl QueuedJob {
             Self::DeleteContent {
                 game, description, ..
             } => format!("{}  ·  {description}", game.title),
+            Self::AuroraImport { .. } => "Aurora game assets".to_string(),
+            Self::AuroraImportClear => "Aurora game assets to import".to_string(),
         }
     }
 
@@ -119,6 +141,10 @@ impl QueuedJob {
                     ..
                 },
             ) => a.path == b.path && fa == fb,
+            // One run covers the whole library: a second one would find
+            // nothing left to do.
+            (Self::AuroraImport { .. }, Self::AuroraImport { .. }) => true,
+            (Self::AuroraImportClear, Self::AuroraImportClear) => true,
             _ => false,
         }
     }

@@ -149,12 +149,27 @@ You confirm (or adjust) the three folders, and the app writes a small **`.txbm.j
 
 The drive's other partitions are left alone, with one exception: the [Original Xbox compatibility](#space_invader-original-xbox-compatibility-toolbox) tool in the Toolbox writes the emulator partition (`HddX`). It is a standalone tool, usable only while no target is connected, so it can never write beside a game transfer.
 
-### Aurora scan paths
+### Aurora
 
-Aurora only lists games from folders it is told to scan. The **Toolbox** page reads Aurora's configured scan paths and compares them with the folders this app uses:
+The **Aurora** card of the **Device status** page gathers what the app knows and does about Aurora on the target.
+
+**Scan paths.** Aurora only lists games from folders it is told to scan. The card reads Aurora's configured scan paths and compares them with the folders this app uses:
 
 - for a **console over FTP**, and for a **USB key that carries an Aurora install**, each storage folder is flagged as scanned by Aurora or not;
 - if a folder isn't scanned yet, the app shows the exact path to add in *Aurora → Settings → Content → Manage Paths* (Scan Depth 3+), then a rescan.
+
+**Game assets.** The app can give Aurora the cover, icon, banner, background and description of your games, so the console needs no internet connection to show them. It takes two steps:
+
+1. the app writes the files into Aurora's import folder (`Aurora/User/Import/<TitleID>/`) — after each batch of games you add (a setting, off by default), or on demand from the card for the games already there;
+2. on the console, in Aurora: **Settings > Assets > Import**. Aurora loads the files of every game it has scanned; a game it has not scanned yet simply waits for the next import.
+
+Good to know:
+
+- a game whose folder already exists is left alone, so you can put your own pictures there;
+- Aurora never removes the files and applies them on every import, replacing what it shows for these games — delete a game's folder from `Aurora/User/Import` to keep a cover you changed in Aurora;
+- **Delete the Aurora game assets to import** empties the import folder; what Aurora has already imported is kept;
+- the language of the titles and descriptions is a setting (English by default);
+- the cover comes from the library's own covers; the rest from what is left of the Xbox 360 marketplace (its image server, and the [dbox.tools](https://dbox.tools) archive of its catalogue). Original Xbox games only get their cover, and screenshots are left out.
 
 ## :space_invader: Original Xbox compatibility (Toolbox)
 
@@ -408,6 +423,7 @@ This app would not exist without the work of many passionate people. Thank you t
 - [XboxUnity](https://www.xboxunity.net) for the Xbox 360 covers and title updates database.
 - [UncreativeXenon](https://github.com/UncreativeXenon/XboxUnity-Scraper) for the XboxUnity archive (alternative cover source).
 - [MobCat](https://github.com/MobCat/MobCats-original-xbox-game-list) for the original Xbox game covers.
+- [dbox.tools](https://dbox.tools) for the archive of the Xbox 360 marketplace catalogue (game descriptions).
 - The [ConsoleMods wiki](https://consolemods.org/wiki/Xbox_360:Original_Xbox_Games) and its contributors for the original Xbox emulator packs and compatibility list, and [Goatman13](https://github.com/Goatman13/xefu) for the per-game emulator configs.
 
 ## :coffee: Support the project

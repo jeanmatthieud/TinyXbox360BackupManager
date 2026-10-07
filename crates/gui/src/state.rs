@@ -80,6 +80,13 @@ pub struct State {
     /// server tolerates no other connection alongside a write (see
     /// `crates/core/src/ftp.rs`), so the scan cannot just run anyway.
     pub rescan_deferred: bool,
+    /// Set when a game was added with the "prepare game info for Aurora"
+    /// setting on: once the library has been rescanned and the queue is idle,
+    /// the import folders still missing are queued (see `ScanFinished`).
+    pub aurora_import_wanted: bool,
+    /// TitleIDs (upper-cased) that already have a folder in Aurora's import
+    /// folder on the target, as last read with the storage status.
+    pub aurora_import_titles: std::collections::HashSet<String>,
     pub is_creating_badavatar: bool,
     /// Destination picked for the BadAvatar key, awaiting confirmation in the
     /// modal before the creation thread actually starts.
@@ -173,6 +180,8 @@ impl State {
             is_downloading_covers: false,
             is_scanning: false,
             rescan_deferred: false,
+            aurora_import_wanted: false,
+            aurora_import_titles: std::collections::HashSet::new(),
             is_creating_badavatar: false,
             badavatar_pending_dest: None,
             dashlaunch_location: None,

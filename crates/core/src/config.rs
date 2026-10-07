@@ -74,6 +74,12 @@ pub struct ConfigContents {
     pub show_arcade: bool,
     pub show_og: bool,
     pub cover_source: CoverSource,
+    /// After games are added, write their folder in Aurora's import folder
+    /// (see [`crate::aurora_import`]).
+    pub aurora_import_on_add: bool,
+    /// Language of the game descriptions prepared for Aurora, as a marketplace
+    /// locale (see [`crate::marketplace::LOCALES`]).
+    pub asset_language: String,
     pub known_drives: Vec<PathBuf>,
 
     /// Most-recently-used library locations (most recent first, max 5).
@@ -110,6 +116,8 @@ impl Default for ConfigContents {
             show_arcade: true,
             show_og: true,
             cover_source: CoverSource::default(),
+            aurora_import_on_add: false,
+            asset_language: "en-us".to_string(),
             known_drives: Vec::new(),
             recent_locations: Vec::new(),
             fatx: FatxConfig::default(),

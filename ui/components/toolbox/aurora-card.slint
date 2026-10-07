@@ -1,0 +1,292 @@
+// SPDX-FileCopyrightText: 2026 Manuel Quarneti <mq1@ik.me> (TinyWiiBackupManager)
+// SPDX-FileContributor: Modified by Jean-Matthieu Dechriste (TinyXbox360BackupManager)
+// SPDX-License-Identifier: GPL-3.0-only
+
+import { Icon, IconSet, IconDisplay } from "@lucide";
+import { Spinner } from "std-widgets.slint";
+import { ToolboxCard } from "../toolbox-card.slint";
+import { CardHeader } from "../card-header.slint";
+import { CardActionRow } from "../card-action-row.slint";
+import { HorizontalLine } from "../horizontal-line.slint";
+import { IconButton } from "../icon-button.slint";
+import { InfoNote } from "../info-note.slint";
+import { MyPalette } from "../../styling.slint";
+import { UiState } from "../../ui-state.slint";
+import { Message, Dispatcher } from "../../messages.slint";
+import { TargetKind } from "../../types.slint";
+
+// Heading of one of the card's sections: a small icon and a bold title.
+component SectionTitle inherits HorizontalLayout {
+    in property <Icon> icon;
+    in property <string> title;
+
+    spacing: 6px;
+    alignment: start;
+    cross-axis-alignment: CrossAxisAlignment.center;
+
+    IconDisplay {
+        icon: root.icon;
+        stroke: MyPalette.foreground;
+        size: 14px;
+    }
+
+    Text {
+        text: root.title;
+        font-weight: 600;
+    }
+}
+
+// One of the numbered steps of a how-to: the number in the accent colour, then
+// what to do.
+component Step inherits HorizontalLayout {
+    in property <string> number;
+    in property <string> text;
+
+    spacing: 8px;
+
+    Text {
+        text: root.number;
+        font-weight: 700;
+        color: MyPalette.accent-background;
+        vertical-alignment: top;
+    }
+
+    Text {
+        text: root.text;
+        wrap: word-wrap;
+        horizontal-stretch: 1;
+    }
+}
+
+// Aurora on the target, one section per concern: the paths it scans, then the
+// game assets handed to it.
+export component AuroraCard inherits ToolboxCard {
+    // Games of the library still without a folder in Aurora's import folder.
+    property <int> import-remaining: UiState.aurora-import-total - UiState.aurora-import-ready;
+
+    CardHeader {
+        icon: IconSet.LayoutDashboard;
+        title: "Aurora";
+
+        if UiState.fetching-aurora-paths: Spinner {
+            width: 27px;
+            height: 27px;
+            indeterminate: true;
+        }
+
+        // Every console-shaped target, FATX included: the page itself is shown
+        // for both (see device-status-page.slint), so both need the refresh.
+        if UiState.config.target-kind != TargetKind.Local && !UiState.fetching-aurora-paths: IconButton {
+            icon: IconSet.RefreshCcw;
+            width: self.height;
+            clicked => {
+                if !UiState.fetching-aurora-paths {
+                    Dispatcher.dispatch(Message.FetchAuroraPaths, "");
+                }
+            }
+        }
+    }
+
+    HorizontalLine { }
+
+    // ---- Scan paths: the paths Aurora is actually scanning, with guidance
+    // when none are set or when the read failed.
+
+    SectionTitle {
+        icon: IconSet.FolderSearch;
+        title: "Scan paths";
+    }
+
+    if UiState.fetching-aurora-paths && !UiState.aurora-paths-loaded: Text {
+        text: "Reading Aurora's scan paths…";
+    }
+
+    // Read failure: reported here, not as a notification.
+    if !UiState.fetching-aurora-paths && UiState.aurora-paths-error != "": VerticalLayout {
+        spacing: 5px;
+
+        HorizontalLayout {
+            spacing: 5px;
+            cross-axis-alignment: CrossAxisAlignment.center;
+
+            IconDisplay {
+                icon: IconSet.TriangleAlert;
+                stroke: MyPalette.destructive;
+                size: 14px;
+            }
+
+            Text {
+                text: "Couldn't read Aurora's scan paths.";
+                color: MyPalette.destructive;
+            }
+        }
+
+        Text {
+            text: UiState.aurora-paths-error;
+            font-size: 12px;
+            wrap: word-wrap;
+            color: MyPalette.foreground.transparentize(0.4);
+        }
+    }
+
+    // Aurora scans nothing yet: warn and offer guidance.
+    if UiState.aurora-paths-error == "" && UiState.aurora-paths-loaded && UiState.aurora-scan-paths.length == 0: VerticalLayout {
+        height: self.min-height;
+        spacing: 8px;
+
+        HorizontalLayout {
+            spacing: 5px;
+            cross-axis-alignment: CrossAxisAlignment.center;
+
+            IconDisplay {
+                icon: IconSet.TriangleAlert;
+                stroke: #e0a12f;
+                size: 14px;
+            }
+
+            Text {
+                text: "Aurora isn't scanning any location.";
+                color: #e0a12f;
+            }
+        }
+
+        Text {
+            text: "No game will show up until you add scan paths in Aurora for your Xbox 360 (GOD) and OG Xbox games. Add them on the console, then refresh.";
+            wrap: word-wrap;
+        }
+
+        CardActionRow {
+            icon: IconSet.CircleQuestionMark;
+            text: "Help me add the content paths to Aurora";
+            clicked => { UiState.showing-aurora-help = true };
+        }
+    }
+
+    if !UiState.fetching-aurora-paths && UiState.aurora-scan-paths.length > 0: VerticalLayout {
+        spacing: 3px;
+
+        Text {
+            text: "The following paths are scanned by Aurora :";
+        }
+
+        for path in UiState.aurora-scan-paths: Text {
+            text: "- " + path;
+            font-size: 12px;
+        }
+    }
+
+    // ---- Game assets: written into Aurora's import folder, which Aurora
+    // only reads when asked to. Hidden without an Aurora to write to.
+
+    if UiState.aurora-install-dir != "": HorizontalLine { }
+
+    if UiState.aurora-install-dir != "": SectionTitle {
+        icon: IconSet.Images;
+        title: "Game assets";
+    }
+
+    // Pinned to its min-height, like every wrapped text in the cards: left to
+    // its preferred height, a wrapped text counts a single line, and the card
+    // comes out too short for what follows.
+    if UiState.aurora-install-dir != "": VerticalLayout {
+        height: self.min-height;
+        spacing: 10px;
+
+        Text {
+            text: "Give Aurora the assets of your games, so the console doesn't need an internet connection to show them. It takes two steps:";
+            wrap: word-wrap;
+        }
+
+        VerticalLayout {
+            spacing: 6px;
+
+            Step {
+                number: "1";
+                text: "Prepare the files here. They are copied into Aurora's import folder.";
+            }
+
+            Step {
+                number: "2";
+                text: "On the console, open Aurora and go to Settings > Assets > Import.";
+            }
+        }
+
+        // Aurora never removes the files and applies them on every run.
+        InfoNote {
+            text: "Each import replaces what Aurora shows for these games, including the customizations you made in Aurora.";
+        }
+    }
+
+    if UiState.aurora-install-dir != "": CardActionRow {
+        icon: IconSet.ImagePlus;
+        text: root.import-remaining == 1
+            ? "Prepare the Aurora game assets of the remaining game"
+            : root.import-remaining > 1
+            ? "Prepare the Aurora game assets of the " + root.import-remaining + " remaining games"
+            : "Prepare the Aurora game assets";
+        disabled: root.import-remaining <= 0 || UiState.fetching-aurora-paths;
+        tooltip: root.import-remaining > 0
+            ? "Games already prepared are left untouched"
+            : UiState.aurora-import-total == 0
+            ? "Add games first"
+            : "Nothing left to prepare";
+        clicked => {
+            Dispatcher.dispatch(Message.PrepareAuroraImport, "");
+        }
+    }
+
+    if UiState.aurora-install-dir != "": CardActionRow {
+        icon: IconSet.Trash;
+        text: "Delete the Aurora game assets to import";
+        disabled: UiState.aurora-import-folders <= 0 || UiState.fetching-aurora-paths;
+        tooltip: UiState.aurora-import-folders > 0
+            ? "Empties Aurora's import folder. What Aurora has already imported is kept."
+            : "Aurora's import folder is empty";
+        clicked => {
+            UiState.confirming-clear-aurora-import = true;
+        }
+    }
+
+    // Shown with the footnote only, so the card never ends on a bare line.
+    if !UiState.fetching-aurora-paths && UiState.aurora-install-dir != "": HorizontalLine { }
+
+    // Quiet footnote, styled like the launch.ini location on the Dashlaunch card.
+    if !UiState.fetching-aurora-paths && UiState.aurora-install-dir != "": HorizontalLayout {
+        spacing: 5px;
+        cross-axis-alignment: CrossAxisAlignment.center;
+
+        IconDisplay {
+            icon: IconSet.Folder;
+            stroke: MyPalette.foreground.transparentize(0.5);
+            size: 12px;
+        }
+
+        Text {
+            text: "Aurora found at: " + UiState.aurora-install-dir;
+            font-size: 11px;
+            wrap: word-wrap;
+            horizontal-stretch: 1;
+            color: MyPalette.foreground.transparentize(0.5);
+        }
+    }
+
+    // How far the library is prepared, in the same quiet style.
+    if !UiState.fetching-aurora-paths && UiState.aurora-install-dir != "" && UiState.aurora-import-total > 0: HorizontalLayout {
+        spacing: 5px;
+        cross-axis-alignment: CrossAxisAlignment.center;
+
+        IconDisplay {
+            icon: IconSet.Images;
+            stroke: MyPalette.foreground.transparentize(0.5);
+            size: 12px;
+        }
+
+        Text {
+            text: "Aurora game assets ready to import: " + UiState.aurora-import-ready + " of " + UiState.aurora-import-total + (UiState.aurora-import-total == 1 ? " game" : " games");
+            font-size: 11px;
+            wrap: word-wrap;
+            horizontal-stretch: 1;
+            color: MyPalette.foreground.transparentize(0.5);
+        }
+    }
+}

@@ -13,7 +13,7 @@ import {
     LibraryStorageCard,
 } from "components/toolbox/library-storage-card.slint";
 import { ConsoleCard } from "components/toolbox/console-card.slint";
-import { AuroraScanPathsCard } from "components/toolbox/aurora-scan-paths-card.slint";
+import { AuroraCard } from "components/toolbox/aurora-card.slint";
 import { DashlaunchCard } from "components/toolbox/dashlaunch-card.slint";
 import { BadAvatarHddCard } from "components/toolbox/badavatar-hdd-card.slint";
 import { BadAvatarHddState } from "types.slint";
@@ -57,9 +57,10 @@ export component DeviceStatusPage inherits VerticalLayout {
             // App storage folders (and, on a console, their Aurora coverage).
             LibraryStorageCard { }
 
-            // Aurora scan paths: always for a console; for a local drive only
-            // when it carries an Aurora install (otherwise nothing to show).
-            if !UiState.config.target.is-empty && (UiState.config.target-kind != TargetKind.Local || UiState.aurora-scan-paths.length > 0): AuroraScanPathsCard { }
+            // Aurora (scan paths, game info): always for a console; for a
+            // local drive only when it carries an Aurora install (otherwise
+            // nothing to show).
+            if !UiState.config.target.is-empty && (UiState.config.target-kind != TargetKind.Local || UiState.aurora-scan-paths.length > 0 || UiState.aurora-install-dir != ""): AuroraCard { }
 
             // Dashlaunch's launch.ini (XeUnshackle, RGH): only when the target
             // has one.

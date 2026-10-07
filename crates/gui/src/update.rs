@@ -19,6 +19,7 @@ use std::{
     sync::{Arc, Mutex, atomic::AtomicBool},
 };
 use txbm_core::{
+    aurora_import::ImportTitle,
     badavatar::{AbadavatarVersion, UrlField}, badavatar_hdd::{HddInspection, HddStatus},
     config::TargetKind, fatx::FatxConfig,
     dashlaunch::{LICENSE_PATCHES, LaunchIni}, data_dir::DATA_DIR, drive_info::DriveInfo,
@@ -655,6 +656,21 @@ impl State {
 
                 message_queue.push_back((Message::SyncConfig, SharedString::new()));
             }
+            Message::SetAuroraImportOnAdd => {
+                let value = payload.parse().unwrap();
+                self.config.contents.aurora_import_on_add = value;
+
+                message_queue.push_back((Message::SyncConfig, SharedString::new()));
+            }
+            Message::SetAssetLanguage => {
+                let index: usize = payload.parse().unwrap_or(0);
+                let (locale, _) = txbm_core::marketplace::LOCALES
+                    .get(index)
+                    .unwrap_or(&txbm_core::marketplace::LOCALES[0]);
+                self.config.contents.asset_language = locale.to_string();
+
+                message_queue.push_back((Message::SyncConfig, SharedString::new()));
+            }
             Message::SetCoverSource => {
                 let value = payload.parse().unwrap();
                 self.config.contents.cover_source = value;
@@ -796,6 +812,24 @@ impl State {
                         if deferred {
                             message_queue.push_back((Message::RefreshAll, SharedString::new()));
                             return;
+                        }
+
+                        self.refresh_aurora_import_counts(&app);
+                        // Games were added since the last preparation: now the
+                        // library lists them, give Aurora their info — once
+                        // the queue is idle, so a batch is prepared in one go.
+                        if self.aurora_import_wanted && self.job_queue.is_empty() {
+                            self.aurora_import_wanted = false;
+                            let titles = self.aurora_import_candidates();
+                            let has_aurora = Target::from_config(&self.config.contents)
+                                .is_some_and(|target| target.may_have_aurora());
+                            if has_aurora && !titles.is_empty() {
+                                self.enqueue_job(
+                                    QueuedJob::AuroraImport { titles, auto: true },
+                                    message_queue,
+                                    weak,
+                                );
+                            }
                         }
 
                         message_queue.push_back((Message::RefreshSorting, SharedString::new()));
@@ -967,6 +1001,10 @@ impl State {
                 self.config.contents.target_kind = TargetKind::Local;
                 self.config.contents.mount_point = PathBuf::new();
                 self.config.contents.fatx = txbm_core::fatx::FatxConfig::default();
+                // What was pending or known about Aurora's import folder
+                // belonged to the target being left.
+                self.aurora_import_wanted = false;
+                self.aurora_import_titles.clear();
 
                 self.dashlaunch_location = None;
                 let app = weak.upgrade().unwrap();
@@ -1442,6 +1480,12 @@ impl State {
                 if payload == "ok" {
                     if was_add {
                         self.adds_done += 1;
+                        // The game's TitleID is only certain once the library
+                        // has been rescanned (an archive does not tell it
+                        // beforehand): `ScanFinished` queues the preparation.
+                        if self.config.contents.aurora_import_on_add {
+                            self.aurora_import_wanted = true;
+                        }
                     }
                 } else {
                     self.jobs_failed += 1;
@@ -1619,6 +1663,10 @@ impl State {
                     Some(Target::Local(mount)) => {
                         app.global::<UiState<'_>>().set_fetching_aurora_paths(true);
                         let status = txbm_core::target::local_storage_status(&mount);
+                        message_queue.push_back((
+                            Message::AuroraImportTitles,
+                            status.aurora_import_titles.join(",").into(),
+                        ));
                         set_storage_status(&app, status);
                     }
                     // Console-shaped target: reading it means either network
@@ -1634,7 +1682,12 @@ impl State {
                             let res = target.storage_status();
 
                             let _ = weak.upgrade_in_event_loop(move |app| match res {
-                                Ok(status) => set_storage_status(&app, status),
+                                Ok(status) => {
+                                    let titles = status.aurora_import_titles.join(",");
+                                    set_storage_status(&app, status);
+                                    app.global::<Dispatcher<'_>>()
+                                        .invoke_dispatch(Message::AuroraImportTitles, titles.into());
+                                }
                                 Err(e) => {
                                     let ui_state = app.global::<UiState<'_>>();
                                     ui_state.set_fetching_aurora_paths(false);
@@ -1654,6 +1707,36 @@ impl State {
                         });
                     }
                 }
+            }
+            Message::AuroraImportTitles => {
+                self.aurora_import_titles = payload
+                    .split(',')
+                    .filter(|id| !id.is_empty())
+                    .map(str::to_uppercase)
+                    .collect();
+                self.refresh_aurora_import_counts(&weak.upgrade().unwrap());
+            }
+            // Confirmed in the modal. A write on the target: a queued job.
+            Message::ClearAuroraImport => {
+                self.enqueue_job(QueuedJob::AuroraImportClear, message_queue, weak);
+            }
+            // Writes Aurora's import folder on the target: a queued job, like
+            // every other write.
+            Message::PrepareAuroraImport => {
+                let titles = self.aurora_import_candidates();
+                if titles.is_empty() {
+                    self.notifications
+                        .push(Notification::info("No game to prepare in the library"));
+                    return;
+                }
+                self.enqueue_job(
+                    QueuedJob::AuroraImport {
+                        titles,
+                        auto: false,
+                    },
+                    message_queue,
+                    weak,
+                );
             }
             Message::FetchDashlaunch => {
                 let Some(target) = Target::from_config(&self.config.contents) else {
@@ -3026,6 +3109,35 @@ fn set_storage_status(app: &AppWindow, status: txbm_core::target::StorageStatus)
 }
 
 impl State {
+    /// Games of the library Aurora's import folder can be prepared for: one
+    /// entry per TitleID (the discs of a game share it).
+    fn aurora_import_candidates(&self) -> Vec<ImportTitle> {
+        let mut seen = std::collections::HashSet::new();
+        self.games
+            .iter()
+            .filter(|game| !game.id.is_empty() && seen.insert(game.id.to_uppercase()))
+            .map(|game| ImportTitle {
+                title_id: game.id.clone(),
+                title: game.title.clone(),
+                is_x360: game.is_x360,
+            })
+            .collect()
+    }
+
+    /// Updates the "N of M games ready to import" figures of the Aurora card
+    /// from the library and the import folders last read on the target.
+    fn refresh_aurora_import_counts(&self, app: &AppWindow) {
+        let candidates = self.aurora_import_candidates();
+        let ready = candidates
+            .iter()
+            .filter(|t| self.aurora_import_titles.contains(&t.title_id.to_uppercase()))
+            .count();
+        let ui = app.global::<UiState<'_>>();
+        ui.set_aurora_import_total(candidates.len() as i32);
+        ui.set_aurora_import_ready(ready as i32);
+        ui.set_aurora_import_folders(self.aurora_import_titles.len() as i32);
+    }
+
     /// Manifest-form (mount-relative for a USB drive) of a picked folder, or
     /// `None` when it lies outside the selected drive.
     fn storage_relative(&self, path: &Path) -> Option<String> {

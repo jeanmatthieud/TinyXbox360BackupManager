@@ -74,6 +74,9 @@ export component SettingCard inherits Card {
             }
         }
 
+        // Extra controls a setting may need below its choices.
+        @children
+
         if note != "": Text {
             text: note;
             wrap: word-wrap;
