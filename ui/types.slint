@@ -98,7 +98,7 @@ export struct DisplayedUrlSource {
     host: string,
 }
 
-export struct DisplayedBadAvatarConfig {
+export struct DisplayedABadAvatarConfig {
     // Effective URLs (user override or built-in default) shown in the fields.
     abadavatar-v10-url: string,
     abadavatar-v13-url: string,
@@ -178,12 +178,12 @@ export struct DisplayedDashlaunch {
     noupdater: bool,
 }
 
-// BadAvatar on the connected console hard drive (Device status page, FATX
-// target only). See `txbm_core::badavatar_hdd`.
-export enum BadAvatarHddState {
+// ABadAvatar on the connected console hard drive (Device status page, FATX
+// target only). See `txbm_core::abadavatar_hdd`.
+export enum ABadAvatarHddState {
     // Not read yet, or not a console hard drive: the card stays hidden.
     Unknown,
-    // No trace of BadAvatar: an install is offered.
+    // No trace of ABadAvatar: an install is offered.
     Retail,
     // Installed by this app.
     Installed,
@@ -191,12 +191,12 @@ export enum BadAvatarHddState {
     Incomplete,
     // Someone else's setup: reported, never touched.
     Foreign,
-    // Formatted for Bad Storage: BadAvatar cannot start from it.
+    // Formatted for Bad Storage: ABadAvatar cannot start from it.
     BadStorage,
 }
 
-export struct DisplayedBadAvatarHdd {
-    state: BadAvatarHddState,
+export struct DisplayedABadAvatarHdd {
+    state: ABadAvatarHddState,
     // What makes a foreign drive non-retail, in console notation.
     found: [string],
     // What a removal deletes, in the order it does.

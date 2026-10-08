@@ -2,7 +2,7 @@
 // SPDX-FileContributor: Modified by Jean-Matthieu Dechriste (TinyXbox360BackupManager)
 // SPDX-License-Identifier: GPL-3.0-only
 
-use crate::badavatar::BadAvatarConfig;
+use crate::abadavatar::ABadAvatarConfig;
 use crate::ogxbox_compat::OgXboxCompatConfig;
 use crate::fatx::FatxConfig;
 use crate::data_dir::DATA_DIR;
@@ -26,7 +26,6 @@ impl Config {
         // mode included: it says nothing about what its owner was using.
         let from_older_build = parsed.is_ok();
         let mut contents: ConfigContents = parsed.unwrap_or_default();
-        contents.badavatar.migrate();
         // A readable config written before expert mode existed belongs to
         // someone who may already use the advanced tools: they must not vanish
         // on upgrade. Only a fresh install, or a lost config, starts in simple
@@ -107,8 +106,8 @@ pub struct ConfigContents {
     pub ftp_user: String,
     pub ftp_password: String,
 
-    /// BadAvatar USB-key creation settings (Toolbox).
-    pub badavatar: BadAvatarConfig,
+    /// ABadAvatar USB-key creation settings (Toolbox).
+    pub abadavatar: ABadAvatarConfig,
 
     /// Original-Xbox compatibility partition settings (Toolbox).
     pub ogxbox_compat: OgXboxCompatConfig,
@@ -139,7 +138,7 @@ impl Default for ConfigContents {
             ftp_port: "21".to_string(),
             ftp_user: "xboxftp".to_string(),
             ftp_password: "xboxftp".to_string(),
-            badavatar: BadAvatarConfig::default(),
+            abadavatar: ABadAvatarConfig::default(),
             ogxbox_compat: OgXboxCompatConfig::default(),
         }
     }

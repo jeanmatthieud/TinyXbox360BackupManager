@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
-//! Creation of a "BadAvatar" homebrew boot USB key for the Xbox 360
+//! Creation of a "ABadAvatar" homebrew boot USB key for the Xbox 360
 //! (ABadAvatar boot chain + XeUnshackle + Aurora dashboard).
 //!
 //! The user must plug in a **FAT32-formatted** USB key and select its mount
@@ -21,14 +21,14 @@ use std::sync::atomic::AtomicBool;
 use which_fs::FsKind;
 
 /// Default download URLs. Each can be overridden by the user in the Settings
-/// page (see [`BadAvatarConfig`]); a `None` override falls back to the
+/// page (see [`ABadAvatarConfig`]); a `None` override falls back to the
 /// constant here. They are pinned on purpose (the feature stores URLs in code
 /// rather than scraping "latest release" pages) — bump them here when a
 /// component publishes a new release.
 ///
 /// ABadAvatar 1.3-beta: bibarub's port of the ABadAvatar entry point onto
 /// BadUpdate 1.3. The only release that also boots from the hard drive (see
-/// [`crate::badavatar_hdd`]).
+/// [`crate::abadavatar_hdd`]).
 pub const DEFAULT_ABADAVATAR_V13_URL: &str =
     "https://github.com/bibarub/Xbox360BadUpdate/releases/download/avatar-v1.3-beta/ABadAvatar_v1.3-beta.zip";
 /// ABadAvatar 1.0-beta: shutterbug2000's original public beta.
@@ -184,14 +184,14 @@ impl UrlField {
     }
 }
 
-/// Persisted BadAvatar settings: which ABadAvatar release the USB key gets,
+/// Persisted ABadAvatar settings: which ABadAvatar release the USB key gets,
 /// per-component URL overrides (`None` = use the built-in default), whether
 /// to also fetch the official system update, and — separately for the USB key
 /// and the hard drive — whether to boot straight into Aurora with XeUnshackle
 /// Max.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
-pub struct BadAvatarConfig {
+pub struct ABadAvatarConfig {
     pub abadavatar_version: AbadavatarVersion,
     pub abadavatar_v10_url: Option<String>,
     pub abadavatar_v13_url: Option<String>,
@@ -204,30 +204,9 @@ pub struct BadAvatarConfig {
     /// exit to Aurora without delay, instead of the stock XeUnshackle. The
     /// hard-drive install never does (see [`DEFAULT_XEUNSHACKLE_MAX_URL`]).
     pub xeunshackle_autostart: bool,
-    /// Single ABadAvatar URL of older settings files, which also stood for the
-    /// version. Read once by [`Self::migrate`], never written back.
-    #[serde(rename = "abadavatar_url", skip_serializing)]
-    legacy_abadavatar_url: Option<String>,
 }
 
-impl BadAvatarConfig {
-    /// Folds a settings file from before the per-version URLs into the current
-    /// shape: a known release URL becomes the version choice, and a URL of the
-    /// user's own becomes the 1.3-beta override.
-    pub fn migrate(&mut self) {
-        let Some(url) = self.legacy_abadavatar_url.take() else {
-            return;
-        };
-        if url == DEFAULT_ABADAVATAR_V10_URL {
-            self.abadavatar_version = AbadavatarVersion::V10;
-        } else {
-            self.abadavatar_version = AbadavatarVersion::V13;
-            if url != DEFAULT_ABADAVATAR_V13_URL {
-                self.abadavatar_v13_url = Some(url);
-            }
-        }
-    }
-
+impl ABadAvatarConfig {
     fn slot(&self, field: UrlField) -> &Option<String> {
         match field {
             UrlField::AbadavatarV10 => &self.abadavatar_v10_url,
@@ -285,7 +264,7 @@ impl BadAvatarConfig {
 /// Error message used to signal that the user cancelled the operation, matched
 /// by the GUI to show a friendly notice instead of an error (mirrors
 /// `convert::CONVERSION_CANCELLED`).
-pub const BADAVATAR_CANCELLED: &str = "badavatar creation cancelled";
+pub const ABADAVATAR_CANCELLED: &str = "abadavatar creation cancelled";
 
 /// A component download that failed, tagged with the component so the GUI can
 /// point at the right field in the settings — and offer its mirrors when it
@@ -315,12 +294,12 @@ impl std::error::Error for ComponentDownloadError {
     }
 }
 
-/// Creates a BadAvatar USB key at `dest` (the mount point of an already
+/// Creates an ABadAvatar USB key at `dest` (the mount point of an already
 /// FAT32-formatted key). `status` receives short human-readable progress lines
 /// for the status bar. `cancel` is polled between phases.
-pub fn create_badavatar(
+pub fn create_abadavatar(
     dest: &Path,
-    cfg: &BadAvatarConfig,
+    cfg: &ABadAvatarConfig,
     cancel: &AtomicBool,
     status: &dyn Fn(&str),
 ) -> Result<()> {
@@ -338,7 +317,7 @@ pub fn create_badavatar(
     check_cancel(cancel)?;
 
     // 2-3. Download and extract every component.
-    let work = TMP_DIR.join("badavatar");
+    let work = TMP_DIR.join("abadavatar");
     let staged = stage_components(&work, cfg, true, cfg.include_system_update, cancel, status)?;
     check_cancel(cancel)?;
 
@@ -387,7 +366,7 @@ pub(crate) struct StagedComponents {
 /// and the system update when asked for. Touches nothing but `work`.
 pub(crate) fn stage_components(
     work: &Path,
-    cfg: &BadAvatarConfig,
+    cfg: &ABadAvatarConfig,
     with_aurora: bool,
     with_system_update: bool,
     cancel: &AtomicBool,
@@ -440,13 +419,13 @@ pub(crate) fn stage_components(
 }
 
 fn check_cancel(cancel: &AtomicBool) -> Result<()> {
-    download::check_cancel(cancel, BADAVATAR_CANCELLED)
+    download::check_cancel(cancel, ABADAVATAR_CANCELLED)
 }
 
 /// Downloads one component to a file in `work`, returning its path.
 fn download_component(
     field: UrlField,
-    cfg: &BadAvatarConfig,
+    cfg: &ABadAvatarConfig,
     work: &Path,
     cancel: &AtomicBool,
     status: &dyn Fn(&str),
@@ -457,7 +436,7 @@ fn download_component(
 
     if url.is_empty() {
         bail!(
-            "No download URL configured for {label}. Open the BadAvatar advanced \
+            "No download URL configured for {label}. Open the ABadAvatar advanced \
              settings and paste a .zip/.7z/.rar URL for it."
         );
     }
@@ -468,7 +447,7 @@ fn download_component(
     let dest = work.join(format!("{}.{ext}", key_of(field)));
 
     status(&format!("Downloading {label}…"));
-    let res = download::download_to_file(url, &dest, label, cancel, status, BADAVATAR_CANCELLED);
+    let res = download::download_to_file(url, &dest, label, cancel, status, ABADAVATAR_CANCELLED);
     // Like the extraction below: a cancelled download is reported with this
     // module's own marker as the top-level message, since the GUI matches on
     // `to_string()` (the outermost context) and not on the chain.
@@ -504,7 +483,7 @@ fn extract_component(
 
 /// Copies the boot-chain pieces from the extracted components into `dest`
 /// (the key's root, or a staging folder mirroring the hard drive's root),
-/// following the canonical BadAvatar layout. Aurora is copied separately, by
+/// following the canonical ABadAvatar layout. Aurora is copied separately, by
 /// [`copy_aurora`].
 pub(crate) fn assemble(dest: &Path, aba_dir: &Path, xe_dir: &Path) -> Result<()> {
     let content_dir = dest.join("Content");
@@ -627,10 +606,10 @@ pub(crate) fn retarget_launch_ini_to_hdd(dest: &Path) -> Result<()> {
     fs::write(&path, out).context("writing launch.ini")
 }
 
-fn write_install_notes(dest: &Path, cfg: &BadAvatarConfig) -> Result<()> {
+fn write_install_notes(dest: &Path, cfg: &ABadAvatarConfig) -> Result<()> {
     let mut notes = String::new();
     notes.push_str(&format!(
-        "BadAvatar USB key — created by TinyXbox360BackupManager v{}\n",
+        "ABadAvatar USB key — created by TinyXbox360BackupManager v{}\n",
         env!("CARGO_PKG_VERSION")
     ));
     notes.push_str("https://github.com/jeanmatthieud/TinyXbox360BackupManager\n\n");
@@ -704,44 +683,17 @@ fn copy_tree(src: &Path, dst: &Path) -> Result<()> {
 mod tests {
     use super::*;
 
-    fn migrated(json: &str) -> BadAvatarConfig {
-        let mut cfg: BadAvatarConfig = serde_json::from_str(json).unwrap();
-        cfg.migrate();
-        cfg
-    }
-
-    #[test]
-    fn migrates_the_single_legacy_url() {
-        let v10 = migrated(&format!(r#"{{"abadavatar_url":"{DEFAULT_ABADAVATAR_V10_URL}"}}"#));
-        assert_eq!(v10.abadavatar_version, AbadavatarVersion::V10);
-        assert_eq!(v10.url(UrlField::AbadavatarV13), DEFAULT_ABADAVATAR_V13_URL);
-
-        let mirror = migrated(r#"{"abadavatar_url":"https://example.org/aba.zip"}"#);
-        assert_eq!(mirror.abadavatar_version, AbadavatarVersion::V13);
-        assert_eq!(mirror.url(UrlField::AbadavatarV13), "https://example.org/aba.zip");
-
-        let none = migrated(r#"{"abadavatar_url":null,"xeunshackle_autostart":true}"#);
-        assert_eq!(none.abadavatar_version, AbadavatarVersion::V13);
-        assert!(none.xeunshackle_autostart);
-    }
-
     #[test]
     fn an_unknown_version_keeps_the_rest() {
-        let cfg: BadAvatarConfig = serde_json::from_str(
+        let cfg: ABadAvatarConfig = serde_json::from_str(
             r#"{"abadavatar_version":"1.4-beta","include_system_update":true}"#,
         )
         .unwrap();
         assert_eq!(cfg.abadavatar_version, AbadavatarVersion::V13);
         assert!(cfg.include_system_update);
-        let v10: BadAvatarConfig =
+        let v10: ABadAvatarConfig =
             serde_json::from_str(r#"{"abadavatar_version":"1.0-beta"}"#).unwrap();
         assert_eq!(v10.abadavatar_version, AbadavatarVersion::V10);
     }
 
-    #[test]
-    fn never_writes_the_legacy_url_back() {
-        let json = serde_json::to_string(&migrated(r#"{"abadavatar_url":"https://x/y.zip"}"#)).unwrap();
-        assert!(!json.contains("\"abadavatar_url\""));
-        assert!(json.contains("\"abadavatar_version\":\"1.3-beta\""));
-    }
 }

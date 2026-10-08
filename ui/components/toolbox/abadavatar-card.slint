@@ -14,26 +14,26 @@ import { Message, Dispatcher } from "../../messages.slint";
 
 // Card offering to build a homebrew boot USB key. Always shown, but the action
 // is disabled while a target is connected (the key must be built standalone).
-export component BadAvatarCard inherits ToolboxCard {
+export component ABadAvatarCard inherits ToolboxCard {
     private property <bool> target-connected: !UiState.config.target.is-empty;
 
     // Nothing here is usable while the key is being built, while a target is
     // connected (the key must be prepared standalone)
     // — so veil the whole card rather than just its action row.
-    disabled: UiState.creating-badavatar || UiState.compat-busy || UiState.badavatar-hdd-tool-busy || target-connected;
+    disabled: UiState.creating-abadavatar || UiState.compat-busy || UiState.abadavatar-hdd-tool-busy || target-connected;
     disabled-tooltip: target-connected
         ? "Disconnect from the current target first"
         : UiState.compat-busy
             ? "Wait for the original Xbox compatibility install to finish."
-            : UiState.badavatar-hdd-tool-busy
-                ? "Wait for BadAvatar to be written to the hard drive."
+            : UiState.abadavatar-hdd-tool-busy
+                ? "Wait for ABadAvatar to be written to the hard drive."
                 : "";
 
     CardHeader {
         icon: IconSet.Usb;
-        title: "BadAvatar USB key";
+        title: "ABadAvatar USB key";
 
-        if UiState.creating-badavatar: Spinner {
+        if UiState.creating-abadavatar: Spinner {
             width: 27px;
             height: 27px;
             indeterminate: true;
@@ -65,29 +65,29 @@ export component BadAvatarCard inherits ToolboxCard {
         ComboBox {
             height: 34px;
             horizontal-stretch: 1;
-            model: UiState.badavatar.abadavatar-versions;
+            model: UiState.abadavatar.abadavatar-versions;
             // A ComboBox shows whatever `current-index` points at — assigning
             // `current-value` does NOT move the selection.
-            current-index: UiState.badavatar.abadavatar-version-index;
+            current-index: UiState.abadavatar.abadavatar-version-index;
             selected => {
-                Dispatcher.dispatch(Message.SetBadAvatarVersion, self.current-index);
+                Dispatcher.dispatch(Message.SetABadAvatarVersion, self.current-index);
             }
         }
     }
 
     CheckBox {
         text: "Download and add the official system update";
-        checked: UiState.badavatar.include-system-update;
+        checked: UiState.abadavatar.include-system-update;
         toggled => {
-            Dispatcher.dispatch(Message.ToggleBadAvatarSystemUpdate, "");
+            Dispatcher.dispatch(Message.ToggleABadAvatarSystemUpdate, "");
         }
     }
 
     if UiState.config.expert-mode: CheckBox {
         text: "Auto start Aurora without delay (XeUnshackle Max)";
-        checked: UiState.badavatar.xeunshackle-autostart;
+        checked: UiState.abadavatar.xeunshackle-autostart;
         toggled => {
-            Dispatcher.dispatch(Message.ToggleBadAvatarAutostart, "");
+            Dispatcher.dispatch(Message.ToggleABadAvatarAutostart, "");
         }
     }
 
@@ -95,11 +95,11 @@ export component BadAvatarCard inherits ToolboxCard {
 
     CardActionRow {
         icon: IconSet.Hammer;
-        text: !UiState.creating-badavatar ? "Create the BadAvatar USB key" : "Working… see the status bar below.";
+        text: !UiState.creating-abadavatar ? "Create the ABadAvatar USB key" : "Working… see the status bar below.";
         // Opens the in-app removable-drive picker. Hidden escape hatch: a long
         // press falls back to the native folder picker (any arbitrary path).
         long-press-duration: 1500ms;
-        clicked => Dispatcher.dispatch(Message.CreateBadAvatar, "");
-        long-pressed => Dispatcher.dispatch(Message.PickBadAvatarMountPoint, "");
+        clicked => Dispatcher.dispatch(Message.CreateABadAvatar, "");
+        long-pressed => Dispatcher.dispatch(Message.PickABadAvatarMountPoint, "");
     }
 }

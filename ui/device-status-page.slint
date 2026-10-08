@@ -15,8 +15,8 @@ import {
 import { ConsoleCard } from "components/toolbox/console-card.slint";
 import { AuroraCard } from "components/toolbox/aurora-card.slint";
 import { DashlaunchCard } from "components/toolbox/dashlaunch-card.slint";
-import { BadAvatarHddCard } from "components/toolbox/badavatar-hdd-card.slint";
-import { BadAvatarHddState } from "types.slint";
+import { ABadAvatarHddCard } from "components/toolbox/abadavatar-hdd-card.slint";
+import { ABadAvatarHddState } from "types.slint";
 
 // Health / storage report for the currently connected target.
 export component DeviceStatusPage inherits VerticalLayout {
@@ -27,8 +27,8 @@ export component DeviceStatusPage inherits VerticalLayout {
         if !UiState.config.target.is-empty && !UiState.writing-dashlaunch {
             Dispatcher.dispatch(Message.FetchDashlaunch, "");
         }
-        if UiState.config.target-kind == TargetKind.Fatx && !UiState.config.target.is-empty && !UiState.badavatar-hdd-busy {
-            Dispatcher.dispatch(Message.FetchBadAvatarHdd, "");
+        if UiState.config.target-kind == TargetKind.Fatx && !UiState.config.target.is-empty && !UiState.abadavatar-hdd-busy {
+            Dispatcher.dispatch(Message.FetchABadAvatarHdd, "");
         }
     }
 
@@ -66,9 +66,9 @@ export component DeviceStatusPage inherits VerticalLayout {
             // has one.
             if UiState.dashlaunch.found: DashlaunchCard { }
 
-            // BadAvatar booted from the console's own hard drive: only for a
+            // ABadAvatar booted from the console's own hard drive: only for a
             // drive connected here, once it has been read.
-            if UiState.config.expert-mode && UiState.config.target-kind == TargetKind.Fatx && UiState.badavatar-hdd.state != BadAvatarHddState.Unknown: BadAvatarHddCard { }
+            if UiState.config.expert-mode && UiState.config.target-kind == TargetKind.Fatx && UiState.abadavatar-hdd.state != ABadAvatarHddState.Unknown: ABadAvatarHddCard { }
         }
     }
 }

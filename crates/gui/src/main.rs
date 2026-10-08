@@ -88,7 +88,7 @@ fn main() -> Result<()> {
     ui_state.set_data_dir(DATA_DIR.to_string_lossy().to_shared_string());
     ui_state.set_fatx_privileges_help_url(config::fatx_privileges_help_url());
     ui_state.set_config(DisplayedConfig::from(&state.config));
-    ui_state.set_badavatar(config::displayed_badavatar(&state.config));
+    ui_state.set_abadavatar(config::displayed_abadavatar(&state.config));
     ui_state.set_compat(config::displayed_compat(&state.config));
     ui_state.set_compat_builtin_packs(ModelRc::from(std::rc::Rc::new(slint::VecModel::from(
         config::builtin_compat_packs(),

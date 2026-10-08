@@ -182,7 +182,7 @@ Compatibility/…                                  no wrapper
 ```
 
 Hence `download::find_entry(root, "Compatibility", true)` rather than a fixed
-path. The same helper handles the archives BadAvatar downloads, for the same
+path. The same helper handles the archives ABadAvatar downloads, for the same
 reason.
 
 ## The `fatx` crate misplaced this partition's cluster area

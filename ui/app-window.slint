@@ -19,13 +19,13 @@ import { Notifications } from "components/notifications.slint";
 import { GameInfoModal } from "components/game-info-modal.slint";
 import { TitleUpdatesModal } from "components/title-updates-modal.slint";
 import { ConfirmationModal } from "components/confirmation-modal.slint";
-import { BadAvatarHddTargetModal } from "components/badavatar-hdd-target-modal.slint";
+import { ABadAvatarHddTargetModal } from "components/abadavatar-hdd-target-modal.slint";
 import { Tooltip } from "tooltip.slint";
 import { ToolboxPage } from "toolbox-page.slint";
 import { DeviceStatusPage } from "device-status-page.slint";
 import { JobQueuePage } from "job-queue.slint";
 import { SelectTargetModal } from "components/select-target-modal.slint";
-import { BadAvatarTargetModal } from "components/badavatar-target-modal.slint";
+import { ABadAvatarTargetModal } from "components/abadavatar-target-modal.slint";
 import { CompatTargetModal } from "components/compat-target-modal.slint";
 import { FtpTargetModal } from "components/ftp-target-modal.slint";
 import { AuroraHelpModal } from "components/aurora-help-modal.slint";
@@ -119,22 +119,22 @@ export component AppWindow inherits Window {
                         clicked => Dispatcher.dispatch(Message.CancelScan, "");
                     }
 
-                    if UiState.creating-badavatar: IconButton {
+                    if UiState.creating-abadavatar: IconButton {
                         icon: IconSet.X;
-                        tooltip: "Cancel the BadAvatar creation";
+                        tooltip: "Cancel the ABadAvatar creation";
                         height: 24px;
                         width: 24px;
                         squared: true;
-                        clicked => Dispatcher.dispatch(Message.CancelBadAvatar, "");
+                        clicked => Dispatcher.dispatch(Message.CancelABadAvatar, "");
                     }
 
-                    if UiState.badavatar-hdd-busy && !UiState.badavatar-hdd-writing: IconButton {
+                    if UiState.abadavatar-hdd-busy && !UiState.abadavatar-hdd-writing: IconButton {
                         icon: IconSet.X;
-                        tooltip: "Cancel the BadAvatar install";
+                        tooltip: "Cancel the ABadAvatar install";
                         height: 24px;
                         width: 24px;
                         squared: true;
-                        clicked => Dispatcher.dispatch(Message.CancelBadAvatarHdd, "");
+                        clicked => Dispatcher.dispatch(Message.CancelABadAvatarHdd, "");
                     }
 
                     if UiState.installing-compat: IconButton {
@@ -174,9 +174,9 @@ export component AppWindow inherits Window {
     if UiState.showing-title-updates: TitleUpdatesModal { }
 
     if UiState.selecting-target: SelectTargetModal { }
-    if UiState.selecting-badavatar-target: BadAvatarTargetModal { }
+    if UiState.selecting-abadavatar-target: ABadAvatarTargetModal { }
     if UiState.selecting-compat-target: CompatTargetModal { }
-    if UiState.selecting-badavatar-hdd-target: BadAvatarHddTargetModal { }
+    if UiState.selecting-abadavatar-hdd-target: ABadAvatarHddTargetModal { }
     if UiState.editing-ftp-target: FtpTargetModal { }
     if UiState.showing-aurora-help: AuroraHelpModal { }
     if UiState.configuring-storage: StorageConfigModal { }
@@ -231,14 +231,14 @@ export component AppWindow inherits Window {
         confirmed => Dispatcher.dispatch(Message.ConfirmGamesToAdd, "");
     }
 
-    if UiState.badavatar-pending-path != "": ConfirmationModal {
+    if UiState.abadavatar-pending-path != "": ConfirmationModal {
         Text {
-            text: "Create the BadAvatar USB key at \{UiState.badavatar-pending-path}?\nAny existing content at this location may be overwritten.";
+            text: "Create the ABadAvatar USB key at \{UiState.abadavatar-pending-path}?\nAny existing content at this location may be overwritten.";
             wrap: word-wrap;
         }
         btn-icon: IconSet.Hammer;
-        cancelled => Dispatcher.dispatch(Message.CancelCreateBadAvatar, "");
-        confirmed => Dispatcher.dispatch(Message.ConfirmCreateBadAvatar, "");
+        cancelled => Dispatcher.dispatch(Message.CancelCreateABadAvatar, "");
+        confirmed => Dispatcher.dispatch(Message.ConfirmCreateABadAvatar, "");
     }
 
     if UiState.compat-pending-target != "": ConfirmationModal {
@@ -286,9 +286,9 @@ export component AppWindow inherits Window {
         confirmed => Dispatcher.dispatch(Message.ConfirmInstallCompat, "");
     }
 
-    if UiState.badavatar-hdd-pending-target != "": ConfirmationModal {
+    if UiState.abadavatar-hdd-pending-target != "": ConfirmationModal {
         Text {
-            text: "Install BadAvatar on the hard drive";
+            text: "Install ABadAvatar on the hard drive";
             font-size: 18px;
         }
 
@@ -301,39 +301,39 @@ export component AppWindow inherits Window {
         }
 
         Text {
-            text: "Written to \{UiState.badavatar-hdd-pending-target}: ABadAvatar 1.3-beta, XeUnshackle"
+            text: "Written to \{UiState.abadavatar-hdd-pending-target}: ABadAvatar 1.3-beta, XeUnshackle"
                 + ", Dashlaunch's launch.ini with its plugins"
-                + (UiState.badavatar-hdd-pending-aurora != ""
-                    ? ", starting the Aurora already at \{UiState.badavatar-hdd-pending-aurora}."
+                + (UiState.abadavatar-hdd-pending-aurora != ""
+                    ? ", starting the Aurora already at \{UiState.abadavatar-hdd-pending-aurora}."
                     : ", and Aurora, installed at Hdd:\\Aurora.");
             wrap: word-wrap;
         }
 
         Text {
-            text: "Before booting the console: disconnect it from the Internet, turn off automatic sign-in, and unplug any BadAvatar USB key (the console looks for one first).";
+            text: "Before booting the console: disconnect it from the Internet, turn off automatic sign-in, and unplug any ABadAvatar USB key (the console looks for one first).";
             wrap: word-wrap;
         }
 
         btn-icon: IconSet.Hammer;
         confirm-label: "Install";
-        cancelled => Dispatcher.dispatch(Message.CancelInstallBadAvatarHdd, "");
-        confirmed => Dispatcher.dispatch(Message.ConfirmInstallBadAvatarHdd, "");
+        cancelled => Dispatcher.dispatch(Message.CancelInstallABadAvatarHdd, "");
+        confirmed => Dispatcher.dispatch(Message.ConfirmInstallABadAvatarHdd, "");
     }
 
-    if UiState.confirming-badavatar-hdd-uninstall: ConfirmationModal {
+    if UiState.confirming-abadavatar-hdd-uninstall: ConfirmationModal {
         Text {
-            text: "Remove BadAvatar from the hard drive";
+            text: "Remove ABadAvatar from the hard drive";
             font-size: 18px;
         }
 
         Rectangle { height: 5px; } // Spacing
 
         Text {
-            text: "Every file that comes with BadAvatar is deleted from \{UiState.config.target}, so the console boots as a retail one again:";
+            text: "Every file that comes with ABadAvatar is deleted from \{UiState.config.target}, so the console boots as a retail one again:";
             wrap: word-wrap;
         }
 
-        for item in UiState.badavatar-hdd.removal: Text {
+        for item in UiState.abadavatar-hdd.removal: Text {
             text: "  • " + item;
             wrap: word-wrap;
         }
@@ -348,11 +348,11 @@ export component AppWindow inherits Window {
         btn-icon: IconSet.Trash2;
         confirm-label: "Remove";
         cancelled => {
-            UiState.confirming-badavatar-hdd-uninstall = false;
+            UiState.confirming-abadavatar-hdd-uninstall = false;
         }
         confirmed => {
-            UiState.confirming-badavatar-hdd-uninstall = false;
-            Dispatcher.dispatch(Message.ConfirmUninstallBadAvatarHdd, "");
+            UiState.confirming-abadavatar-hdd-uninstall = false;
+            Dispatcher.dispatch(Message.ConfirmUninstallABadAvatarHdd, "");
         }
     }
 

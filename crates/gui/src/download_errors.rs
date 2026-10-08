@@ -7,14 +7,14 @@
 //! turned into a short sentence with a way out. The raw error still goes to
 //! stderr, for a bug report.
 
-use txbm_core::{badavatar::ComponentDownloadError, download::DownloadError};
+use txbm_core::{abadavatar::ComponentDownloadError, download::DownloadError};
 
 /// Where the Toolbox download URLs are edited.
 const DOWNLOAD_SOURCES: &str = "Settings › Download sources";
 
-/// Rewords a BadAvatar component download failure, pointing at the settings
+/// Rewords an ABadAvatar component download failure, pointing at the settings
 /// where its source can be changed. `None` if `err` is not one.
-pub fn badavatar(err: &anyhow::Error) -> Option<String> {
+pub fn abadavatar(err: &anyhow::Error) -> Option<String> {
     let failure = ComponentDownloadError::find(err)?;
     log(&failure.cause);
     let advice = if failure.field.sources().is_empty() {

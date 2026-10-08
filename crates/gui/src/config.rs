@@ -3,25 +3,25 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 use crate::{
-    DisplayedBadAvatarConfig, DisplayedCompatConfig, DisplayedCompatPack, DisplayedConfig,
+    DisplayedABadAvatarConfig, DisplayedCompatConfig, DisplayedCompatPack, DisplayedConfig,
     DisplayedFatxDrive, DisplayedRecentLocation, DisplayedRemovableDrive, DisplayedUrlSource,
     GodLayout, TargetKind,
 };
 use crate::util::GIB;
 use slint::{Model, ModelRc, SharedString, ToSharedString, VecModel};
 use txbm_core::{
-    badavatar::{AbadavatarVersion, UrlField},
+    abadavatar::{AbadavatarVersion, UrlField},
     config::{Config, GodLayout as CoreGodLayout},
     ogxbox_compat::{COMPAT_PACKS, XEFU_CONFIGS_URL},
     target::Target,
 };
 
-/// Builds the model backing `UiState.badavatar` from the config, resolving each
+/// Builds the model backing `UiState.abadavatar` from the config, resolving each
 /// URL (override or built-in default) and exposing the default alongside so the
 /// UI can offer a per-field reset when the two differ.
-pub fn displayed_badavatar(config: &Config) -> DisplayedBadAvatarConfig {
-    let ba = &config.contents.badavatar;
-    DisplayedBadAvatarConfig {
+pub fn displayed_abadavatar(config: &Config) -> DisplayedABadAvatarConfig {
+    let ba = &config.contents.abadavatar;
+    DisplayedABadAvatarConfig {
         abadavatar_v10_url: ba.url(UrlField::AbadavatarV10).to_shared_string(),
         abadavatar_v13_url: ba.url(UrlField::AbadavatarV13).to_shared_string(),
         xeunshackle_url: ba.url(UrlField::Xeunshackle).to_shared_string(),

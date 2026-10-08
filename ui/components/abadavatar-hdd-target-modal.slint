@@ -7,10 +7,10 @@ import { FatxDrivePicker } from "removable-drive-picker.slint";
 import { UiState } from "../ui-state.slint";
 import { Message, Dispatcher } from "../messages.slint";
 
-// Hard-drive chooser for the BadAvatar install tool. Picks a drive for this
+// Hard-drive chooser for the ABadAvatar install tool. Picks a drive for this
 // one operation: it never becomes the app's target. The drive is then read
 // before the confirmation modal opens.
-export component BadAvatarHddTargetModal inherits Modal {
+export component ABadAvatarHddTargetModal inherits Modal {
     min-w: 480px;
     min-h: 0px;
     max-h: min(620px, root.height - 75px);
@@ -23,7 +23,7 @@ export component BadAvatarHddTargetModal inherits Modal {
         spacing: 15px;
 
         FatxDrivePicker {
-            title: "Select the console hard drive for BadAvatar";
+            title: "Select the console hard drive for ABadAvatar";
             selected-drive <=> root.selected-drive;
         }
     }
@@ -40,7 +40,7 @@ export component BadAvatarHddTargetModal inherits Modal {
             IconButton {
                 label: "Close";
                 clicked => {
-                    UiState.selecting-badavatar-hdd-target = false;
+                    UiState.selecting-abadavatar-hdd-target = false;
                 }
             }
 
@@ -53,8 +53,8 @@ export component BadAvatarHddTargetModal inherits Modal {
                 kind: IconButtonKind.Primary;
                 disabled: selected-drive < 0;
                 clicked => {
-                    UiState.selecting-badavatar-hdd-target = false;
-                    Dispatcher.dispatch(Message.SelectBadAvatarHddDrive, UiState.fatx-drives[selected-drive].path);
+                    UiState.selecting-abadavatar-hdd-target = false;
+                    Dispatcher.dispatch(Message.SelectABadAvatarHddDrive, UiState.fatx-drives[selected-drive].path);
                 }
             }
         }
