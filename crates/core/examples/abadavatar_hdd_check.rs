@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
-//! Manual verification of the BadAvatar hard-drive install, end to end, against
+//! Manual verification of the ABadAvatar hard-drive install, end to end, against
 //! a disk image built here rather than against a real console drive:
-//! `cargo run -p txbm-core --example badavatar_hdd_check [-- --with-aurora]`
+//! `cargo run -p txbm-core --example abadavatar_hdd_check [-- --with-aurora]`
 //!
 //! Downloads the real components (ABadAvatar, XeUnshackle), installs them on a
 //! blank FATX image that already holds an Aurora and a game, checks what landed
@@ -11,8 +11,8 @@
 
 use std::io::{Seek, SeekFrom, Write};
 use std::sync::atomic::AtomicBool;
-use txbm_core::badavatar::BadAvatarConfig;
-use txbm_core::badavatar_hdd::{self, HddStatus};
+use txbm_core::abadavatar::ABadAvatarConfig;
+use txbm_core::abadavatar_hdd::{self, HddStatus};
 use txbm_core::fatx::FatxConfig;
 use txbm_core::remote_fs::RemoteFs;
 use txbm_core::target::Target;
@@ -32,9 +32,9 @@ const GAME_DIR: &str = "/Hdd1/Content/0000000000000000/4D5307D5/00007000";
 
 fn main() -> anyhow::Result<()> {
     let with_aurora = std::env::args().any(|a| a == "--with-aurora");
-    let cfg = BadAvatarConfig::default();
+    let cfg = ABadAvatarConfig::default();
 
-    let image = std::env::temp_dir().join("txbm-badavatar-hdd-check.img");
+    let image = std::env::temp_dir().join("txbm-abadavatar-hdd-check.img");
     let offset = fatx::PartitionMapEntry::from_x360_name("data")
         .expect("the data partition is part of the 360 map")
         .offset_bytes;
@@ -53,19 +53,19 @@ fn main() -> anyhow::Result<()> {
         s.quit()?;
     }
 
-    let before = badavatar_hdd::inspect(&target)?;
+    let before = abadavatar_hdd::inspect(&target)?;
     println!("before: {:?}, aurora {:?}", before.status, before.aurora);
     assert!(matches!(before.status, HddStatus::Retail));
     assert_eq!(before.aurora.is_some(), !with_aurora);
 
     // Cancelled before the first write: nothing may be on the drive after.
     let cancel = AtomicBool::new(true);
-    let res = badavatar_hdd::install(&target, &before, &cfg, &cancel, &|_| {}, &|| {
+    let res = abadavatar_hdd::install(&target, &before, &cfg, &cancel, &|_| {}, &|| {
         panic!("a cancelled install must not start writing")
     });
     println!("cancelled install: {:?}", res.as_ref().err().map(|e| e.to_string()));
     assert!(res.is_err());
-    assert!(matches!(badavatar_hdd::inspect(&target)?.status, HddStatus::Retail));
+    assert!(matches!(abadavatar_hdd::inspect(&target)?.status, HddStatus::Retail));
 
     // The install itself.
     let status = |line: &str| {
@@ -74,12 +74,12 @@ fn main() -> anyhow::Result<()> {
         }
     };
     let wrote = std::cell::Cell::new(false);
-    badavatar_hdd::install(&target, &before, &cfg, &NO_CANCEL, &status, &|| {
+    abadavatar_hdd::install(&target, &before, &cfg, &NO_CANCEL, &status, &|| {
         wrote.set(true)
     })?;
     assert!(wrote.get());
 
-    let after = badavatar_hdd::inspect(&target)?;
+    let after = abadavatar_hdd::inspect(&target)?;
     println!("after install: {:?}", after.status);
     assert!(matches!(after.status, HddStatus::Installed { complete: true, .. }));
 
@@ -128,10 +128,10 @@ fn main() -> anyhow::Result<()> {
 
     // Installing again is refused, even from the stale look taken before.
     assert!(
-        badavatar_hdd::install(&target, &after, &cfg, &NO_CANCEL, &|_| {}, &|| {})
+        abadavatar_hdd::install(&target, &after, &cfg, &NO_CANCEL, &|_| {}, &|| {})
             .is_err()
     );
-    let res = badavatar_hdd::install(&target, &before, &cfg, &NO_CANCEL, &|_| {}, &|| {});
+    let res = abadavatar_hdd::install(&target, &before, &cfg, &NO_CANCEL, &|_| {}, &|| {});
     println!("install over our own: {:?}", res.as_ref().err().map(|e| e.to_string()));
     assert!(res.is_err());
 
@@ -143,14 +143,14 @@ fn main() -> anyhow::Result<()> {
         s.quit()?;
     }
 
-    let listed = badavatar_hdd::inspect(&target)?;
+    let listed = abadavatar_hdd::inspect(&target)?;
     println!("removal list:");
     for item in &listed.removal {
         println!("  - {item}");
     }
 
-    badavatar_hdd::uninstall(&target, &status)?;
-    let gone = badavatar_hdd::inspect(&target)?;
+    abadavatar_hdd::uninstall(&target, &status)?;
+    let gone = abadavatar_hdd::inspect(&target)?;
     println!("after removal: {:?}, aurora {:?}", gone.status, gone.aurora);
     assert!(matches!(gone.status, HddStatus::Retail));
     // Aurora stays exactly when it was the user's.
@@ -177,11 +177,11 @@ fn main() -> anyhow::Result<()> {
             s.put_bytes("/Hdd1/Aurora/Data", "settings.db", b"the user's")?;
             s.quit()?;
         }
-        let stray = badavatar_hdd::inspect(&target)?;
+        let stray = abadavatar_hdd::inspect(&target)?;
         println!("with a stray Aurora folder: {:?}", stray.stray_aurora);
         assert!(stray.stray_aurora.is_some());
         assert!(
-            badavatar_hdd::install(&target, &stray, &cfg, &NO_CANCEL, &|_| {}, &|| {
+            abadavatar_hdd::install(&target, &stray, &cfg, &NO_CANCEL, &|_| {}, &|| {
                 panic!("a stray Aurora folder must stop the install before it writes")
             })
             .is_err()
@@ -194,10 +194,10 @@ fn main() -> anyhow::Result<()> {
         s.put_bytes("/Hdd1", "launch.ini", b"[Paths]\r\n")?;
         s.quit()?;
     }
-    let foreign = badavatar_hdd::inspect(&target)?;
+    let foreign = abadavatar_hdd::inspect(&target)?;
     println!("with a stray launch.ini: {:?}", foreign.status);
     assert!(matches!(foreign.status, HddStatus::Foreign { .. }));
-    assert!(badavatar_hdd::uninstall(&target, &|_| {}).is_err());
+    assert!(abadavatar_hdd::uninstall(&target, &|_| {}).is_err());
 
     let _ = std::fs::remove_file(&image);
     println!("OK");

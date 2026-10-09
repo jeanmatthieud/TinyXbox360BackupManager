@@ -6,7 +6,8 @@
 //! The image is a sparse file laid out like a console drive, with a blank
 //! Xbox 360 filesystem at the offset the *compatibility* partition sits at —
 //! the one the console calls `HddX`. Everything the tool does to a real drive
-//! (probe, inspect, back up, replace) therefore runs against it unchanged.
+//! (probe, inspect, back up, replace, check the room, format, create)
+//! therefore runs against it unchanged.
 //! Sparse means the 4.5 GiB of nothing in front of the partition costs no disk
 //! space.
 //!
@@ -19,8 +20,8 @@ use std::io::{Seek, SeekFrom, Write};
 use std::path::Path;
 use std::sync::atomic::AtomicBool;
 use txbm_core::fatx::{COMPAT_PARTITION, FatxConfig, FatxSession};
-use txbm_core::ogxbox_compat::{self, COMPAT_PATH, CONFIGS_PATH};
-use txbm_core::remote_fs::RemoteFs;
+use txbm_core::ogxbox_compat::{self, COMPAT_PATH, CONFIGS_PATH, CompatPartition};
+use txbm_core::remote_fs::{RemoteFs, RemoteSession};
 
 static NO_CANCEL: AtomicBool = AtomicBool::new(false);
 /// Where `install_remote` reports that it has started replacing the partition.
@@ -68,8 +69,13 @@ fn main() -> anyhow::Result<()> {
     println!("volumes: {devices:?}");
     assert_eq!(devices, vec!["HddX".to_string()], "wrong device name");
 
-    assert!(
-        !ogxbox_compat::inspect_remote(&mut session)?,
+    assert_eq!(
+        ogxbox_compat::inspect_remote(&mut session)?,
+        CompatPartition::Present {
+            has_files: false,
+            readable: true,
+            damage: None
+        },
         "a blank partition reported files"
     );
     println!("before: nothing installed");
@@ -93,7 +99,13 @@ fn main() -> anyhow::Result<()> {
 
     let mut session = open(&image, false)?;
     assert!(
-        ogxbox_compat::inspect_remote(&mut session)?,
+        matches!(
+            ogxbox_compat::inspect_remote(&mut session)?,
+            CompatPartition::Present {
+                has_files: true,
+                ..
+            }
+        ),
         "the files were not installed"
     );
     // Three files at the root plus the two dash stubs `fake_pack` plants.
@@ -203,6 +215,133 @@ fn main() -> anyhow::Result<()> {
         "a config of the same name was not overwritten"
     );
     session.quit()?;
+
+    // ── Room check ───────────────────────────────────────────────────────
+    // A pack that fits passes; one bigger than the whole partition does not,
+    // and the refusal comes before anything is written.
+    let medium = fake_pack(&work.join("medium"), &["xefu.xex"])?;
+    // More than the first FAT sector — the part the leftovers spare — can map.
+    std::fs::File::create(medium.join("xefu.xex"))?.set_len(8 << 20)?;
+    let mut session = RemoteSession::Fatx(open(&image, false)?);
+    ogxbox_compat::check_room(&mut session, &[medium.as_path()], &NO_CANCEL, &|_| {})?;
+    let huge = work.join("huge/Compatibility");
+    std::fs::create_dir_all(&huge)?;
+    std::fs::File::create(huge.join("xefu.xex"))?.set_len(PARTITION_SIZE)?;
+    assert!(
+        ogxbox_compat::check_room(&mut session, &[huge.as_path()], &NO_CANCEL, &|_| {}).is_err(),
+        "a pack bigger than the partition passed the room check"
+    );
+    session.quit()?;
+    println!("room: a fitting pack passes, an oversized one is refused");
+
+    // ── A partition created over a used disk ─────────────────────────────
+    // Leftover bytes through the FAT and in the root directory, as on a drive
+    // whose partition was created by writing little more than its superblock.
+    spoil_with_leftovers(&image, offset)?;
+    let found = ogxbox_compat::inspect_fatx(&image)?;
+    println!("damaged: {found:?}");
+    assert!(
+        matches!(
+            &found,
+            CompatPartition::Present {
+                has_files: true,
+                readable: true,
+                damage: Some(_)
+            }
+        ),
+        "the leftovers went unnoticed"
+    );
+    let mut session = RemoteSession::Fatx(open(&image, false)?);
+    assert!(
+        ogxbox_compat::check_room(&mut session, &[medium.as_path()], &NO_CANCEL, &|_| {}).is_err(),
+        "the leftovers' space was taken for free space"
+    );
+    session.quit()?;
+
+    // ── Format and create ────────────────────────────────────────────────
+    // Refused while nothing tells the compat partition's place is its own…
+    assert!(
+        ogxbox_compat::format_fatx(&image).is_err(),
+        "formatted a disk with no games partition"
+    );
+    // …and done once the games partition sits where the console puts it.
+    write_data_superblock(&image)?;
+    let created = ogxbox_compat::format_fatx(&image)?;
+    assert!(!created, "an existing partition was reported as created");
+    assert_eq!(
+        ogxbox_compat::inspect_fatx(&image)?,
+        CompatPartition::Present {
+            has_files: false,
+            readable: true,
+            damage: None
+        },
+        "the formatted partition is not blank and healthy"
+    );
+    let session = open(&image, false)?;
+    assert_eq!(session.volume_id(), 0xcafe_babe, "the serial was not kept");
+    session.quit()?;
+    println!("format: damaged partition formatted, serial kept");
+
+    // No partition at all: created from scratch.
+    let mut file = std::fs::OpenOptions::new().write(true).open(&image)?;
+    file.seek(SeekFrom::Start(offset))?;
+    file.write_all(&[0u8; SUPERBLOCK_SIZE])?;
+    drop(file);
+    assert_eq!(ogxbox_compat::inspect_fatx(&image)?, CompatPartition::Missing);
+    assert!(ogxbox_compat::format_fatx(&image)?, "the partition was not created");
+    assert!(
+        matches!(
+            ogxbox_compat::inspect_fatx(&image)?,
+            CompatPartition::Present { damage: None, .. }
+        ),
+        "the created partition is not healthy"
+    );
+    println!("create: missing partition created");
+
+    // A superblock the filesystem cannot be opened with (3 sectors per
+    // cluster is no power of two). The inspection must not fail on it: it is
+    // the partition that is the problem, and the format is what repairs it.
+    let mut file = std::fs::OpenOptions::new().write(true).open(&image)?;
+    file.seek(SeekFrom::Start(offset + 8))?;
+    file.write_all(&3u32.to_be_bytes())?;
+    drop(file);
+    match ogxbox_compat::inspect_fatx(&image)? {
+        CompatPartition::Present {
+            readable: false,
+            damage: Some(why),
+            ..
+        } => println!("unreadable: {why}"),
+        other => panic!("a partition that does not open was reported as {other:?}"),
+    }
+    assert!(
+        !ogxbox_compat::format_fatx(&image)?,
+        "an existing partition was reported as created"
+    );
+    assert!(
+        matches!(
+            ogxbox_compat::inspect_fatx(&image)?,
+            CompatPartition::Present {
+                readable: true,
+                damage: None,
+                ..
+            }
+        ),
+        "the unreadable partition was not repaired by the format"
+    );
+    println!("repair: unreadable partition reported, then formatted");
+
+    // An original Xbox signature where the partition goes — leftovers from
+    // the disk's earlier life. Not a partition to repair, one to create.
+    let mut file = std::fs::OpenOptions::new().write(true).open(&image)?;
+    file.seek(SeekFrom::Start(offset))?;
+    file.write_all(&SIGNATURE.to_le_bytes())?;
+    drop(file);
+    assert_eq!(ogxbox_compat::inspect_fatx(&image)?, CompatPartition::Missing);
+    assert!(
+        ogxbox_compat::format_fatx(&image)?,
+        "leftovers were not replaced by a new partition"
+    );
+    println!("foreign: original Xbox leftovers taken for a missing partition, then created");
 
     let _ = std::fs::remove_dir_all(&work);
     let _ = std::fs::remove_file(&image);
@@ -371,6 +510,44 @@ fn list_local(dir: &Path) -> Vec<String> {
     walk(dir, "", &mut out);
     out.sort();
     out
+}
+
+/// Fills the FAT past its first sector, and the root directory's second slot
+/// (the first holds `Compatibility`), with bytes that are not FATX — what a partition created over a used disk
+/// without clearing it looks like.
+fn spoil_with_leftovers(image: &Path, offset: u64) -> anyhow::Result<()> {
+    let fat_size = reference_fat_size() as usize;
+    let leftovers: Vec<u8> = (0..fat_size - 512)
+        .map(|i| (i as u8).wrapping_mul(37) | 1)
+        .collect();
+    let mut file = std::fs::OpenOptions::new().write(true).open(image)?;
+    file.seek(SeekFrom::Start(offset + FAT_OFFSET + 512))?;
+    file.write_all(&leftovers)?;
+    file.seek(SeekFrom::Start(offset + FAT_OFFSET + fat_size as u64 + 64))?;
+    file.write_all(&[0x8bu8; 64])?;
+    file.sync_all()?;
+    Ok(())
+}
+
+/// Plants the superblock of a games partition where the console puts it,
+/// right after the compatibility partition. Only its signature is ever read
+/// here: it is what tells the format that the disk is laid out like a
+/// console's.
+fn write_data_superblock(image: &Path) -> anyhow::Result<()> {
+    let data = fatx::PartitionMapEntry::from_x360_name("data")
+        .expect("the data partition is part of the 360 map")
+        .offset_bytes;
+    let mut superblock = Vec::new();
+    superblock.extend_from_slice(&SIGNATURE.to_be_bytes());
+    for value in [0x1234_5678u32, SECTORS_PER_CLUSTER, ROOT_CLUSTER] {
+        superblock.extend_from_slice(&value.to_be_bytes());
+    }
+    superblock.resize(SUPERBLOCK_SIZE, 0xff);
+    let mut file = std::fs::OpenOptions::new().write(true).open(image)?;
+    file.seek(SeekFrom::Start(data))?;
+    file.write_all(&superblock)?;
+    file.sync_all()?;
+    Ok(())
 }
 
 fn write_blank_filesystem(path: &Path, offset: u64) -> anyhow::Result<()> {

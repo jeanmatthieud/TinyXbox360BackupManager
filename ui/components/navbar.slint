@@ -54,14 +54,14 @@ export component Navbar inherits VerticalLayout {
         // would be a second write in flight (see `crates/core/src/ftp.rs`).
         if UiState.config.target.is-empty: NavbarButton {
             icon: IconSet.Zap;
-            ping: !UiState.creating-badavatar && !UiState.compat-busy && !UiState.badavatar-hdd-tool-busy;
-            disabled: UiState.creating-badavatar || UiState.compat-busy || UiState.badavatar-hdd-tool-busy;
-            tooltip: UiState.creating-badavatar
-                ? "BadAvatar USB key creation in progress"
+            ping: !UiState.creating-abadavatar && !UiState.compat-busy && !UiState.abadavatar-hdd-tool-busy;
+            disabled: UiState.creating-abadavatar || UiState.compat-busy || UiState.abadavatar-hdd-tool-busy;
+            tooltip: UiState.creating-abadavatar
+                ? "ABadAvatar USB key creation in progress"
                 : UiState.compat-busy
                     ? "Original Xbox compatibility install in progress"
-                    : UiState.badavatar-hdd-tool-busy
-                        ? "BadAvatar hard drive install in progress"
+                    : UiState.abadavatar-hdd-tool-busy
+                        ? "ABadAvatar hard drive install in progress"
                         : "Select a target";
             clicked => {
                 UiState.selecting-target = true;
@@ -70,11 +70,11 @@ export component Navbar inherits VerticalLayout {
 
         if !UiState.config.target.is-empty: NavbarButton {
             icon: IconSet.Unplug;
-            // The hard drive must not be let go while BadAvatar is being
+            // The hard drive must not be let go while ABadAvatar is being
             // written to it or removed from it.
-            disabled: UiState.badavatar-hdd-busy;
-            tooltip: UiState.badavatar-hdd-busy
-                ? "Wait until BadAvatar is removed from the hard drive"
+            disabled: UiState.abadavatar-hdd-busy;
+            tooltip: UiState.abadavatar-hdd-busy
+                ? "Wait until ABadAvatar is removed from the hard drive"
                 : "Disconnect from \{UiState.config.target}";
             clicked => Dispatcher.dispatch(Message.RequestDisconnect, "");
         }
@@ -90,7 +90,7 @@ export component Navbar inherits VerticalLayout {
             clicked => Dispatcher.dispatch(Message.OpenThat, "https://github.com/jeanmatthieud/TinyXbox360BackupManager/releases/latest");
         }
 
-        // Always available: the Toolbox hosts the BadAvatar USB-key creation,
+        // Always available: the Toolbox hosts the ABadAvatar USB-key creation,
         // which is useful even when no target is connected.
         NavbarButton {
             active: UiState.current-page == Page.Toolbox;

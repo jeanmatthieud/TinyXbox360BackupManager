@@ -35,7 +35,10 @@ sysinfo = { version = "0.33", default-features = false, features = ["disk"] }
 sha1 = "0.10"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
 sevenz-rust2 = { version = "0.21.3", default-features = false }
-rars = "0.9.4"
+# Reader only: no writer, recovery-record or encryption code (the app never
+# writes RARs nor takes a password). `parallel` is left out too: it only
+# serves `extract_to_parallel_buffered*`, which `archive::extract_rar` avoids.
+rars = { version = "0.10.0", default-features = false }
 zip = { version = "8.6.0", default-features = false, features = ["deflate", "deflate64"] }
 
 # Reads the real location of a file the Flatpak document portal hands over

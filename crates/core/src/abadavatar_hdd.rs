@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
-//! Installing the BadAvatar boot chain on the console's own hard drive, and
+//! Installing the ABadAvatar boot chain on the console's own hard drive, and
 //! removing it again.
 //!
 //! ABadAvatar v1.3 (bibarub's fork of BadUpdate 1.3) looks for its payload
@@ -29,7 +29,7 @@
 //! folder, lists what was put there; it is what tells our install apart from
 //! anyone else's, and what the removal goes by.
 
-use crate::badavatar::{self, AbadavatarVersion, BADAVATAR_CANCELLED, BadAvatarConfig, UrlField};
+use crate::abadavatar::{self, AbadavatarVersion, ABADAVATAR_CANCELLED, ABadAvatarConfig, UrlField};
 use crate::data_dir::TMP_DIR;
 use crate::ftp::RemoteEntry;
 use crate::remote_fs::{RemoteFs, RemoteSession};
@@ -59,14 +59,14 @@ const PAYLOAD_DIR: &str = "BadUpdatePayload";
 const PROFILE_XUID: &str = "E0002FF78DFBDE7B";
 /// Folders from the drive root down to the profile package.
 const PROFILE_DIRS: [&str; 4] = ["Content", PROFILE_XUID, "FFFE07D1", "00010000"];
-const MANIFEST_NAME: &str = "txbm-badavatar.json";
+const MANIFEST_NAME: &str = "txbm-abadavatar.json";
 
-/// Files at the drive root that belong to a BadAvatar setup. Any of them on a
+/// Files at the drive root that belong to an ABadAvatar setup. Any of them on a
 /// drive we did not install makes it "not retail".
 const ROOT_FILES: [&str; 3] = ["launch.ini", "JRPC2.xex", "Xbdm.xex"];
 /// Dashlaunch's helper, which XeUnshackle copies to the hard drive by itself
 /// whenever the console has one — so nearly every console that ever ran
-/// BadAvatar from a USB key has it. Not a sign of anyone's install, but still
+/// ABadAvatar from a USB key has it. Not a sign of anyone's install, but still
 /// removed with ours.
 const LHELPER: &str = "lhelper.xex";
 
@@ -82,7 +82,7 @@ pub struct HddManifest {
     pub root_files: Vec<String>,
     /// The Aurora folder we installed, relative to the drive root
     /// (`Aurora`). `None` when Aurora was already there: it is then the user's,
-    /// and stays when BadAvatar is removed.
+    /// and stays when ABadAvatar is removed.
     pub aurora_installed: Option<String>,
 }
 
@@ -99,10 +99,10 @@ impl Default for HddManifest {
     }
 }
 
-/// State of the drive, as far as BadAvatar goes.
+/// State of the drive, as far as ABadAvatar goes.
 #[derive(Debug, Clone)]
 pub enum HddStatus {
-    /// No trace of BadAvatar: ready for an install.
+    /// No trace of ABadAvatar: ready for an install.
     Retail,
     /// Our install. `complete` is false when a run was interrupted, or the
     /// profile or payload was removed by hand; removing it is still offered.
@@ -140,7 +140,7 @@ pub fn inspect(target: &Target) -> Result<HddInspection> {
     Ok(found)
 }
 
-/// Downloads, checks and installs BadAvatar on a retail drive. `before` is
+/// Downloads, checks and installs ABadAvatar on a retail drive. `before` is
 /// what [`inspect`] found on it when it was picked: it decides whether Aurora
 /// has to be downloaded, and the session that writes checks the drive again
 /// before its first write. `status` receives short progress lines. `cancel` is
@@ -150,7 +150,7 @@ pub fn inspect(target: &Target) -> Result<HddInspection> {
 pub fn install(
     target: &Target,
     before: &HddInspection,
-    cfg: &BadAvatarConfig,
+    cfg: &ABadAvatarConfig,
     cancel: &AtomicBool,
     status: &dyn Fn(&str),
     writing: &dyn Fn(),
@@ -168,21 +168,21 @@ pub fn install(
     cfg.xeunshackle_autostart = false;
     let need_aurora = before.aurora.is_none();
 
-    let work = TMP_DIR.join("badavatar-hdd");
+    let work = TMP_DIR.join("abadavatar-hdd");
     let res = (|| {
         let staged =
-            badavatar::stage_components(&work, &cfg, need_aurora, false, cancel, status)?;
+            abadavatar::stage_components(&work, &cfg, need_aurora, false, cancel, status)?;
         check_cancel(cancel)?;
 
         status("Preparing the files…");
         let root = work.join("hdd");
         let _ = fs::remove_dir_all(&root);
         fs::create_dir_all(&root)?;
-        badavatar::assemble(&root, &staged.abadavatar, &staged.xeunshackle)?;
+        abadavatar::assemble(&root, &staged.abadavatar, &staged.xeunshackle)?;
 
         let aurora_rel = match &staged.aurora {
             Some(aurora) => {
-                badavatar::copy_aurora(aurora, &root.join("Aurora"))?;
+                abadavatar::copy_aurora(aurora, &root.join("Aurora"))?;
                 "Aurora".to_string()
             }
             None => {
@@ -190,8 +190,8 @@ pub fn install(
                 dir.trim_start_matches("Hdd:\\").to_string()
             }
         };
-        badavatar::retarget_launch_ini_to_hdd(&root)?;
-        badavatar::set_launch_default(&root, &format!("Hdd:\\{aurora_rel}\\Aurora.xex"))?;
+        abadavatar::retarget_launch_ini_to_hdd(&root)?;
+        abadavatar::set_launch_default(&root, &format!("Hdd:\\{aurora_rel}\\Aurora.xex"))?;
 
         check_gamer_profile(&root.join(PAYLOAD_DIR).join(GAMER_PROFILE))?;
         if !root
@@ -234,7 +234,7 @@ pub fn install(
 /// anything else goes, then the files at the root, the Aurora folder when we
 /// installed it, and the payload folder last.
 pub fn uninstall(target: &Target, status: &dyn Fn(&str)) -> Result<()> {
-    status("Removing BadAvatar from the hard drive…");
+    status("Removing ABadAvatar from the hard drive…");
     let mut session = open(target, true)?;
     let res = uninstall_remote(&mut session, status);
     // Flushed even after a failure: whatever was removed must reach the disk
@@ -247,12 +247,12 @@ pub fn uninstall(target: &Target, status: &dyn Fn(&str)) -> Result<()> {
 fn open(target: &Target, writable: bool) -> Result<RemoteSession> {
     match target {
         Target::Fatx(_) => target.open_remote(writable),
-        _ => bail!("BadAvatar can only be installed on a console hard drive connected here"),
+        _ => bail!("ABadAvatar can only be installed on a console hard drive connected here"),
     }
 }
 
 fn check_cancel(cancel: &AtomicBool) -> Result<()> {
-    crate::download::check_cancel(cancel, BADAVATAR_CANCELLED)
+    crate::download::check_cancel(cancel, ABADAVATAR_CANCELLED)
 }
 
 /// Refuses a drive the install must not write to: one that is not retail, or
@@ -260,13 +260,13 @@ fn check_cancel(cancel: &AtomicBool) -> Result<()> {
 pub fn ensure_installable(inspection: &HddInspection) -> Result<()> {
     match &inspection.status {
         HddStatus::Retail => {}
-        HddStatus::Installed { .. } => bail!("BadAvatar is already installed on this hard drive"),
+        HddStatus::Installed { .. } => bail!("ABadAvatar is already installed on this hard drive"),
         HddStatus::BadStorage => bail!(
             "this hard drive is formatted for Bad Storage: the console can only read it once \
-             the exploit has run, so BadAvatar cannot start from it — keep it on the USB key"
+             the exploit has run, so ABadAvatar cannot start from it — keep it on the USB key"
         ),
         HddStatus::Foreign { found } => bail!(
-            "this hard drive already holds another BadAvatar or BadUpdate setup ({}) — restore \
+            "this hard drive already holds another ABadAvatar or BadUpdate setup ({}) — restore \
              it to its retail state first",
             found.join(", ")
         ),
@@ -514,7 +514,7 @@ fn install_remote(
 
     // 1. The manifest first: from here on, whatever happens, the drive reads
     //    as our install and can be removed from the card.
-    status("Writing BadAvatar to the hard drive…");
+    status("Writing ABadAvatar to the hard drive…");
     let payload = format!("{hdd}/{PAYLOAD_DIR}");
     fs.ensure_dir(&payload)?;
     let json = serde_json::to_vec_pretty(manifest)?;
@@ -552,7 +552,7 @@ fn install_remote(
             }
         })
         .context("writing Aurora")?;
-        status("Writing BadAvatar to the hard drive…");
+        status("Writing ABadAvatar to the hard drive…");
     }
 
     // 5. The profile last: it is what arms the exploit at the next boot.
@@ -568,7 +568,7 @@ fn uninstall_remote(fs: &mut dyn RemoteFs, status: &dyn Fn(&str)) -> Result<()> 
     let layout = read_layout(fs)?;
     let manifest = match &layout.manifest {
         Some(Some(manifest)) => manifest.clone(),
-        _ => bail!("BadAvatar wasn't installed on this hard drive by TinyXbox360BackupManager"),
+        _ => bail!("ABadAvatar wasn't installed on this hard drive by TinyXbox360BackupManager"),
     };
     let hdd = layout.root.clone();
     let never = AtomicBool::new(false);
@@ -617,7 +617,7 @@ fn uninstall_remote(fs: &mut dyn RemoteFs, status: &dyn Fn(&str)) -> Result<()> 
     // 4. The payload folder, manifest included, last: until it goes, the drive
     //    still reads as our install and the removal can be run again.
     if let Some(name) = &layout.payload {
-        status("Removing BadAvatar from the hard drive…");
+        status("Removing ABadAvatar from the hard drive…");
         fs.remove_dir_recursive(&format!("{hdd}/{name}"), &never, &mut |_, _| {})
             .context("removing the payload folder")?;
     }

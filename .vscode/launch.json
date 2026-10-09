@@ -9,6 +9,19 @@
       "args": [],
       "cwd": "${workspaceFolder}",
       "env": { "RUST_BACKTRACE": "1" }
+    },
+    {
+      // UI interpreted at runtime: edits to ui/*.slint show up live, without a restart.
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug txbm-gui (live preview)",
+      "cargo": {
+        "args": ["build", "--bin=txbm-gui", "--package=txbm-gui", "--features=live-preview"],
+        "env": { "SLINT_LIVE_PREVIEW": "1" }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}",
+      "env": { "RUST_BACKTRACE": "1" }
     }
   ]
 }

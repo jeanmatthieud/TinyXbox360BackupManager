@@ -3,25 +3,25 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 use crate::{
-    DisplayedBadAvatarConfig, DisplayedCompatConfig, DisplayedCompatPack, DisplayedConfig,
+    DisplayedABadAvatarConfig, DisplayedCompatConfig, DisplayedCompatPack, DisplayedConfig,
     DisplayedFatxDrive, DisplayedRecentLocation, DisplayedRemovableDrive, DisplayedUrlSource,
     GodLayout, TargetKind,
 };
 use crate::util::GIB;
 use slint::{Model, ModelRc, SharedString, ToSharedString, VecModel};
 use txbm_core::{
-    badavatar::{AbadavatarVersion, UrlField},
+    abadavatar::{AbadavatarVersion, UrlField},
     config::{Config, GodLayout as CoreGodLayout},
     ogxbox_compat::{COMPAT_PACKS, XEFU_CONFIGS_URL},
     target::Target,
 };
 
-/// Builds the model backing `UiState.badavatar` from the config, resolving each
+/// Builds the model backing `UiState.abadavatar` from the config, resolving each
 /// URL (override or built-in default) and exposing the default alongside so the
 /// UI can offer a per-field reset when the two differ.
-pub fn displayed_badavatar(config: &Config) -> DisplayedBadAvatarConfig {
-    let ba = &config.contents.badavatar;
-    DisplayedBadAvatarConfig {
+pub fn displayed_abadavatar(config: &Config) -> DisplayedABadAvatarConfig {
+    let ba = &config.contents.abadavatar;
+    DisplayedABadAvatarConfig {
         abadavatar_v10_url: ba.url(UrlField::AbadavatarV10).to_shared_string(),
         abadavatar_v13_url: ba.url(UrlField::AbadavatarV13).to_shared_string(),
         xeunshackle_url: ba.url(UrlField::Xeunshackle).to_shared_string(),
@@ -158,15 +158,21 @@ pub fn sync_custom_packs(model: &VecModel<DisplayedCompatPack>, config: &Config)
     }
 }
 
-/// Builds the model backing `UiState.recent-locations` from the config.
+/// Builds the model backing `UiState.recent-locations` from the config. A
+/// console hard drive is left out of expert mode, like the FATX target card:
+/// it stays in the config, and reappears with expert mode.
 pub fn recent_locations(config: &Config) -> Vec<DisplayedRecentLocation> {
+    let expert = config.contents.expert_mode();
     config
         .contents
         .recent_locations
         .iter()
-        .map(|l| DisplayedRecentLocation {
+        .enumerate()
+        .filter(|(_, l)| expert || l.kind != txbm_core::config::TargetKind::Fatx)
+        .map(|(i, l)| DisplayedRecentLocation {
             name: l.display_name().to_shared_string(),
             kind: l.kind.into(),
+            index: i as i32,
         })
         .collect()
 }
@@ -287,6 +293,8 @@ impl From<&Config> for DisplayedConfig {
                 .mount_point
                 .to_string_lossy()
                 .to_shared_string(),
+            expert_mode: config.contents.expert_mode(),
+            expert_mode_switchable: !txbm_core::config::EXPERT_MODE_FORCED,
             remove_sources_games: config.contents.remove_sources_games.to_shared_string(),
             xbox360_format: config.contents.xbox360_format.to_shared_string(),
             sort_by: config.contents.sort_by.to_shared_string(),
@@ -294,6 +302,17 @@ impl From<&Config> for DisplayedConfig {
             theme_preference: config.contents.theme_preference.to_shared_string(),
             auto_reconnect: config.contents.auto_reconnect.to_shared_string(),
             cover_source: config.contents.cover_source.to_shared_string(),
+            aurora_import_on_add: config.contents.aurora_import_on_add.to_shared_string(),
+            asset_languages: ModelRc::new(VecModel::from(
+                txbm_core::marketplace::LOCALES
+                    .iter()
+                    .map(|(_, name)| name.to_shared_string())
+                    .collect::<Vec<_>>(),
+            )),
+            asset_language_index: txbm_core::marketplace::LOCALES
+                .iter()
+                .position(|(locale, _)| locale.eq_ignore_ascii_case(&config.contents.asset_language))
+                .unwrap_or(0) as i32,
             show_x360: config.contents.show_x360,
             show_arcade: config.contents.show_arcade,
             show_og: config.contents.show_og,

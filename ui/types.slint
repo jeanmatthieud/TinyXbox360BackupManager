@@ -20,6 +20,10 @@ export enum JobKind {
     Delete,
     // One stored component (a disc package, a DLC file) removed from a game.
     DeleteContent,
+    // Aurora's import folder written for the games that have none yet.
+    AuroraImport,
+    // Aurora's import folder emptied.
+    AuroraImportClear,
 }
 
 // One entry of the job queue, as shown on the queue page.
@@ -63,6 +67,10 @@ export struct DisplayedConfig {
     target: string,
     target-kind: TargetKind,
     mount-point: string,
+    // Shows the advanced tools and settings (see `ConfigContents::expert_mode`).
+    expert-mode: bool,
+    // False while `EXPERT_MODE_FORCED` hides the expert mode switch.
+    expert-mode-switchable: bool,
     remove-sources-games: string,
     xbox360-format: string,
     sort-by: string,
@@ -70,6 +78,11 @@ export struct DisplayedConfig {
     theme-preference: string,
     auto-reconnect: string,
     cover-source: string,
+    aurora-import-on-add: string,
+    // Names of the languages the Aurora game assets can be prepared in
+    // (`marketplace::LOCALES`, same order), and the row of the chosen one.
+    asset-languages: [string],
+    asset-language-index: int,
     show-x360: bool,
     show-arcade: bool,
     show-og: bool,
@@ -87,7 +100,7 @@ export struct DisplayedUrlSource {
     host: string,
 }
 
-export struct DisplayedBadAvatarConfig {
+export struct DisplayedABadAvatarConfig {
     // Effective URLs (user override or built-in default) shown in the fields.
     abadavatar-v10-url: string,
     abadavatar-v13-url: string,
@@ -167,12 +180,12 @@ export struct DisplayedDashlaunch {
     noupdater: bool,
 }
 
-// BadAvatar on the connected console hard drive (Device status page, FATX
-// target only). See `txbm_core::badavatar_hdd`.
-export enum BadAvatarHddState {
+// ABadAvatar on the connected console hard drive (Device status page, FATX
+// target only). See `txbm_core::abadavatar_hdd`.
+export enum ABadAvatarHddState {
     // Not read yet, or not a console hard drive: the card stays hidden.
     Unknown,
-    // No trace of BadAvatar: an install is offered.
+    // No trace of ABadAvatar: an install is offered.
     Retail,
     // Installed by this app.
     Installed,
@@ -180,12 +193,12 @@ export enum BadAvatarHddState {
     Incomplete,
     // Someone else's setup: reported, never touched.
     Foreign,
-    // Formatted for Bad Storage: BadAvatar cannot start from it.
+    // Formatted for Bad Storage: ABadAvatar cannot start from it.
     BadStorage,
 }
 
-export struct DisplayedBadAvatarHdd {
-    state: BadAvatarHddState,
+export struct DisplayedABadAvatarHdd {
+    state: ABadAvatarHddState,
     // What makes a foreign drive non-retail, in console notation.
     found: [string],
     // What a removal deletes, in the order it does.
@@ -197,6 +210,10 @@ export struct DisplayedRecentLocation {
     // console hard drive connected here).
     name: string,
     kind: TargetKind,
+    // Position in the config's list, which is what the connect and remove
+    // messages carry: the displayed list may skip entries (a console hard
+    // drive is hidden out of expert mode).
+    index: int,
 }
 
 // A raw disk offered in the FATX target picker. See `txbm_core::fatx_dev`.

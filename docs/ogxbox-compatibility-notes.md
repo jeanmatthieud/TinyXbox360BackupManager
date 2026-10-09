@@ -33,10 +33,72 @@ The fonts are what make a pack 38–42 MiB; everything else is under 5 MiB.
 
 **The partition is only created when a drive is formatted at the Microsoft
 factory.** A third-party drive, a reformatted one or one whose partition was
-lost has no `HddX` at all. Nothing in the `fatx` crate can create one (there is
-no `mkfs` of any kind), and nothing can over FTP either, so the tool detects the
-absence and points at *HDD Compatibility Partition Fixer* (homebrew, run on the
-console) or FATXplorer.
+lost has no `HddX` at all. Nothing can create one over FTP, so the tool detects
+the absence and sends the user to the card's *Create / format the compatibility
+partition* button (expert mode), which works on the hard drive plugged into this
+computer (`ogxbox_compat::format_fatx`, over `fatx::FatxFs::format`, a port of
+libfatx's `fatx_disk_format_partition`). The partition has a fixed place —
+`0x120EB0000`, 256 MiB, right in front of `data` at `0x130EB0000` — so creating
+it touches no game; the format refuses a drive whose `data` partition is not
+found at its offset, since that place is only the partition's on a console's
+layout. An existing partition keeps its volume serial.
+
+## Partitions created over a used disk
+
+Found on a second-hand 500 GB drive: its `HddX` had a valid superblock and a
+valid first FAT *sector*, but the rest of the FAT and the root cluster held
+whatever the disk carried before (random data, then a 32-bit Windows PE). The
+FAT header itself was a FAT32 one (`FFFFFFF8 FFFFFFFF`) on a FAT16 partition,
+so whatever created it wrote little more than a superblock. The consequences:
+
+- every non-zero leftover word reads as a cluster in use: 16 377 of 16 384
+  clusters taken, 96 KiB free, with only ~27 MiB of real files. Installs ran
+  out of room halfway (the console wrote two files as 0-byte entries);
+- the root cluster holds slots whose name length exceeds 42, which used to
+  panic the `fatx` crate (`DirectoryEntry::file_name`). The crate now reads
+  them as `DirectoryEntryKind::Invalid`, skips them and never reuses them.
+
+So the tool checks before it deletes anything: on a hard drive, `inspect_fatx`
+runs `fatx::FatxFsHandle::audit` (lost clusters, unreadable entries, broken or
+cross-linked chains) and refuses an install on a damaged partition, then
+`check_room` compares the free clusters plus those the current files free up
+with what the staged pack needs. Over FTP the console hides all of that, so
+`check_room` *reserves* the missing space by writing a scratch file
+(`/HddX/txbm-space-check.tmp`) and removing it — nothing when a pack replaces
+one of the same size, a few seconds otherwise. In both cases the fix is to
+format the partition from a hard drive plugged into this computer.
+
+Details worth knowing before touching this again:
+
+- `CompatPartition::Present` carries `has_files`, `readable` and `damage`. A partition that
+  opens badly (a superblock the filesystem rejects) or cannot be walked is reported as damaged
+  and unreadable instead of failing the inspection — otherwise the very partition the format is
+  for could never reach it. Only `fatx::DeviceAccessError` (permission, disk gone) is passed up as
+  an error, since no format fixes that. The error is typed on purpose: do not match its text.
+- The backup is offered only for files that can be read. Formatting a **damaged** partition makes
+  it best effort (`compat::backup_is_best_effort`); a healthy one still stops on a failed backup.
+- The FTP room check tells "no room" from any other write failure with a one-byte file: it still
+  fits on a merely full partition and fails on one that cannot be reached. A scratch file that
+  cannot be removed is reported, never ignored — it fills the room it reserved. It is streamed
+  (`FtpSession::put_zeros`), not built in memory.
+- `inspect_fatx` and the room check use the same read-only session as the backup, so an install
+  opens one read session and one write session.
+- Device failures (`DeviceAccessError`, any `io::Error` or `fatx::Error::Io` in the chain) are
+  errors, never "damage": an unplugged adapter mid-audit must not end in an offer to format. An
+  original Xbox signature where `compat` goes is leftovers, so it reads as a *missing* partition
+  and `format_fatx` creates one over it.
+- The room counts directories by the entries they hold (a 16 KiB cluster per 256 entries, end
+  marker included), not one cluster each — `Configs` alone may outgrow one.
+- The per-title configs, once ticked, are part of the install: counted by the room check, and a
+  download or write failure fails it (titles that need a config do not run without one).
+- The FTP scratch file honours *Cancel*: the interrupted session is unusable, so the leftover is
+  removed over a fresh one (`remove_room_probe`).
+- Checked on a real drive (500 GB, 2026-10): after the format and an install, the audit was clean
+  and the 140 files, `xefu3.xex` and the 14 MiB `Xbox Book.xtf` included, matched the pack byte
+  for byte (the HUD pack: 23 of 23 files outside `Configs`, plus one community config).
+- Expert mode (which shows the create/format button) is not switchable while a target is
+  connected: it decides which cards and settings that target shows. Out of expert mode a console
+  hard drive is not reopened by auto-reconnect, nor offered among the recent locations.
 
 Not to be confused with `Hdd1\Compatibility\Xbox1\{TDATA,UDATA}` on the *content*
 partition — that is the original Xbox's E drive, i.e. the **save games**.
@@ -104,8 +166,8 @@ Sizes at the pinned snapshot, for reference:
 | `Hacked_Xefu_Pack.zip` | 40 614 646 |
 | `Hacked_Xefu_Pack_with_HUD.zip` | 40 605 241 |
 
-The *HDD Compatibility Partition Fixer* homebrew, referenced in the error
-message when `HddX` is missing, is at
+The *HDD Compatibility Partition Fixer* homebrew (the console-side way to
+create a missing `HddX`, not used by this tool) is at
 `consolemods.org/wiki/images/b/b2/Hdd_compat_partition_fixer_v1.zip` and is
 reachable the same way.
 
@@ -120,7 +182,7 @@ Compatibility/…                                  no wrapper
 ```
 
 Hence `download::find_entry(root, "Compatibility", true)` rather than a fixed
-path. The same helper handles the archives BadAvatar downloads, for the same
+path. The same helper handles the archives ABadAvatar downloads, for the same
 reason.
 
 ## The `fatx` crate misplaced this partition's cluster area

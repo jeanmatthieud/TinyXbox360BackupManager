@@ -90,7 +90,7 @@ Inspired by [TinyWiiBackupManager](https://github.com/mq1/TinyWiiBackupManager).
 - **Accepts many kinds of input** and picks the right processing automatically: Xbox 360 ISOs, original Xbox ISOs, Arcade (XBLA) archives, install / expansion discs, and bare STFS packages.
 - **Multi-disc games with an install disc** (e.g. GTA V) and **Expansion Installer discs** (e.g. GTA IV: The Complete Edition) are handled — just provide both ISOs; DLC and title updates get installed to the right place so unlocks work out of the box.
 - **Covers** from [XboxUnity](https://www.xboxunity.net) and [MobCats](https://github.com/MobCat/MobCats-original-xbox-game-list) (with a local cache).
-- **Toolbox** for the jobs that come before the games: build a BadAvatar USB key, and install the original Xbox compatibility files to maximize the compatibility.
+- **Toolbox** for the jobs that come before the games: build an ABadAvatar USB key, and install the original Xbox compatibility files to maximize the compatibility.
 - **Cross-platform**, native, no dependencies to install:
   - :window: Windows 10+ | x86 (32-bit), x64 (64-bit), arm64 (Qualcomm Snapdragon etc.)
   - :apple: macOS 10.14+ | x86_64 (Intel), arm64 (Apple Silicon/M1+)
@@ -147,14 +147,29 @@ You confirm (or adjust) the three folders, and the app writes a small **`.txbm.j
 - **Xbox360 over FTP (Aurora):** the game list is read from the console, added games are converted locally then pushed to the console; deletion is done remotely. Only **one FTP connection at a time** is used, as required by the console's FTP server.
 - **Console hard drive (FATX360), experimental:** the drive is opened as a raw device and its `data` partition — the one the console calls `Hdd1` — is read and written directly, so folders, the game list, the `.txbm.json` configuration and Aurora's own databases are the very same ones the console sees. Added games are converted locally then copied across. The drive is opened **read-only unless a write is actually taking place**, and only one session at a time. See [Using the console's hard drive](#electric_plug-using-the-consoles-hard-drive) for the disk permissions this needs.
 
-The drive's other partitions are left alone, with one exception: the [Original Xbox compatibility](#space_invader-original-xbox-compatibility-toolbox) tool in the Toolbox writes the emulator partition (`HddX`). It is a standalone tool, usable only while no target is connected, so it can never write beside a game transfer.
+The drive's other partitions are left alone, with one exception: the [Original Xbox compatibility](#space_invader-original-xbox-compatibility-toolbox) tool in the Toolbox writes the emulator partition (`HddX`) — and, in expert mode, can create or format it. It is a standalone tool, usable only while no target is connected, so it can never write beside a game transfer.
 
-### Aurora scan paths
+### Aurora
 
-Aurora only lists games from folders it is told to scan. The **Toolbox** page reads Aurora's configured scan paths and compares them with the folders this app uses:
+The **Aurora** card of the **Device status** page gathers what the app knows and does about Aurora on the target.
+
+**Scan paths.** Aurora only lists games from folders it is told to scan. The card reads Aurora's configured scan paths and compares them with the folders this app uses:
 
 - for a **console over FTP**, and for a **USB key that carries an Aurora install**, each storage folder is flagged as scanned by Aurora or not;
 - if a folder isn't scanned yet, the app shows the exact path to add in *Aurora → Settings → Content → Manage Paths* (Scan Depth 3+), then a rescan.
+
+**Game assets.** The app can give Aurora the cover, icon, banner, background and description of your games, so the console needs no internet connection to show them. It takes two steps:
+
+1. the app writes the files into Aurora's import folder (`Aurora/User/Import/<TitleID>/`) — after each batch of games you add (a setting, off by default), or on demand from the card for the games already there;
+2. on the console, in Aurora: **Settings > Assets > Import**. Aurora loads the files of every game it has scanned; a game it has not scanned yet simply waits for the next import.
+
+Good to know:
+
+- a game whose folder already exists is left alone, so you can put your own pictures there;
+- Aurora never removes the files and applies them on every import, replacing what it shows for these games — delete a game's folder from `Aurora/User/Import` to keep a cover you changed in Aurora;
+- **Delete the Aurora game assets to import** empties the import folder; what Aurora has already imported is kept;
+- the language of the titles and descriptions is a setting (English by default);
+- the cover comes from the library's own covers; the rest from what is left of the Xbox 360 marketplace (its image server, and the [dbox.tools](https://dbox.tools) archive of its catalogue). Original Xbox games only get their cover, and screenshots are left out.
 
 ## :space_invader: Original Xbox compatibility (Toolbox)
 
@@ -164,14 +179,15 @@ which the console calls **`HddX`** and which holds a single `Compatibility` fold
 
 That partition is only ever created when a drive is formatted at the Microsoft factory. So a
 third-party drive, a reformatted one, or one whose partition was lost simply cannot launch an
-original Xbox title — whatever the dashboard shows. The **Toolbox** page can put it back.
+original Xbox title — whatever the dashboard shows. The **Toolbox** page can put the emulator back
+and, on a drive plugged into this computer, [create or repair the partition itself](#creating-or-formatting-the-partition-expert-mode).
 
 > [!WARNING]
 > **Experimental.** This replaces the partition your console needs to boot original Xbox games,
 > and the files already there are deleted first. Tick *"Backup the current compatibility files"* on your first run — you choose where the archive goes, and it is written only once it is
 > complete.
 
-Disconnect from your current target first — like the BadAvatar tool, this one picks its own
+Disconnect from your current target first — like the ABadAvatar tool, this one picks its own
 console: either **over the network** (FTP, console powered on) or on the console's **hard drive
 connected to this computer**. It then downloads the emulator set you chose and writes it to
 `HddX:\Compatibility`.
@@ -186,6 +202,44 @@ exactly where it comes from and keep a copy of what gets installed.
 | **Hacked — no whitelist** | The same, with every restriction and the game whitelist removed, plus the four emulators found in Xbox One/Series releases and the per-game config loader. | JTAG / RGH / XDK only |
 | **Hacked — with HUD** | As above, but the Xbox 360 guide stays available while a game runs. Uses more memory, so a few games behave worse. | JTAG / RGH / XDK only |
 
+### Checked before anything is deleted
+
+The existing files are only removed once the new set is known to fit — the per-title configs
+included when *"Update the per-title configs"* is ticked: titles that need one do not run without
+it, so a config that cannot be downloaded or written fails the install like the emulator would.
+After the downloads, and before the backup:
+
+- **Hard drive on this computer:** the partition is audited (unreadable directory entries, broken
+  or lost clusters) and the free room is counted exactly. A damaged partition, or one that is
+  missing, is refused with a short message.
+- **Over the network:** the console reveals neither its filesystem nor its free space, so if the
+  set needs more room than the current files free up, a scratch file of the missing size is
+  written to `HddX` and removed straight away. Usually nothing is written (a pack replaces one of
+  about the same size); at worst it takes a few seconds, and *Cancel* stops it. If there is no
+  room, the install stops and nothing is touched.
+
+This matters on second-hand drives: some carry a compatibility partition created over a disk that
+held something else, whose leftovers read as used space. It looks healthy, then fills up halfway
+through an install — after the previous emulator was deleted.
+
+### Creating or formatting the partition (expert mode)
+
+With **Expert mode** on (*Settings*), the card gains a **Create / format the compatibility
+partition** button (experimental). It works on a console hard drive plugged into this computer
+only: over the network there is no way to lay a filesystem down.
+
+- It looks at the drive first, then asks you to confirm: *create* when the drive has no
+  compatibility partition, *format* when it has one (everything on it is erased).
+- Files that can be read are offered a backup first. On a **damaged** partition the backup is a
+  best effort: if it cannot be completed, the format goes on and says so afterwards.
+- The partition has a fixed place on a console drive — 256 MiB right in front of the games
+  partition — so creating it never touches a game. The format is refused unless the games
+  partition is found where a console puts it. An existing partition keeps its serial number.
+- It writes a blank filesystem; it does not erase the data area, only what points at it.
+
+Expert mode cannot be switched on or off while a target is connected. Out of expert mode, a
+console hard drive is neither listed among the recent locations nor reopened at startup.
+
 ### Putting a backup back
 
 The **upload icon** in the card's top-right corner takes a zip this tool wrote earlier and puts
@@ -198,9 +252,9 @@ a different source rather than a mode of its own.
 
 Two things this tool deliberately does **not** do:
 
-- **It never creates the partition.** If `HddX` is missing it says so and points you at the
-  *HDD Compatibility Partition Fixer* homebrew (run on the console) or FATXplorer. Come back
-  once it exists.
+- **It does not create the partition over the network.** On a drive plugged into this computer it
+  can (see above); otherwise, if `HddX` is missing, plug the drive in, or use the
+  *HDD Compatibility Partition Fixer* homebrew on the console, or FATXplorer.
 - **It does not install the April 2018 title update** (build 5832) for the emulator. A stock
   console fetches it from Xbox Live on its own, and the hacked packs neither need nor want it.
 
@@ -408,6 +462,7 @@ This app would not exist without the work of many passionate people. Thank you t
 - [XboxUnity](https://www.xboxunity.net) for the Xbox 360 covers and title updates database.
 - [UncreativeXenon](https://github.com/UncreativeXenon/XboxUnity-Scraper) for the XboxUnity archive (alternative cover source).
 - [MobCat](https://github.com/MobCat/MobCats-original-xbox-game-list) for the original Xbox game covers.
+- [dbox.tools](https://dbox.tools) for the archive of the Xbox 360 marketplace catalogue (game descriptions).
 - The [ConsoleMods wiki](https://consolemods.org/wiki/Xbox_360:Original_Xbox_Games) and its contributors for the original Xbox emulator packs and compatibility list, and [Goatman13](https://github.com/Goatman13/xefu) for the per-game emulator configs.
 
 ## :coffee: Support the project

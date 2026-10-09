@@ -140,9 +140,9 @@ export component DashlaunchCard inherits ToolboxCard {
         }
     }
 
-    disabled: UiState.job-running || UiState.badavatar-hdd-busy;
-    disabled-tooltip: UiState.badavatar-hdd-busy
-        ? "Available once BadAvatar is written to the hard drive."
+    disabled: UiState.job-running || UiState.abadavatar-hdd-busy;
+    disabled-tooltip: UiState.abadavatar-hdd-busy
+        ? "Available once ABadAvatar is written to the hard drive."
         : "Available once the queue has finished.";
 
     CardHeader {
@@ -165,124 +165,130 @@ export component DashlaunchCard inherits ToolboxCard {
 
     HorizontalLine { }
 
-    // Main switch: the three patches at once.
-    HorizontalLayout {
-        spacing: 12px;
-        cross-axis-alignment: CrossAxisAlignment.center;
+    // The patches change how the console boots: expert only. The protections
+    // below stay in view whatever the mode, since a missing one is a real risk.
+    if UiState.config.expert-mode: VerticalLayout {
+        spacing: 10px;
 
-        VerticalLayout {
-            spacing: 3px;
-            horizontal-stretch: 1;
-
-            Text {
-                text: "Play content from another console";
-                font-weight: 600;
-                wrap: word-wrap;
-            }
-
-            Text {
-                text: "Lets Arcade games and add-ons (DLC) bought on another Xbox 360 run on this one.";
-                font-size: 12px;
-                wrap: word-wrap;
-                color: MyPalette.foreground.transparentize(0.35);
-            }
-        }
-
-        ToggleSwitch {
-            checked: root.all-on;
-            mixed: root.mixed;
-            enabled: root.can-edit;
-            // Partly on counts as "not yet": the click finishes the job.
-            toggled => {
-                if root.all-on {
-                    Dispatcher.dispatch(Message.SetDashlaunch, "contpatch=false,xblapatch=false,licpatch=false");
-                } else {
-                    Dispatcher.dispatch(Message.SetDashlaunch, "contpatch=true,xblapatch=true,licpatch=true");
-                }
-            }
-        }
-    }
-
-    // Disclosure: summary of the state, and the switch to unfold the details.
-    Rectangle {
-        height: disclosure.preferred-height;
-
-        disclosure := HorizontalLayout {
-            spacing: 4px;
-            alignment: start;
+        // Main switch: the three patches at once.
+        HorizontalLayout {
+            spacing: 12px;
             cross-axis-alignment: CrossAxisAlignment.center;
 
-            IconDisplay {
-                icon: root.expanded ? IconSet.ChevronDown : IconSet.ChevronRight;
-                stroke: MyPalette.foreground.transparentize(0.35);
-                size: 14px;
+            VerticalLayout {
+                spacing: 3px;
+                horizontal-stretch: 1;
+
+                Text {
+                    text: "Play content from another console";
+                    font-weight: 600;
+                    wrap: word-wrap;
+                }
+
+                Text {
+                    text: "Lets Arcade games and add-ons (DLC) bought on another Xbox 360 run on this one.";
+                    font-size: 12px;
+                    wrap: word-wrap;
+                    color: MyPalette.foreground.transparentize(0.35);
+                }
             }
 
-            Text {
-                text: root.all-on
-                    ? "On · all 3 settings"
-                    : root.mixed ? "Custom · " + root.patches-on + " of 3 settings on" : "Off · all 3 settings";
-                font-size: 12px;
-                color: root.mixed ? MyPalette.accent-background : MyPalette.foreground.transparentize(0.35);
+            ToggleSwitch {
+                checked: root.all-on;
+                mixed: root.mixed;
+                enabled: root.can-edit;
+                // Partly on counts as "not yet": the click finishes the job.
+                toggled => {
+                    if root.all-on {
+                        Dispatcher.dispatch(Message.SetDashlaunch, "contpatch=false,xblapatch=false,licpatch=false");
+                    } else {
+                        Dispatcher.dispatch(Message.SetDashlaunch, "contpatch=true,xblapatch=true,licpatch=true");
+                    }
+                }
             }
         }
 
-        TouchArea {
-            mouse-cursor: pointer;
-            clicked => {
-                root.expanded = !root.expanded;
-            }
-        }
-    }
-
-    if root.expanded: HorizontalLayout {
-        padding-left: 6px;
-        spacing: 12px;
-
-        // Guide line tying the three rows to the main switch above.
+        // Disclosure: summary of the state, and the switch to unfold the details.
         Rectangle {
-            width: 2px;
-            border-radius: 1px;
-            background: MyPalette.border;
-        }
+            height: disclosure.preferred-height;
 
-        VerticalLayout {
-            spacing: 8px;
-            horizontal-stretch: 1;
+            disclosure := HorizontalLayout {
+                spacing: 4px;
+                alignment: start;
+                cross-axis-alignment: CrossAxisAlignment.center;
 
-            PatchRow {
-                label: "Add-ons (DLC)";
-                key: "contpatch";
-                checked: UiState.dashlaunch.contpatch;
-                enabled: root.can-edit;
-                toggled => {
-                    Dispatcher.dispatch(Message.SetDashlaunch, UiState.dashlaunch.contpatch ? "contpatch=false" : "contpatch=true");
+                IconDisplay {
+                    icon: root.expanded ? IconSet.ChevronDown : IconSet.ChevronRight;
+                    stroke: MyPalette.foreground.transparentize(0.35);
+                    size: 14px;
+                }
+
+                Text {
+                    text: root.all-on
+                        ? "On · all 3 settings"
+                        : root.mixed ? "Custom · " + root.patches-on + " of 3 settings on" : "Off · all 3 settings";
+                    font-size: 12px;
+                    color: root.mixed ? MyPalette.accent-background : MyPalette.foreground.transparentize(0.35);
                 }
             }
 
-            PatchRow {
-                label: "Arcade games";
-                key: "xblapatch";
-                checked: UiState.dashlaunch.xblapatch;
-                enabled: root.can-edit;
-                toggled => {
-                    Dispatcher.dispatch(Message.SetDashlaunch, UiState.dashlaunch.xblapatch ? "xblapatch=false" : "xblapatch=true");
-                }
-            }
-
-            PatchRow {
-                label: "License check";
-                key: "licpatch";
-                checked: UiState.dashlaunch.licpatch;
-                enabled: root.can-edit;
-                toggled => {
-                    Dispatcher.dispatch(Message.SetDashlaunch, UiState.dashlaunch.licpatch ? "licpatch=false" : "licpatch=true");
+            TouchArea {
+                mouse-cursor: pointer;
+                clicked => {
+                    root.expanded = !root.expanded;
                 }
             }
         }
+
+        if root.expanded: HorizontalLayout {
+            padding-left: 6px;
+            spacing: 12px;
+
+            // Guide line tying the three rows to the main switch above.
+            Rectangle {
+                width: 2px;
+                border-radius: 1px;
+                background: MyPalette.border;
+            }
+
+            VerticalLayout {
+                spacing: 8px;
+                horizontal-stretch: 1;
+
+                PatchRow {
+                    label: "Add-ons (DLC)";
+                    key: "contpatch";
+                    checked: UiState.dashlaunch.contpatch;
+                    enabled: root.can-edit;
+                    toggled => {
+                        Dispatcher.dispatch(Message.SetDashlaunch, UiState.dashlaunch.contpatch ? "contpatch=false" : "contpatch=true");
+                    }
+                }
+
+                PatchRow {
+                    label: "Arcade games";
+                    key: "xblapatch";
+                    checked: UiState.dashlaunch.xblapatch;
+                    enabled: root.can-edit;
+                    toggled => {
+                        Dispatcher.dispatch(Message.SetDashlaunch, UiState.dashlaunch.xblapatch ? "xblapatch=false" : "xblapatch=true");
+                    }
+                }
+
+                PatchRow {
+                    label: "License check";
+                    key: "licpatch";
+                    checked: UiState.dashlaunch.licpatch;
+                    enabled: root.can-edit;
+                    toggled => {
+                        Dispatcher.dispatch(Message.SetDashlaunch, UiState.dashlaunch.licpatch ? "licpatch=false" : "licpatch=true");
+                    }
+                }
+            }
+        }
+
+        HorizontalLine { }
     }
-
-    HorizontalLine { }
 
     ProtectionRow {
         ok: UiState.dashlaunch.liveblock;
@@ -325,7 +331,7 @@ export component DashlaunchCard inherits ToolboxCard {
             }
         }
 
-        Text {
+        if UiState.config.expert-mode: Text {
             text: "Changes apply the next time the console restarts.";
             font-size: 11px;
             wrap: word-wrap;

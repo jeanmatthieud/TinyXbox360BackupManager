@@ -4,8 +4,9 @@
 #![warn(clippy::all, rust_2018_idioms)]
 
 pub mod archive;
-pub mod badavatar;
-pub mod badavatar_hdd;
+pub mod aurora_import;
+pub mod abadavatar;
+pub mod abadavatar_hdd;
 pub mod config;
 pub mod convert;
 pub mod covers;
@@ -26,6 +27,7 @@ pub mod hash_cache;
 pub mod instance;
 pub mod iso_info;
 pub mod job_queue;
+pub mod marketplace;
 pub mod mobcat;
 pub mod ogxbox_compat;
 pub mod quirks;

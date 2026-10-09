@@ -3,11 +3,11 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 import {
-    DisplayedBadAvatarConfig,
+    DisplayedABadAvatarConfig,
     DisplayedCompatConfig,
     DisplayedCompatPack,
     DisplayedDashlaunch,
-    DisplayedBadAvatarHdd,
+    DisplayedABadAvatarHdd,
     DisplayedConfig,
     DisplayedDriveInfo,
     DisplayedFatxDrive,
@@ -176,6 +176,14 @@ export global UiState {
     // Non-empty when the last fetch failed: shown in the card instead of a
     // notification.
     in-out property <string> aurora-paths-error;
+    // Games of the library that carry a TitleID, and how many of them already
+    // have a folder in Aurora's import folder on the target.
+    in-out property <int> aurora-import-total: 0;
+    in-out property <int> aurora-import-ready: 0;
+    // Folders in Aurora's import folder, whatever game they are for.
+    in-out property <int> aurora-import-folders: 0;
+    // True while the "delete the assets to import" confirmation is shown.
+    in-out property <bool> confirming-clear-aurora-import: false;
     // True while the "how to add Aurora scan paths" help modal is shown.
     in-out property <bool> showing-aurora-help: false;
 
@@ -195,43 +203,43 @@ export global UiState {
     // second write never starts beside the first.
     in-out property <bool> writing-dashlaunch: false;
 
-    // BadAvatar on the connected console hard drive (FATX target only).
-    in-out property <DisplayedBadAvatarHdd> badavatar-hdd;
+    // ABadAvatar on the connected console hard drive (FATX target only).
+    in-out property <DisplayedABadAvatarHdd> abadavatar-hdd;
     // True from the start of an install or removal until it is over. A
     // removal runs on the connected target, outside the queue: jobs queued
     // meanwhile wait for it.
-    in-out property <bool> badavatar-hdd-busy: false;
+    in-out property <bool> abadavatar-hdd-busy: false;
     // True once the install has started writing: it can no longer be cancelled.
-    in-out property <bool> badavatar-hdd-writing: false;
+    in-out property <bool> abadavatar-hdd-writing: false;
     // Removal confirmation modal (Device status).
-    in-out property <bool> confirming-badavatar-hdd-uninstall: false;
+    in-out property <bool> confirming-abadavatar-hdd-uninstall: false;
     // Install (Toolbox): the drive picker, then the read-only look at the
     // picked drive, then the confirmation modal, shown while
-    // `badavatar-hdd-pending-target` names the drive.
-    in-out property <bool> selecting-badavatar-hdd-target: false;
-    in-out property <bool> inspecting-badavatar-hdd: false;
-    in-out property <string> badavatar-hdd-pending-target: "";
+    // `abadavatar-hdd-pending-target` names the drive.
+    in-out property <bool> selecting-abadavatar-hdd-target: false;
+    in-out property <bool> inspecting-abadavatar-hdd: false;
+    in-out property <string> abadavatar-hdd-pending-target: "";
     // Where Aurora already is on the picked drive; empty when the install
     // brings it.
-    in-out property <string> badavatar-hdd-pending-aurora: "";
+    in-out property <string> abadavatar-hdd-pending-aurora: "";
     // True from the moment the install tool picks a drive until it is done
     // with it, and while a removal runs: no target may be connected, and no
     // other Toolbox tool started, in between.
-    out property <bool> badavatar-hdd-tool-busy: badavatar-hdd-busy
-        || selecting-badavatar-hdd-target
-        || inspecting-badavatar-hdd
-        || badavatar-hdd-pending-target != "";
+    out property <bool> abadavatar-hdd-tool-busy: abadavatar-hdd-busy
+        || selecting-abadavatar-hdd-target
+        || inspecting-abadavatar-hdd
+        || abadavatar-hdd-pending-target != "";
 
-    // True while the BadAvatar USB-key drive-picker modal is shown.
-    in-out property <bool> selecting-badavatar-target: false;
+    // True while the ABadAvatar USB-key drive-picker modal is shown.
+    in-out property <bool> selecting-abadavatar-target: false;
 
-    // BadAvatar USB-key creation (Toolbox), independent of the target.
-    in-out property <DisplayedBadAvatarConfig> badavatar;
-    // True while a BadAvatar key is being created.
-    in-out property <bool> creating-badavatar: false;
+    // ABadAvatar USB-key creation (Toolbox), independent of the target.
+    in-out property <DisplayedABadAvatarConfig> abadavatar;
+    // True while an ABadAvatar key is being created.
+    in-out property <bool> creating-abadavatar: false;
     // Non-empty while the destination-confirmation modal is shown, holding
-    // the path picked for the BadAvatar key.
-    in-out property <string> badavatar-pending-path: "";
+    // the path picked for the ABadAvatar key.
+    in-out property <string> abadavatar-pending-path: "";
 
     // Original-Xbox compatibility partition (Toolbox), independent of the
     // target: the tool picks its own console, over FTP or on a raw disk.
@@ -261,6 +269,11 @@ export global UiState {
     in-out property <string> compat-pending-source: "";
     // True when that source is a backup rather than a published pack.
     in-out property <bool> compat-restoring: false;
+    // True when the run being prepared creates or formats the partition itself
+    // (hard drive only) rather than writing files into it.
+    in-out property <bool> compat-formatting: false;
+    // True when that run creates a partition the drive does not have yet.
+    in-out property <bool> compat-creating: false;
     // True from the moment the compatibility tool picks a console until it is
     // done with it: the install it is heading for writes outside the job queue,
     // so no target may be connected (and no second tool started) in between.

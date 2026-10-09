@@ -46,7 +46,12 @@
 use crate::archive;
 use crate::data_dir::TMP_DIR;
 use crate::download::{self, archive_extension, find_entry};
-use crate::remote_fs::RemoteFs;
+use crate::fatx::{
+    COMPAT_PARTITION, DEFAULT_PARTITION, DeviceAccessError, FatxConfig, FatxSession,
+};
+use crate::fatx_dev::{self, FatxProbe};
+use crate::remote_fs::{RemoteFs, RemoteSession};
+use crate::util::human_size;
 use anyhow::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -220,6 +225,9 @@ pub struct OgXboxCompatConfig {
     /// Also write the community per-title configs from [`XEFU_CONFIGS_URL`]
     /// into `Compatibility/Configs`. On by default: they only add titles the
     /// emulator can start, and a config with no matching game is never read.
+    /// Once asked for they are part of the install: a download or a write that
+    /// fails fails the install, since the titles that need them do not run
+    /// without.
     pub update_configs: bool,
 }
 
@@ -304,25 +312,26 @@ pub fn check_cancel(cancel: &AtomicBool) -> Result<()> {
     download::check_cancel(cancel, COMPAT_CANCELLED)
 }
 
-/// Fails unless the target actually exposes the emulator partition.
+/// Whether the target exposes the emulator partition at all.
 ///
 /// Over FTP this is a real question — the console lists `HddX` only when the
 /// partition exists. On a FATX session the partition was named when the device
 /// was opened, so `list_root` answers `HddX` by construction and this check
 /// costs nothing.
-fn ensure_compat_volume(fs: &mut dyn RemoteFs) -> Result<()> {
+fn has_compat_volume(fs: &mut dyn RemoteFs) -> Result<bool> {
     let devices = fs.list_root().context("listing the target's volumes")?;
-    if devices
+    Ok(devices
         .iter()
-        .any(|d| d.eq_ignore_ascii_case(COMPAT_VOLUME))
-    {
+        .any(|d| d.eq_ignore_ascii_case(COMPAT_VOLUME)))
+}
+
+/// Fails unless the target actually exposes the emulator partition.
+fn ensure_compat_volume(fs: &mut dyn RemoteFs) -> Result<()> {
+    if has_compat_volume(fs)? {
         return Ok(());
     }
     bail!(
-        "this console has no original-Xbox compatibility partition ({COMPAT_VOLUME}).\n\n\
-         It is only created when a drive is formatted at the Microsoft factory. Create it \
-         first — with the `HDD Compatibility Partition Fixer` homebrew run on the console, \
-         or with FATXplorer on Windows — then come back here."
+        "this console has no original-Xbox compatibility partition ({COMPAT_VOLUME})."
     );
 }
 
@@ -465,16 +474,378 @@ pub fn stage_pack(
     extract_and_locate(&archive_path, &work, pack.label(), cancel, status)
 }
 
-/// Checks the target really has a compatibility partition, and reports whether
-/// it already holds files. The session may (and should) be read-only.
+/// What a console's compatibility partition looks like, as far as the tool
+/// can tell before writing to it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CompatPartition {
+    /// The drive has no compatibility partition at all.
+    Missing,
+    Present {
+        /// Whether the `Compatibility` folder already holds something. A
+        /// partition that cannot be read at all is taken for one that does,
+        /// the cautious side to err on.
+        has_files: bool,
+        /// Whether the files can be listed, hence backed up. False for a
+        /// partition too damaged to open or to walk.
+        readable: bool,
+        /// What is wrong with its filesystem, in a few words. Only a FATX
+        /// session can tell: over FTP the console hides its filesystem, so
+        /// this is always `None` there.
+        damage: Option<String>,
+    },
+}
+
+/// Inspects the compatibility partition over a session that already reached
+/// the console. The session may (and should) be read-only.
 ///
-/// Deliberately shallow: what is there gets deleted either way, so the user
-/// only needs to be told that it will be. Naming the emulator in place would
-/// mean carrying a table of hashes that no pack variant, and no hand-made
-/// arrangement of a user's own, is obliged to match.
-pub fn inspect_remote(fs: &mut dyn RemoteFs) -> Result<bool> {
-    ensure_compat_volume(fs)?;
-    Ok(!list_dir(fs, COMPAT_PATH)?.is_empty())
+/// Deliberately shallow about the files: what is there gets deleted either
+/// way, so the user only needs to be told that it will be. Naming the emulator
+/// in place would mean carrying a table of hashes that no pack variant, and no
+/// hand-made arrangement of a user's own, is obliged to match.
+pub fn inspect_remote(fs: &mut dyn RemoteFs) -> Result<CompatPartition> {
+    if !has_compat_volume(fs)? {
+        return Ok(CompatPartition::Missing);
+    }
+    Ok(CompatPartition::Present {
+        has_files: !list_dir(fs, COMPAT_PATH)?.is_empty(),
+        readable: true,
+        damage: None,
+    })
+}
+
+/// Inspects the compatibility partition of a console hard drive plugged into
+/// this computer, filesystem check included. Read-only throughout.
+///
+/// The check is what an FTP inspection cannot do: a partition created by
+/// writing little more than its superblock over a used disk keeps leftover
+/// bytes in its FAT, which read as clusters in use. The partition then looks
+/// fine and fills up long before its files account for it, so an install
+/// fails halfway — after the previous emulator was deleted.
+pub fn inspect_fatx(device: &Path) -> Result<CompatPartition> {
+    match fatx_dev::probe_partition(device, COMPAT_PARTITION) {
+        FatxProbe::Xbox360 => {}
+        // Nothing there, or leftovers that are not a 360 filesystem (an
+        // original Xbox signature from the disk's earlier life): either way no
+        // compatibility partition, and creating one is what fixes it.
+        FatxProbe::NoFilesystem | FatxProbe::OriginalXbox => {
+            return Ok(CompatPartition::Missing);
+        }
+        probe @ (FatxProbe::AccessDenied | FatxProbe::Unreadable) => {
+            bail!("{}: {}", device.display(), probe.label())
+        }
+    }
+    let unreadable = |why: &anyhow::Error| CompatPartition::Present {
+        has_files: true,
+        readable: false,
+        damage: Some(format!("it cannot be read: {why:#}")),
+    };
+
+    let config = FatxConfig::for_partition(device.to_path_buf(), COMPAT_PARTITION);
+    // A permission, connection or disk problem is not the partition's fault,
+    // and formatting would not fix it: that one is reported as it is. Anything
+    // else that stops it opening means the partition itself is the problem.
+    let mut session = match FatxSession::open(&config, false) {
+        Ok(session) => session,
+        Err(e) if is_device_failure(&e) => return Err(e),
+        Err(e) => return Ok(unreadable(&e)),
+    };
+    let found = (|| {
+        let audit = session.audit()?;
+        let cluster_bytes = session.space()?.bytes_per_cluster;
+        Ok::<_, anyhow::Error>(match describe_damage(&audit, cluster_bytes) {
+            None => inspect_remote(&mut session)?,
+            // A damaged tree may not even list.
+            damage => {
+                let listed = list_dir(&mut session, COMPAT_PATH);
+                CompatPartition::Present {
+                    has_files: listed.as_ref().is_ok_and(|e| !e.is_empty()),
+                    readable: listed.is_ok(),
+                    damage,
+                }
+            }
+        })
+    })();
+    let closed = session.quit();
+    // Same split as at open: a disk unplugged or failing mid-walk is not a
+    // damaged partition.
+    let found = match found {
+        Ok(found) => found,
+        Err(e) if is_device_failure(&e) => return Err(e),
+        Err(e) => unreadable(&e),
+    };
+    closed?;
+    Ok(found)
+}
+
+/// Whether an error comes from the device rather than from the filesystem on
+/// it: access refused, the disk gone, or an I/O error — none of which a format
+/// would fix. Everything else the `fatx` crate reports (a broken chain, a
+/// bad superblock field) is the partition's own damage.
+fn is_device_failure(error: &anyhow::Error) -> bool {
+    error.chain().any(|cause| {
+        cause.is::<DeviceAccessError>()
+            || cause.is::<std::io::Error>()
+            || matches!(cause.downcast_ref::<fatx::Error>(), Some(fatx::Error::Io(_)))
+    })
+}
+
+/// What an audit found, in a few words — `None` for a healthy filesystem.
+fn describe_damage(audit: &fatx::Audit, cluster_bytes: u64) -> Option<String> {
+    if audit.is_clean() {
+        return None;
+    }
+    let mut parts = Vec::new();
+    if audit.lost_clusters > 0 {
+        parts.push(format!(
+            "{} marked as used by no file",
+            human_size(audit.lost_clusters * cluster_bytes)
+        ));
+    }
+    if audit.invalid_entries > 0 {
+        parts.push(format!("{} unreadable directory entries", audit.invalid_entries));
+    }
+    let chains = audit.broken_chains + audit.cross_linked_clusters;
+    if chains > 0 {
+        parts.push(format!("{chains} broken cluster chains"));
+    }
+    Some(parts.join(", "))
+}
+
+/// Size of a cluster on the compatibility partition: 16 KiB, as a factory
+/// drive carries it and as [`format_fatx`] lays it out. Over FTP the console
+/// does not say, so this is what the room check counts in there.
+const COMPAT_CLUSTER_BYTES: u64 = 0x4000;
+
+/// Name of the file the FTP room check reserves space with, at the root of the
+/// partition. Removed straight away; a leftover one holds nothing.
+const ROOM_PROBE_NAME: &str = "txbm-space-check.tmp";
+
+/// Checks that the staged folders fit on the partition once the current
+/// `Compatibility` folder is gone — before that folder is backed up, let
+/// alone deleted. Otherwise an install that runs out of room halfway leaves
+/// the console with no emulator at all.
+///
+/// On a FATX session the answer is exact: the filesystem knows its free
+/// clusters. Over FTP the console does not tell, so the space the install
+/// needs beyond what the current files free up is *reserved*: a file of that
+/// size is written, then removed. That costs nothing when a pack replaces one
+/// of about the same size — the usual case — and a few seconds when it does
+/// not.
+pub fn check_room(
+    session: &mut RemoteSession,
+    staged: &[&Path],
+    cancel: &AtomicBool,
+    status: &dyn Fn(&str),
+) -> Result<()> {
+    if let RemoteSession::Fatx(fatx) = session {
+        let space = fatx.space()?;
+        let cluster = space.bytes_per_cluster;
+        let needed = staged
+            .iter()
+            .map(|dir| local_clusters(dir, cluster))
+            .sum::<Result<u64>>()?;
+        let available = space.free_bytes / cluster + remote_clusters(fatx, COMPAT_PATH, cluster)?;
+        if available < needed {
+            bail!(
+                "not enough room on the compatibility partition: {} needed, {} available. \
+                 Nothing was changed.",
+                human_size(needed * cluster),
+                human_size(available * cluster)
+            );
+        }
+        return Ok(());
+    }
+
+    let RemoteSession::Ftp(ftp) = session else {
+        return Ok(());
+    };
+    let cluster = COMPAT_CLUSTER_BYTES;
+    let needed = staged
+        .iter()
+        .map(|dir| local_clusters(dir, cluster))
+        .sum::<Result<u64>>()?;
+    let freed = remote_clusters(ftp, COMPAT_PATH, cluster)?;
+    let missing = needed.saturating_sub(freed) * cluster;
+    if missing == 0 {
+        return Ok(());
+    }
+
+    status(&format!(
+        "Checking the room on the console ({})…",
+        human_size(missing)
+    ));
+    let volume = format!("/{COMPAT_VOLUME}");
+    let written = ftp.put_zeros(&volume, ROOM_PROBE_NAME, missing, cancel);
+    // Stopped mid-file, the session can no longer be used, and a partial
+    // scratch file may be there: the caller removes it over a fresh session,
+    // see [`remove_room_probe`].
+    check_cancel(cancel)?;
+    match written {
+        Ok(()) => ensure_scratch_removed(&ftp.remove_file(&volume, ROOM_PROBE_NAME)),
+        Err(e) => {
+            // A refused write may well have left a partial file behind.
+            let _ = ftp.remove_file(&volume, ROOM_PROBE_NAME);
+            // A write can fail for want of room, or for any other reason (the
+            // connection, a permission). A single byte tells them apart: it
+            // still fits on a partition that is merely full, and fails on one
+            // that is not reachable — in which case `e` is the real story.
+            if ftp.put_bytes(&volume, ROOM_PROBE_NAME, b"x").is_err() {
+                return Err(e).context("checking the room on the console");
+            }
+            ensure_scratch_removed(&ftp.remove_file(&volume, ROOM_PROBE_NAME))?;
+            bail!(
+                "not enough room on the compatibility partition: {} more are needed. Format \
+                 it from a hard drive plugged into this computer (expert mode). Nothing was \
+                 changed.",
+                human_size(missing)
+            );
+        }
+    }
+}
+
+/// Removes what an interrupted room check may have left on the console: a
+/// partial scratch file. Best effort, over a session of its own — the one the
+/// check ran on is unusable after a cancellation.
+pub fn remove_room_probe(fs: &mut dyn RemoteFs) {
+    let _ = fs.remove_file(&format!("/{COMPAT_VOLUME}"), ROOM_PROBE_NAME);
+}
+
+/// The room check's scratch file fills the space it reserved, so one left
+/// behind would eat the very room the install needs: say so rather than carry
+/// on.
+fn ensure_scratch_removed(removed: &Result<()>) -> Result<()> {
+    if let Err(e) = removed {
+        bail!(
+            "the room check left {ROOM_PROBE_NAME} on the console's compatibility partition \
+             and could not remove it ({e:#}). Nothing else was changed."
+        );
+    }
+    Ok(())
+}
+
+/// Clusters a local tree takes once written: at least one per file — the
+/// `fatx` crate gives even an empty file a cluster — and, per directory, as
+/// many as its entries fill (64 bytes each, plus the end marker). Erring high
+/// is the safe side here.
+fn local_clusters(dir: &Path, cluster: u64) -> Result<u64> {
+    let mut total = 0;
+    let mut entries = 0;
+    for entry in fs::read_dir(dir).with_context(|| format!("reading {}", dir.display()))? {
+        let entry = entry.with_context(|| format!("reading {}", dir.display()))?;
+        let meta = entry
+            .metadata()
+            .with_context(|| format!("reading {}", entry.path().display()))?;
+        entries += 1;
+        total += if meta.is_dir() {
+            local_clusters(&entry.path(), cluster)?
+        } else {
+            meta.len().div_ceil(cluster).max(1)
+        };
+    }
+    Ok(total + dir_clusters(entries + 1, cluster))
+}
+
+/// Clusters a directory of `entries` slots takes.
+fn dir_clusters(entries: u64, cluster: u64) -> u64 {
+    entries.div_ceil(cluster / DIRENT_BYTES).max(1)
+}
+
+/// Size of a FATX directory entry.
+const DIRENT_BYTES: u64 = 64;
+
+/// Clusters what is under a directory of the target gives back once deleted.
+/// The directory itself is not counted, a sub-directory only for the entries
+/// it lists (its end marker and deleted slots unknown from here), and an empty
+/// file counts for none — one written by the console owns no cluster — so
+/// this errs low, which is again the safe side.
+fn remote_clusters(fs: &mut dyn RemoteFs, dir: &str, cluster: u64) -> Result<u64> {
+    Ok(remote_dir_clusters(fs, dir, cluster)?.0)
+}
+
+/// [`remote_clusters`] of `dir`, along with how many entries it lists — read
+/// in the same pass, so each directory is listed once.
+fn remote_dir_clusters(fs: &mut dyn RemoteFs, dir: &str, cluster: u64) -> Result<(u64, u64)> {
+    let entries = list_dir(fs, dir)?;
+    let listed = entries.len() as u64;
+    let mut total = 0;
+    for entry in entries {
+        total += if entry.is_dir {
+            let path = format!("{dir}/{}", entry.name);
+            let (contents, sub_listed) = remote_dir_clusters(fs, &path, cluster)?;
+            dir_clusters(sub_listed, cluster) + contents
+        } else {
+            entry.size.div_ceil(cluster)
+        };
+    }
+    Ok((total, listed))
+}
+
+/// Creates the compatibility partition of a console hard drive plugged into
+/// this computer, or formats it when it is already there. Returns whether it
+/// was created.
+///
+/// The partition has a place of its own on the disk: 256 MiB right in front
+/// of the games partition, which starts after it and is never touched. That
+/// place is only the partition's on a drive laid out the way the console lays
+/// one out, so the games partition must be found where it belongs first —
+/// anything else is refused rather than written over.
+///
+/// A partition already there keeps its serial number, so the console goes on
+/// seeing the same volume. Everything on it is lost: back it up first.
+pub fn format_fatx(device: &Path) -> Result<bool> {
+    match fatx_dev::probe_partition(device, DEFAULT_PARTITION) {
+        FatxProbe::Xbox360 => {}
+        probe @ (FatxProbe::AccessDenied | FatxProbe::Unreadable) => {
+            bail!("{}: {}", device.display(), probe.label())
+        }
+        _ => bail!(
+            "{} has no Xbox 360 games partition where the console puts it, so the place of \
+             the compatibility partition cannot be trusted. Nothing was written.",
+            device.display()
+        ),
+    }
+
+    let config = FatxConfig::for_partition(device.to_path_buf(), COMPAT_PARTITION);
+    let (created, volume_id) = match fatx_dev::probe_partition(device, COMPAT_PARTITION) {
+        // Nothing there, or an original Xbox signature left over from the
+        // disk's earlier life: either way there is no partition to keep.
+        FatxProbe::NoFilesystem | FatxProbe::OriginalXbox => (true, new_volume_id()),
+        // A superblock too damaged to open still gets replaced, under a new
+        // serial: there is no old one worth keeping.
+        FatxProbe::Xbox360 => (
+            false,
+            FatxSession::open(&config, false).map_or_else(|_| new_volume_id(), |s| s.volume_id()),
+        ),
+        other => bail!(
+            "{}: unexpected content where the compatibility partition goes ({}). Nothing was \
+             written.",
+            device.display(),
+            other.label()
+        ),
+    };
+
+    crate::fatx::format_partition(&config, volume_id)?;
+
+    // Read back: only a partition that opens, empty and healthy, is one to
+    // report as ready.
+    let mut session = FatxSession::open(&config, false)?;
+    let audit = session.audit()?;
+    let entries = session.try_list_dir(&format!("/{COMPAT_VOLUME}"))?;
+    session.quit()?;
+    if !audit.is_clean() || !entries.is_empty() {
+        bail!("the compatibility partition did not read back blank after formatting ({audit:?})");
+    }
+    Ok(created)
+}
+
+/// A serial number for a brand new partition. Nothing reads it but the
+/// console, which only needs it to differ from the other volumes' — the clock
+/// is plenty for that.
+fn new_volume_id() -> u32 {
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_nanos());
+    (nanos ^ (nanos >> 32)) as u32
 }
 
 /// Lists a directory of the partition, reporting one that cannot be read.

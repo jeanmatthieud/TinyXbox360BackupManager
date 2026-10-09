@@ -13,6 +13,7 @@ use std::{
     sync::{Arc, atomic::AtomicBool},
 };
 use txbm_core::{
+    aurora_import::{AURORA_NOT_FOUND, IMPORT_CANCELLED, ImportReport, ImportTitle},
     config::Config,
     game::Game,
     game_details::ContentKind,
@@ -37,6 +38,8 @@ impl From<job_queue::JobKind> for JobKind {
             job_queue::JobKind::Add => JobKind::Add,
             job_queue::JobKind::Delete => JobKind::Delete,
             job_queue::JobKind::DeleteContent => JobKind::DeleteContent,
+            job_queue::JobKind::AuroraImport => JobKind::AuroraImport,
+            job_queue::JobKind::AuroraImportClear => JobKind::AuroraImportClear,
         }
     }
 }
@@ -49,7 +52,26 @@ pub fn perform_job(
     cancel: Arc<AtomicBool>,
     weak: &Weak<AppWindow>,
 ) {
+    // Only the import preparation has something to say once it is over; the
+    // other jobs are summed up by their kind alone.
+    let mut import = None;
+    let mut cleared = None;
     let res = match &job {
+        QueuedJob::AuroraImportClear => {
+            perform_aurora_import_clear(config, &cancel, weak).map(|count| cleared = Some(count))
+        }
+        QueuedJob::AuroraImport { titles, auto } => {
+            match perform_aurora_import(titles, config, &cancel, weak) {
+                Ok(report) => {
+                    import = Some(report);
+                    Ok(())
+                }
+                // Queued by the app itself: a target without Aurora simply
+                // has nothing to prepare, which is no failure to report.
+                Err(e) if *auto && format!("{e:#}").contains(AURORA_NOT_FOUND) => Ok(()),
+                Err(e) => Err(e),
+            }
+        }
         QueuedJob::Add { path, .. } => perform_add(path, config, &cancel, weak),
         QueuedJob::Delete(game) => perform_delete(game, config, &cancel, weak),
         QueuedJob::DeleteContent {
@@ -69,7 +91,19 @@ pub fn perform_job(
 
         match res {
             Ok(()) => {
-                if let Some(text) = success_text(&job) {
+                let auto = matches!(job, QueuedJob::AuroraImport { auto: true, .. });
+                if let Some(text) = import.and_then(|report| import_text(report, auto)) {
+                    // Sticky: it says what is left to do on the console, and
+                    // must still be there when the user comes back to the app.
+                    dispatcher.invoke_dispatch(Message::NotifyInfoSticky, text);
+                } else if let Some(count) = cleared {
+                    let text = match count {
+                        0 => slint::format!("No Aurora game assets were waiting to be imported"),
+                        1 => slint::format!("Aurora game assets to import deleted (1 game)"),
+                        n => slint::format!("Aurora game assets to import deleted ({n} games)"),
+                    };
+                    dispatcher.invoke_dispatch(Message::NotifyInfo, text);
+                } else if let Some(text) = success_text(&job) {
                     dispatcher.invoke_dispatch(Message::NotifyInfo, text);
                 }
             }
@@ -104,6 +138,11 @@ pub fn perform_job(
                     dispatcher.invoke_dispatch(Message::FetchGameDetails, current.path);
                 }
             }
+            // Nothing the library shows changed, only the Aurora card's count
+            // of games ready to import.
+            QueuedJob::AuroraImport { .. } | QueuedJob::AuroraImportClear => {
+                dispatcher.invoke_dispatch(Message::FetchAuroraPaths, SharedString::new());
+            }
         }
     });
 }
@@ -112,7 +151,9 @@ pub fn perform_job(
 /// markers rather than a genuine failure.
 fn is_cancellation(e: &anyhow::Error) -> bool {
     let text = format!("{e:#}");
-    text.contains(txbm_core::convert::CONVERSION_CANCELLED) || text.contains(DELETION_CANCELLED)
+    text.contains(txbm_core::convert::CONVERSION_CANCELLED)
+        || text.contains(DELETION_CANCELLED)
+        || text.contains(IMPORT_CANCELLED)
 }
 
 /// Notification shown when the job succeeded, if it deserves one. An addition
@@ -122,6 +163,7 @@ fn success_text(job: &QueuedJob) -> Option<SharedString> {
         QueuedJob::Add { .. } => None,
         QueuedJob::Delete(game) => Some(slint::format!("{} deleted", game.title)),
         QueuedJob::DeleteContent { .. } => Some("Content deleted".into()),
+        QueuedJob::AuroraImport { .. } | QueuedJob::AuroraImportClear => None,
     }
 }
 
@@ -137,6 +179,12 @@ fn cancelled_text(job: &QueuedJob) -> SharedString {
         QueuedJob::DeleteContent { .. } => {
             "Deletion cancelled\nThe content is only partially removed".into()
         }
+        QueuedJob::AuroraImport { .. } => {
+            "Preparation cancelled\nThe games already prepared stay ready to import".into()
+        }
+        QueuedJob::AuroraImportClear => {
+            "Deletion cancelled\nSome Aurora game assets are still waiting to be imported".into()
+        }
     }
 }
 
@@ -145,7 +193,45 @@ fn failure_text(job: &QueuedJob, e: &anyhow::Error) -> SharedString {
         QueuedJob::Add { .. } => slint::format!("Conversion failed: {e:#}"),
         QueuedJob::Delete(_) => slint::format!("Failed to delete game: {e:#}"),
         QueuedJob::DeleteContent { .. } => slint::format!("Failed to delete content: {e:#}"),
+        QueuedJob::AuroraImport { .. } => {
+            slint::format!("Failed to prepare the Aurora game assets: {e:#}")
+        }
+        QueuedJob::AuroraImportClear => {
+            slint::format!("Failed to delete the Aurora game assets to import: {e:#}")
+        }
     }
+}
+
+/// Summary of an import preparation, with where to go next: the files do
+/// nothing until the user runs the import in Aurora. `None` when there is
+/// nothing worth saying — a preparation queued by the app itself (`auto`)
+/// that found every game already prepared.
+fn import_text(report: ImportReport, auto: bool) -> Option<SharedString> {
+    let games = |n: usize| if n == 1 { "1 game".to_string() } else { format!("{n} games") };
+
+    let mut text = match report {
+        ImportReport { prepared: 0, unavailable: 0, failed: 0 } if auto => return None,
+        ImportReport { prepared: 0, unavailable: 0, failed: 0 } => {
+            "The Aurora game assets of every game are already prepared".to_string()
+        }
+        ImportReport { prepared: 0, unavailable: 0, .. } => {
+            "The game assets sources could not be reached\nTry again later".to_string()
+        }
+        ImportReport { prepared: 0, unavailable, .. } => {
+            format!("No assets were found online for {}", games(unavailable))
+        }
+        ImportReport { prepared, .. } => format!(
+            "Aurora game assets ready for {}\nIn Aurora: Settings > Assets > Import",
+            games(prepared)
+        ),
+    };
+    if report.prepared > 0 && report.unavailable > 0 {
+        text.push_str(&format!("\n{} without assets online", games(report.unavailable)));
+    }
+    if report.failed > 0 && (report.prepared > 0 || report.unavailable > 0) {
+        text.push_str(&format!("\n{} skipped: sources unreachable", games(report.failed)));
+    }
+    Some(text.into())
 }
 
 /// ISO (or archive) added to the target: GOD conversion or extraction, then
@@ -275,6 +361,57 @@ fn perform_delete_content(
 
 fn target_or_err(config: &Config) -> anyhow::Result<Target> {
     Target::from_config(&config.contents).ok_or_else(|| anyhow::anyhow!("no target selected"))
+}
+
+/// Aurora's import folder written for every game of `titles` that has none.
+fn perform_aurora_import(
+    titles: &[ImportTitle],
+    config: &Config,
+    cancel: &AtomicBool,
+    weak: &Weak<AppWindow>,
+) -> anyhow::Result<ImportReport> {
+    let target = target_or_err(config)?;
+    let weak = weak.clone();
+    let mut progress = move |done: usize, total: usize, title: &str| {
+        let percentage = (done * 100 / total.max(1)) as u32;
+        let status = slint::format!("⟳  Preparing Aurora game assets  {percentage}%");
+        let phase = slint::format!("{} of {total}  ·  {title}", done + 1);
+        let _ = weak.upgrade_in_event_loop(move |app| {
+            let ui = app.global::<UiState<'_>>();
+            ui.set_status(status);
+            ui.set_job_progress(percentage as f32 / 100.0);
+            ui.set_job_phase(phase);
+        });
+    };
+
+    target.prepare_aurora_import(
+        titles,
+        config.contents.cover_source,
+        &config.contents.asset_language,
+        cancel,
+        &mut progress,
+    )
+}
+
+/// Aurora's import folder emptied; returns how many games had a folder in it.
+fn perform_aurora_import_clear(
+    config: &Config,
+    cancel: &AtomicBool,
+    weak: &Weak<AppWindow>,
+) -> anyhow::Result<usize> {
+    let target = target_or_err(config)?;
+    let weak = weak.clone();
+    let mut progress = move |done: usize, total: usize| {
+        let percentage = (done * 100 / total.max(1)) as u32;
+        let status = slint::format!("⟳  Deleting Aurora game assets to import  {percentage}%");
+        let _ = weak.upgrade_in_event_loop(move |app| {
+            let ui = app.global::<UiState<'_>>();
+            ui.set_status(status);
+            ui.set_job_progress(percentage as f32 / 100.0);
+        });
+    };
+
+    target.clear_aurora_import(cancel, &mut progress)
 }
 
 /// Percentage callback feeding both the status bar and the progress card, with

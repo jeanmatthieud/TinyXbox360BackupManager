@@ -18,7 +18,7 @@ pub fn ensure_data_dir() -> std::io::Result<()> {
 /// Where a conversion is staged before being copied to a console.
 pub static STAGING_DIR: LazyLock<PathBuf> = LazyLock::new(|| DATA_DIR.join("staging"));
 
-/// Scratch space for a running job: archive extraction, the BadAvatar key
+/// Scratch space for a running job: archive extraction, the ABadAvatar key
 /// builder, the copies of Aurora's databases.
 pub static TMP_DIR: LazyLock<PathBuf> = LazyLock::new(|| DATA_DIR.join("tmp"));
 

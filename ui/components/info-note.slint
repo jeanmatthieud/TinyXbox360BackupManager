@@ -1,0 +1,34 @@
+// SPDX-FileCopyrightText: 2026 Manuel Quarneti <mq1@ik.me> (TinyWiiBackupManager)
+// SPDX-FileContributor: Modified by Jean-Matthieu Dechriste (TinyXbox360BackupManager)
+// SPDX-License-Identifier: GPL-3.0-only
+
+import { IconSet, IconDisplay } from "@lucide";
+import { MyPalette } from "../styling.slint";
+
+// The informative sibling of WarningNote: something worth knowing before
+// acting, that carries no risk. Same quiet shape — an icon and a line of text,
+// no border and no background — in the accent colour instead of the warning one.
+export component InfoNote inherits HorizontalLayout {
+    in property <string> text;
+
+    spacing: 8px;
+
+    VerticalLayout {
+        alignment: start;
+        padding-top: 2px;
+
+        IconDisplay {
+            icon: IconSet.Info;
+            stroke: MyPalette.accent-background;
+            size: 16px;
+        }
+    }
+
+    Text {
+        text: root.text;
+        color: MyPalette.foreground.transparentize(0.2);
+        font-size: 12px;
+        wrap: word-wrap;
+        horizontal-stretch: 1;
+    }
+}

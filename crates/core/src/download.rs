@@ -5,7 +5,7 @@
 //! Both Toolbox tools work the same way: pull a `.zip`/`.7z`/`.rar` from a URL,
 //! unpack it somewhere temporary, and pick the one folder inside it that
 //! matters. Only the assembly step differs, so everything up to it lives here
-//! and is shared by [`crate::badavatar`] and [`crate::ogxbox_compat`].
+//! and is shared by [`crate::abadavatar`] and [`crate::ogxbox_compat`].
 //!
 //! Each caller owns its own cancellation marker — the GUI matches on the error
 //! message to tell "the user stopped it" from "it broke" — so the marker is

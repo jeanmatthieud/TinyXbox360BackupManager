@@ -2,7 +2,7 @@
 // SPDX-FileContributor: Modified by Jean-Matthieu Dechriste (TinyXbox360BackupManager)
 // SPDX-License-Identifier: GPL-3.0-only
 
-use crate::badavatar::BadAvatarConfig;
+use crate::abadavatar::ABadAvatarConfig;
 use crate::ogxbox_compat::OgXboxCompatConfig;
 use crate::fatx::FatxConfig;
 use crate::data_dir::DATA_DIR;
@@ -10,6 +10,11 @@ use anyhow::Result;
 use derive_more::{Display, FromStr};
 use serde::{Deserialize, Serialize};
 use std::{fs, path::PathBuf};
+
+/// Temporary release flag: while `true`, expert mode is on for everyone, new
+/// installs included, and its Settings switch is hidden. Set it back to
+/// `false` to restore the switch and the simple/expert defaults below.
+pub const EXPERT_MODE_FORCED: bool = true;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
@@ -21,8 +26,18 @@ impl Config {
     pub fn load() -> Self {
         let path = DATA_DIR.join("config.json");
         let s = fs::read_to_string(&path).unwrap_or_default();
-        let mut contents: ConfigContents = serde_json::from_str(&s).unwrap_or_default();
-        contents.badavatar.migrate();
+        let parsed = serde_json::from_str::<ConfigContents>(&s);
+        // A config that does not parse starts over from the defaults, simple
+        // mode included: it says nothing about what its owner was using.
+        let from_older_build = parsed.is_ok();
+        let mut contents: ConfigContents = parsed.unwrap_or_default();
+        // A readable config written before expert mode existed belongs to
+        // someone who may already use the advanced tools: they must not vanish
+        // on upgrade. Only a fresh install, or a lost config, starts in simple
+        // mode.
+        contents
+            .expert_mode
+            .get_or_insert(from_older_build || EXPERT_MODE_FORCED);
 
         Self { path, contents }
     }
@@ -62,6 +77,10 @@ impl Config {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct ConfigContents {
+    /// Shows the advanced tools and settings. `None` only until
+    /// [`Config::load`] resolves it; read it through
+    /// [`ConfigContents::expert_mode`].
+    pub expert_mode: Option<bool>,
     pub target_kind: TargetKind,
     pub mount_point: PathBuf,
     pub remove_sources_games: bool,
@@ -74,6 +93,12 @@ pub struct ConfigContents {
     pub show_arcade: bool,
     pub show_og: bool,
     pub cover_source: CoverSource,
+    /// After games are added, write their folder in Aurora's import folder
+    /// (see [`crate::aurora_import`]).
+    pub aurora_import_on_add: bool,
+    /// Language of the game descriptions prepared for Aurora, as a marketplace
+    /// locale (see [`crate::marketplace::LOCALES`]).
+    pub asset_language: String,
     pub known_drives: Vec<PathBuf>,
 
     /// Most-recently-used library locations (most recent first, max 5).
@@ -88,8 +113,8 @@ pub struct ConfigContents {
     pub ftp_user: String,
     pub ftp_password: String,
 
-    /// BadAvatar USB-key creation settings (Toolbox).
-    pub badavatar: BadAvatarConfig,
+    /// ABadAvatar USB-key creation settings (Toolbox).
+    pub abadavatar: ABadAvatarConfig,
 
     /// Original-Xbox compatibility partition settings (Toolbox).
     pub ogxbox_compat: OgXboxCompatConfig,
@@ -98,6 +123,7 @@ pub struct ConfigContents {
 impl Default for ConfigContents {
     fn default() -> Self {
         Self {
+            expert_mode: None,
             target_kind: TargetKind::Local,
             mount_point: PathBuf::new(),
             remove_sources_games: false,
@@ -110,6 +136,8 @@ impl Default for ConfigContents {
             show_arcade: true,
             show_og: true,
             cover_source: CoverSource::default(),
+            aurora_import_on_add: false,
+            asset_language: "en-us".to_string(),
             known_drives: Vec::new(),
             recent_locations: Vec::new(),
             fatx: FatxConfig::default(),
@@ -117,13 +145,17 @@ impl Default for ConfigContents {
             ftp_port: "21".to_string(),
             ftp_user: "xboxftp".to_string(),
             ftp_password: "xboxftp".to_string(),
-            badavatar: BadAvatarConfig::default(),
+            abadavatar: ABadAvatarConfig::default(),
             ogxbox_compat: OgXboxCompatConfig::default(),
         }
     }
 }
 
 impl ConfigContents {
+    pub fn expert_mode(&self) -> bool {
+        EXPERT_MODE_FORCED || self.expert_mode.unwrap_or(false)
+    }
+
     pub fn ftp_config(&self) -> crate::ftp::FtpConfig {
         crate::ftp::FtpConfig {
             host: self.console_ip.trim().to_string(),
@@ -149,6 +181,10 @@ impl ConfigContents {
                 matches!(self.target_kind, TargetKind::Local | TargetKind::Fatx)
             }
         };
+
+        // Console hard drive access is expert only: out of expert mode the
+        // drive is not reopened, whatever the policy says.
+        let keep = keep && (self.target_kind != TargetKind::Fatx || self.expert_mode());
 
         if !keep {
             self.target_kind = TargetKind::Local;

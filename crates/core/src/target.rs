@@ -979,6 +979,9 @@ pub struct StorageStatus {
     pub aurora_install_dir: Option<String>,
     /// Set when Aurora's databases could not be read (message).
     pub aurora_error: Option<String>,
+    /// TitleIDs (upper-cased) that already have a folder in Aurora's import
+    /// folder (see [`crate::aurora_import`]).
+    pub aurora_import_titles: Vec<String>,
     /// True when at least one app path is not covered by Aurora (and Aurora
     /// was read successfully) — i.e. paths still need to be added on Aurora.
     pub has_uncovered: bool,
@@ -1089,12 +1092,14 @@ pub fn remote_storage_status(session: &mut dyn RemoteFs, hdd: &str) -> StorageSt
 
     let aurora_compared = aurora_error.is_none();
     let has_uncovered = aurora_compared && paths.iter().any(|p| !p.covered_by_aurora);
+    let aurora_import_titles = crate::aurora_import::remote_import_titles(session);
 
     StorageStatus {
         paths,
         aurora_lines,
         aurora_install_dir,
         aurora_error,
+        aurora_import_titles,
         has_uncovered,
         aurora_compared,
         god_layout: storage.god_layout,
@@ -1131,7 +1136,7 @@ pub(crate) fn find_child_ci(dir: &Path, name: &str) -> Option<PathBuf> {
 /// Resolves the Aurora install directory on a mounted drive: prefers a
 /// `launch.ini`'s `[Paths]` entry when present (whatever the actual layout),
 /// falling back to `Aurora` or `Dashboard/Aurora` at the drive's root.
-fn local_aurora_dir(mount: &Path) -> Option<PathBuf> {
+pub(crate) fn local_aurora_dir(mount: &Path) -> Option<PathBuf> {
     if let Some(ini_path) = find_child_ci(mount, "launch.ini")
         && let Ok(text) = std::fs::read_to_string(&ini_path)
         && let Some(rel_dir) = aurora_dir_from_launch_ini(&text)
@@ -1254,6 +1259,7 @@ pub fn local_storage_status(mount: &Path) -> StorageStatus {
         aurora_install_dir: aurora.as_ref().and_then(|a| a.install_dir.clone()),
         // A drive without Aurora is not an error, just an empty list.
         aurora_error: None,
+        aurora_import_titles: crate::aurora_import::local_import_titles(mount),
         has_uncovered,
         aurora_compared,
         god_layout: storage.god_layout,

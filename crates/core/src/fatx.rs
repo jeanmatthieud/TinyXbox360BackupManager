@@ -152,6 +152,18 @@ impl FatxSession {
         self.fs.space().context("reading FATX free space")
     }
 
+    /// Checks the whole partition for damage, without changing anything. Reads
+    /// every directory, so it is meant for a small partition — the
+    /// compatibility one — rather than for `data`.
+    pub fn audit(&mut self) -> Result<fatx::Audit> {
+        self.fs.audit().context("checking the FATX filesystem")
+    }
+
+    /// Serial number recorded in the partition's superblock.
+    pub fn volume_id(&self) -> u32 {
+        self.fs.volume_id()
+    }
+
     /// Flushes everything still held in memory (the FAT above all) to the
     /// device. Called at the end of every write; a session that is only read
     /// has nothing to flush.
@@ -400,13 +412,15 @@ fn open_error(config: &FatxConfig, writable: bool, error: fatx::Error) -> anyhow
     if let fatx::Error::Io(io) = &error {
         match io.kind() {
             std::io::ErrorKind::PermissionDenied => {
-                return anyhow!(
+                return anyhow::Error::new(DeviceAccessError(format!(
                     "no permission to open {device}{}.\nRaw disk access is reserved to the administrator.",
                     if writable { " for writing" } else { "" }
-                );
+                )));
             }
             std::io::ErrorKind::NotFound => {
-                return anyhow!("{device} is no longer connected");
+                return anyhow::Error::new(DeviceAccessError(format!(
+                    "{device} is no longer connected"
+                )));
             }
             _ => {}
         }
@@ -418,10 +432,7 @@ fn open_error(config: &FatxConfig, writable: bool, error: fatx::Error) -> anyhow
         // wrong and would send the user looking in the wrong place.
         if config.partition_name() == COMPAT_PARTITION {
             return anyhow!(
-                "{device} has no original-Xbox compatibility partition ({COMPAT_VOLUME}).\n\n\
-                 It is only created when a drive is formatted at the Microsoft factory. \
-                 Create it first — with the `HDD Compatibility Partition Fixer` homebrew \
-                 run on the console, or with FATXplorer on Windows — then come back here."
+                "{device} has no original-Xbox compatibility partition ({COMPAT_VOLUME})."
             );
         }
         return anyhow!(
@@ -432,6 +443,62 @@ fn open_error(config: &FatxConfig, writable: bool, error: fatx::Error) -> anyhow
         );
     }
     anyhow::Error::new(error).context(format!("opening {device}"))
+}
+
+/// The device could not be reached at all — access refused, or the disk gone —
+/// as opposed to a partition that opened and turned out unusable. Callers tell
+/// the two apart with `downcast_ref`: reformatting fixes the second, never the
+/// first.
+#[derive(Debug)]
+pub struct DeviceAccessError(String);
+
+impl std::fmt::Display for DeviceAccessError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl std::error::Error for DeviceAccessError {}
+
+/// Sectors per cluster the console formats its small partitions with: 16 KiB
+/// clusters, as the compatibility partition of a factory drive carries.
+pub const DEFAULT_SECTORS_PER_CLUSTER: u32 = 32;
+
+/// Lays a blank FATX filesystem over one partition of `config.device`,
+/// destroying whatever it held. `volume_id` is the serial to record — the old
+/// one, to reformat a partition the console already knows.
+///
+/// Nothing here checks that the partition *may* be formatted: that is the
+/// caller's decision, and the one place it is made is
+/// [`crate::ogxbox_compat::format_fatx`].
+pub fn format_partition(config: &FatxConfig, volume_id: u32) -> Result<()> {
+    if config.device.as_os_str().is_empty() {
+        bail!("no FATX device selected");
+    }
+    if fatx::PartitionMapEntry::from_x360_name(config.partition_name()).is_none() {
+        bail!("unknown Xbox 360 partition '{}'", config.partition_name());
+    }
+    let fs_config = FatxFsConfig::new(config.device.to_string_lossy().to_string())
+        .x360_partition(config.partition_name())
+        .variant(fatx::Variant::X360)
+        .writable(true);
+    FatxFs::format(&fs_config, DEFAULT_SECTORS_PER_CLUSTER, volume_id).map_err(|e| match &e {
+        // Opening the device is where a missing permission or a vanished disk
+        // shows up, and it reads the same as for a session.
+        fatx::Error::Io(io)
+            if matches!(
+                io.kind(),
+                std::io::ErrorKind::PermissionDenied | std::io::ErrorKind::NotFound
+            ) =>
+        {
+            open_error(config, true, e)
+        }
+        _ => anyhow::Error::new(e).context(format!(
+            "formatting the `{}` partition of {}",
+            config.partition_name(),
+            config.device.display()
+        )),
+    })
 }
 
 impl RemoteFs for FatxSession {
