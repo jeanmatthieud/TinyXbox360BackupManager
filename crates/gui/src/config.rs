@@ -294,6 +294,7 @@ impl From<&Config> for DisplayedConfig {
                 .to_string_lossy()
                 .to_shared_string(),
             expert_mode: config.contents.expert_mode(),
+            expert_mode_switchable: !txbm_core::config::EXPERT_MODE_FORCED,
             remove_sources_games: config.contents.remove_sources_games.to_shared_string(),
             xbox360_format: config.contents.xbox360_format.to_shared_string(),
             sort_by: config.contents.sort_by.to_shared_string(),

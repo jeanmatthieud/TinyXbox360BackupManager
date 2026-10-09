@@ -778,6 +778,10 @@ impl State {
                 message_queue.push_back((Message::SyncConfig, SharedString::new()));
             }
             Message::SetExpertMode => {
+                // Its switch is hidden while the flag forces it on.
+                if txbm_core::config::EXPERT_MODE_FORCED {
+                    return;
+                }
                 // Turning it off would hide the card of a tool still at work
                 // (its status line and Cancel with it): the switch is veiled
                 // meanwhile, and this guards against a click slipping through.

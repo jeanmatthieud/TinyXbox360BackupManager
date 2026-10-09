@@ -24,7 +24,7 @@ export component SettingsPage inherits VerticalLayout {
             spacing: 10px;
             alignment: start;
 
-            SettingCard {
+            if UiState.config.expert-mode-switchable: SettingCard {
                 icon: IconSet.FlaskConical;
                 label: "Expert mode";
                 items: [

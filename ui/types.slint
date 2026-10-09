@@ -69,6 +69,8 @@ export struct DisplayedConfig {
     mount-point: string,
     // Shows the advanced tools and settings (see `ConfigContents::expert_mode`).
     expert-mode: bool,
+    // False while `EXPERT_MODE_FORCED` hides the expert mode switch.
+    expert-mode-switchable: bool,
     remove-sources-games: string,
     xbox360-format: string,
     sort-by: string,

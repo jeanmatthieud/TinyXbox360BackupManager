@@ -11,6 +11,11 @@ use derive_more::{Display, FromStr};
 use serde::{Deserialize, Serialize};
 use std::{fs, path::PathBuf};
 
+/// Temporary release flag: while `true`, expert mode is on for everyone, new
+/// installs included, and its Settings switch is hidden. Set it back to
+/// `false` to restore the switch and the simple/expert defaults below.
+pub const EXPERT_MODE_FORCED: bool = true;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
     pub path: PathBuf,
@@ -30,7 +35,9 @@ impl Config {
         // someone who may already use the advanced tools: they must not vanish
         // on upgrade. Only a fresh install, or a lost config, starts in simple
         // mode.
-        contents.expert_mode.get_or_insert(from_older_build);
+        contents
+            .expert_mode
+            .get_or_insert(from_older_build || EXPERT_MODE_FORCED);
 
         Self { path, contents }
     }
@@ -146,7 +153,7 @@ impl Default for ConfigContents {
 
 impl ConfigContents {
     pub fn expert_mode(&self) -> bool {
-        self.expert_mode.unwrap_or(false)
+        EXPERT_MODE_FORCED || self.expert_mode.unwrap_or(false)
     }
 
     pub fn ftp_config(&self) -> crate::ftp::FtpConfig {
