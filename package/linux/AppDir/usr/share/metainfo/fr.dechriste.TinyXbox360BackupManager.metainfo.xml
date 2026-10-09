@@ -44,24 +44,40 @@
     <url type="donation">https://github.com/sponsors/jeanmatthieud</url>
     <screenshots>
         <screenshot type="default">
-            <image>https://raw.githubusercontent.com/jeanmatthieud/TinyXbox360BackupManager/main/assets/screenshot-games-light.png</image>
+            <image>https://raw.githubusercontent.com/jeanmatthieud/TinyXbox360BackupManager/v0.18.0/assets/screenshot-games-light.png</image>
             <caption>The game library</caption>
         </screenshot>
         <screenshot>
-            <image>https://raw.githubusercontent.com/jeanmatthieud/TinyXbox360BackupManager/main/assets/screenshot-queue.png</image>
+            <image>https://raw.githubusercontent.com/jeanmatthieud/TinyXbox360BackupManager/v0.18.0/assets/screenshot-queue.png</image>
             <caption>The upload queue</caption>
         </screenshot>
         <screenshot>
-            <image>https://raw.githubusercontent.com/jeanmatthieud/TinyXbox360BackupManager/main/assets/screenshot-toolbox.png</image>
+            <image>https://raw.githubusercontent.com/jeanmatthieud/TinyXbox360BackupManager/v0.18.0/assets/screenshot-toolbox.png</image>
             <caption>Toolbox page</caption>
         </screenshot>
         <screenshot>
-            <image>https://raw.githubusercontent.com/jeanmatthieud/TinyXbox360BackupManager/main/assets/screenshot-settings.png</image>
+            <image>https://raw.githubusercontent.com/jeanmatthieud/TinyXbox360BackupManager/v0.18.0/assets/screenshot-settings.png</image>
             <caption>Settings page</caption>
         </screenshot>
     </screenshots>
     <!-- Releases are appended by the release pipeline; keep the newest first. -->
     <releases>
+        <release version="0.18.0" date="2026-10-09">
+            <url type="details">https://github.com/jeanmatthieud/TinyXbox360BackupManager/releases/tag/v0.18.0</url>
+            <description>
+                <p>Features</p>
+                <ul>
+                    <li>Aurora assets builder (for Aurora asset "Import" function)</li>
+                    <li>Enable expert mode for everyone and hide its switch</li>
+                    <li>Format/Rebuild FATX Xbox OG compatibility partition + "Expert mode" in settings</li>
+                    <li>RAR extraction improved</li>
+                </ul>
+                <p>Bug Fixes</p>
+                <ul>
+                    <li>Aurora assets - Xbox OG cover ratio</li>
+                </ul>
+            </description>
+        </release>
         <release version="0.17.0" date="2026-10-06">
             <url type="details">https://github.com/jeanmatthieud/TinyXbox360BackupManager/releases/tag/v0.17.0</url>
             <description>

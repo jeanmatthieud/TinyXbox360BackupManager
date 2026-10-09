@@ -1,3 +1,16 @@
+## [0.18.0](https://github.com/jeanmatthieud/TinyXbox360BackupManager/compare/v0.17.0...v0.18.0) (2026-10-09)
+
+### Features
+
+* Aurora assets builder (for Aurora asset "Import" function) ([f45dd99](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/f45dd994c999631aa8f4115e04da479fc929bb41))
+* Enable expert mode for everyone and hide its switch ([f24a665](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/f24a66594a6c5279b88691d30ac3f650160e7b62))
+* Format/Rebuild FATX Xbox OG compatibility partition + "Expert mode" in settings ([937be7b](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/937be7b4289df2d8e6fa07ea80ff72abd1c40de7))
+* RAR extraction improved ([b93edd7](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/b93edd78c9431fac7246506efd0b0fce105c4c4d))
+
+### Bug Fixes
+
+* Aurora assets - Xbox OG cover ratio ([4ef6769](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/4ef6769c996f7e2681b576b3975d160143d96492))
+
 ## [0.17.0](https://github.com/jeanmatthieud/TinyXbox360BackupManager/compare/v0.16.0...v0.17.0) (2026-10-06)
 
 ### Features
