@@ -90,7 +90,7 @@ Inspired by [TinyWiiBackupManager](https://github.com/mq1/TinyWiiBackupManager).
 - **Accepts many kinds of input** and picks the right processing automatically: Xbox 360 ISOs, original Xbox ISOs, Arcade (XBLA) archives, install / expansion discs, and bare STFS packages.
 - **Multi-disc games with an install disc** (e.g. GTA V) and **Expansion Installer discs** (e.g. GTA IV: The Complete Edition) are handled — just provide both ISOs; DLC and title updates get installed to the right place so unlocks work out of the box.
 - **Covers** from [XboxUnity](https://www.xboxunity.net) and [MobCats](https://github.com/MobCat/MobCats-original-xbox-game-list) (with a local cache).
-- **Toolbox** for the jobs that come before the games: build a BadAvatar USB key, and install the original Xbox compatibility files to maximize the compatibility.
+- **Toolbox** for the jobs that come before the games: build an ABadAvatar USB key, and install the original Xbox compatibility files to maximize the compatibility.
 - **Cross-platform**, native, no dependencies to install:
   - :window: Windows 10+ | x86 (32-bit), x64 (64-bit), arm64 (Qualcomm Snapdragon etc.)
   - :apple: macOS 10.14+ | x86_64 (Intel), arm64 (Apple Silicon/M1+)
@@ -187,7 +187,7 @@ and, on a drive plugged into this computer, [create or repair the partition itse
 > and the files already there are deleted first. Tick *"Backup the current compatibility files"* on your first run — you choose where the archive goes, and it is written only once it is
 > complete.
 
-Disconnect from your current target first — like the BadAvatar tool, this one picks its own
+Disconnect from your current target first — like the ABadAvatar tool, this one picks its own
 console: either **over the network** (FTP, console powered on) or on the console's **hard drive
 connected to this computer**. It then downloads the emulator set you chose and writes it to
 `HddX:\Compatibility`.

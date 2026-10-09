@@ -62,7 +62,7 @@ component CompatExpertBody inherits VerticalLayout {
         padding-left: pack-label.width + picker.spacing;
 
         WarningNote {
-            text: "Requires Aurora + BadUpdate/BadAvatar/RGH to run.";
+            text: "Requires Aurora + BadUpdate/ABadAvatar/RGH to run.";
         }
     }
 
@@ -141,12 +141,12 @@ component CompatSimpleBody inherits VerticalLayout {
     }
 
     WarningNote {
-        text: "The patch requires Aurora + BadUpdate/BadAvatar/RGH to run.";
+        text: "The patch requires Aurora + BadUpdate/ABadAvatar/RGH to run.";
     }
 }
 
 // Card offering to write the original-Xbox emulator onto a console's
-// compatibility partition. Like the BadAvatar card it is a standalone tool: it
+// compatibility partition. Like the ABadAvatar card it is a standalone tool: it
 // picks its own console (over the network, or its hard drive on this computer)
 // and is therefore unusable while a target is connected — which is also what
 // keeps it clear of the job queue's single-writer rule.
@@ -156,13 +156,13 @@ export component OgXboxCompatCard inherits ToolboxCard {
     // The two Toolbox tools exclude each other: they share the status line and
     // the toolbar's cancel button, so running both at once makes progress and
     // cancellation unreadable.
-    disabled: UiState.compat-busy || UiState.creating-badavatar || UiState.badavatar-hdd-tool-busy || target-connected;
+    disabled: UiState.compat-busy || UiState.creating-abadavatar || UiState.abadavatar-hdd-tool-busy || target-connected;
     disabled-tooltip: target-connected
         ? "Disconnect from the current target first"
-        : UiState.creating-badavatar
-            ? "Wait for the BadAvatar USB key to be written."
-            : UiState.badavatar-hdd-tool-busy
-                ? "Wait for BadAvatar to be written to the hard drive."
+        : UiState.creating-abadavatar
+            ? "Wait for the ABadAvatar USB key to be written."
+            : UiState.abadavatar-hdd-tool-busy
+                ? "Wait for ABadAvatar to be written to the hard drive."
                 : "";
 
     CardHeader {

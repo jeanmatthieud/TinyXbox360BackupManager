@@ -15,17 +15,17 @@
 
 ### Features
 
-* Add BadAvatar HDD management and download sources configuration ([b8f0ced](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/b8f0cedc2e597dc0ac695e7ef2865077fe23b257))
+* Add ABadAvatar HDD management and download sources configuration ([b8f0ced](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/b8f0cedc2e597dc0ac695e7ef2865077fe23b257))
 * Add FATX BadStorage compatibility ([2ae1eb8](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/2ae1eb8011b60cdbdf83f5dd84a45dcf92e46e43))
 * Badavatar with XEUNSHACKLE MAX ([1e46039](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/1e46039de67bd8ee90c4f33e0efc14d730997843))
 * Dashlaunch configurable settings ([3053a7f](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/3053a7ffa1fe8043c2be6aebc7aa614b353b318a))
-* Enhance BadAvatar HDD installation ([1abda2e](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/1abda2ec02f569f43ac63e67d6b6982391a88685))
+* Enhance ABadAvatar HDD installation ([1abda2e](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/1abda2ec02f569f43ac63e67d6b6982391a88685))
 * Support .rar archives in input handling and update related documentation ([da28993](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/da28993de0a46df03ed4e99df8a763c251cd59e3))
 
 ### Bug Fixes
 
 * BadStorage detection and UI tweaks ([aa12649](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/aa1264925b1f9cd6834fa5a6010401d435f1c6df))
-* Copy the whole ABadAvatar payload onto the BadAvatar USB key ([f237a7c](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/f237a7c1be8da81d6de6e0ee31073a8b077bca6a))
+* Copy the whole ABadAvatar payload onto the ABadAvatar USB key ([f237a7c](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/f237a7c1be8da81d6de6e0ee31073a8b077bca6a))
 * RAR file management issues ([040ce05](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/040ce052bfb35d1fb0d41445bb65e8b990bc62af))
 
 ## [0.15.0](https://github.com/jeanmatthieud/TinyXbox360BackupManager/compare/v0.14.0...v0.15.0) (2026-09-22)
@@ -83,7 +83,7 @@
 
 ### Features
 
-* Add disabled state and tooltip support to ToolboxCard and BadAvatarCard ([6e4c729](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/6e4c72985b50a4ed3caa2f85e63a7ad16cc84e03))
+* Add disabled state and tooltip support to ToolboxCard and ABadAvatarCard ([6e4c729](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/6e4c72985b50a4ed3caa2f85e63a7ad16cc84e03))
 * Add support for additional directory structure in local Aurora path resolution ([c36a6b5](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/c36a6b5796ca6030752be6dddeab14cbcfdfc36e))
 * Add support for configurable GOD storage layouts ([d866cc3](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/d866cc3159df926eb988c14300403f98d0ebb336))
 * Enhance conversion process with progress tracking and UI updates ([2875b5a](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/2875b5a04d382f82d3d813ebd2b401674e3f0b04))
@@ -112,7 +112,7 @@
 
 ### Bug Fixes
 
-* Add tooltip support for CardActionRow and update BadAvatarCard behavior based on target connection ([fc814b7](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/fc814b79369ac3240d140f6e86f4735ec12ef10f))
+* Add tooltip support for CardActionRow and update ABadAvatarCard behavior based on target connection ([fc814b7](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/fc814b79369ac3240d140f6e86f4735ec12ef10f))
 * Enhance cancellation handling and user feedback during conversion processes ([e94bd92](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/e94bd923c4107b80cd163634aa786fad6fa33272))
 * Implement case-insensitive file detection for extracted game directories (Xbox360 XEX) ([6e80efb](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/6e80efb4f03d003b2af173ff532953a5c0e8c7bb))
 
@@ -121,7 +121,7 @@
 ### Features
 
 * Add support for displaying Aurora installation directory and enhance thumbnail caching mechanism ([8cbf183](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/8cbf183a6944ba458a470aa61effbb840866d5dc))
-* Update target selection button behavior during BadAvatar USB key creation ([660c452](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/660c452949df69f1166e93ba20384bb18689bf55))
+* Update target selection button behavior during ABadAvatar USB key creation ([660c452](https://github.com/jeanmatthieud/TinyXbox360BackupManager/commit/660c452949df69f1166e93ba20384bb18689bf55))
 
 ### Bug Fixes
 

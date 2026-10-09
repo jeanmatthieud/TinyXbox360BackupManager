@@ -24,7 +24,7 @@ export component SettingsPage inherits VerticalLayout {
             spacing: 10px;
             alignment: start;
 
-            SettingCard {
+            if UiState.config.expert-mode-switchable: SettingCard {
                 icon: IconSet.FlaskConical;
                 label: "Expert mode";
                 items: [
@@ -38,8 +38,8 @@ export component SettingsPage inherits VerticalLayout {
                 // its status line and Cancel button with it.
                 disabled: UiState.job-queue.length > 0
                     || UiState.compat-busy
-                    || UiState.creating-badavatar
-                    || UiState.badavatar-hdd-tool-busy
+                    || UiState.creating-abadavatar
+                    || UiState.abadavatar-hdd-tool-busy
                     // Expert mode decides what a connected target shows, so
                     // it is only switched with none connected.
                     || !UiState.config.target.is-empty;

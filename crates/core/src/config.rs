@@ -2,7 +2,7 @@
 // SPDX-FileContributor: Modified by Jean-Matthieu Dechriste (TinyXbox360BackupManager)
 // SPDX-License-Identifier: GPL-3.0-only
 
-use crate::badavatar::BadAvatarConfig;
+use crate::abadavatar::ABadAvatarConfig;
 use crate::ogxbox_compat::OgXboxCompatConfig;
 use crate::fatx::FatxConfig;
 use crate::data_dir::DATA_DIR;
@@ -10,6 +10,11 @@ use anyhow::Result;
 use derive_more::{Display, FromStr};
 use serde::{Deserialize, Serialize};
 use std::{fs, path::PathBuf};
+
+/// Temporary release flag: while `true`, expert mode is on for everyone, new
+/// installs included, and its Settings switch is hidden. Set it back to
+/// `false` to restore the switch and the simple/expert defaults below.
+pub const EXPERT_MODE_FORCED: bool = true;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
@@ -26,12 +31,13 @@ impl Config {
         // mode included: it says nothing about what its owner was using.
         let from_older_build = parsed.is_ok();
         let mut contents: ConfigContents = parsed.unwrap_or_default();
-        contents.badavatar.migrate();
         // A readable config written before expert mode existed belongs to
         // someone who may already use the advanced tools: they must not vanish
         // on upgrade. Only a fresh install, or a lost config, starts in simple
         // mode.
-        contents.expert_mode.get_or_insert(from_older_build);
+        contents
+            .expert_mode
+            .get_or_insert(from_older_build || EXPERT_MODE_FORCED);
 
         Self { path, contents }
     }
@@ -107,8 +113,8 @@ pub struct ConfigContents {
     pub ftp_user: String,
     pub ftp_password: String,
 
-    /// BadAvatar USB-key creation settings (Toolbox).
-    pub badavatar: BadAvatarConfig,
+    /// ABadAvatar USB-key creation settings (Toolbox).
+    pub abadavatar: ABadAvatarConfig,
 
     /// Original-Xbox compatibility partition settings (Toolbox).
     pub ogxbox_compat: OgXboxCompatConfig,
@@ -139,7 +145,7 @@ impl Default for ConfigContents {
             ftp_port: "21".to_string(),
             ftp_user: "xboxftp".to_string(),
             ftp_password: "xboxftp".to_string(),
-            badavatar: BadAvatarConfig::default(),
+            abadavatar: ABadAvatarConfig::default(),
             ogxbox_compat: OgXboxCompatConfig::default(),
         }
     }
@@ -147,7 +153,7 @@ impl Default for ConfigContents {
 
 impl ConfigContents {
     pub fn expert_mode(&self) -> bool {
-        self.expert_mode.unwrap_or(false)
+        EXPERT_MODE_FORCED || self.expert_mode.unwrap_or(false)
     }
 
     pub fn ftp_config(&self) -> crate::ftp::FtpConfig {

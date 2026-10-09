@@ -157,14 +157,14 @@ export component DownloadUrlField inherits VerticalLayout {
     }
 }
 
-// A BadAvatar component's URL, stored under its key in the BadAvatar settings.
-export component BadAvatarUrlField inherits DownloadUrlField {
+// An ABadAvatar component's URL, stored under its key in the ABadAvatar settings.
+export component ABadAvatarUrlField inherits DownloadUrlField {
     in property <string> field-key;
 
     url-edited(url) => {
-        Dispatcher.dispatch(Message.SetBadAvatarUrl, field-key + "\n" + url);
+        Dispatcher.dispatch(Message.SetABadAvatarUrl, field-key + "\n" + url);
     }
     reset-requested => {
-        Dispatcher.dispatch(Message.ResetBadAvatarUrl, field-key);
+        Dispatcher.dispatch(Message.ResetABadAvatarUrl, field-key);
     }
 }

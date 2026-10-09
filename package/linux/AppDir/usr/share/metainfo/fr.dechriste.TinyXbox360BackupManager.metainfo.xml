@@ -71,9 +71,9 @@
         <release version="0.16.0" date="2026-09-26">
             <url type="details">https://github.com/jeanmatthieud/TinyXbox360BackupManager/releases/tag/v0.16.0</url>
             <description>
-                <p>This release adds BadAvatar installation on the console's hard drive, a Dashlaunch settings card, RAR support, and configurable download sources.</p>
+                <p>This release adds ABadAvatar installation on the console's hard drive, a Dashlaunch settings card, RAR support, and configurable download sources.</p>
                 <ul>
-                    <li>Experimental 🧪: BadAvatar on the console's hard drive</li>
+                    <li>Experimental 🧪: ABadAvatar on the console's hard drive</li>
                     <li>XeUnshackle Max</li>
                     <li>Dashlaunch settings</li>
                     <li>Download sources</li>
@@ -131,7 +131,7 @@
             <description>
                 <p>Features</p>
                 <ul>
-                    <li>Add disabled state and tooltip support to ToolboxCard and BadAvatarCard</li>
+                    <li>Add disabled state and tooltip support to ToolboxCard and ABadAvatarCard</li>
                     <li>Add support for additional directory structure in local Aurora path resolution</li>
                     <li>Add support for configurable GOD storage layouts</li>
                     <li>Enhance conversion process with progress tracking and UI updates</li>
@@ -166,7 +166,7 @@
                 </ul>
                 <p>Bug Fixes</p>
                 <ul>
-                    <li>Add tooltip support for CardActionRow and update BadAvatarCard behavior based on target connection</li>
+                    <li>Add tooltip support for CardActionRow and update ABadAvatarCard behavior based on target connection</li>
                     <li>Enhance cancellation handling and user feedback during conversion processes</li>
                     <li>Implement case-insensitive file detection for extracted game directories (Xbox360 XEX)</li>
                 </ul>
@@ -178,7 +178,7 @@
                 <p>Features</p>
                 <ul>
                     <li>Add support for displaying Aurora installation directory and enhance thumbnail caching mechanism</li>
-                    <li>Update target selection button behavior during BadAvatar USB key creation</li>
+                    <li>Update target selection button behavior during ABadAvatar USB key creation</li>
                 </ul>
                 <p>Bug Fixes</p>
                 <ul>

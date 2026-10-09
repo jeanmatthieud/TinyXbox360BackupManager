@@ -5,8 +5,8 @@
 
 pub mod archive;
 pub mod aurora_import;
-pub mod badavatar;
-pub mod badavatar_hdd;
+pub mod abadavatar;
+pub mod abadavatar_hdd;
 pub mod config;
 pub mod convert;
 pub mod covers;

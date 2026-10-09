@@ -5,7 +5,7 @@ import { ToolboxCard } from "toolbox-card.slint";
 import { CardHeader } from "card-header.slint";
 import { HorizontalLine } from "horizontal-line.slint";
 import { IconButton } from "icon-button.slint";
-import { BadAvatarUrlField, DownloadUrlField } from "download-url-field.slint";
+import { ABadAvatarUrlField, DownloadUrlField } from "download-url-field.slint";
 import { BuiltinPackRow, CustomPackRow } from "compat-pack-rows.slint";
 import { Message, Dispatcher } from "../messages.slint";
 import { MyPalette } from "../styling.slint";
@@ -27,15 +27,15 @@ component SectionTitle inherits HorizontalLayout {
     @children
 }
 
-// Where the Toolbox tools download what they install: the BadAvatar
+// Where the Toolbox tools download what they install: the ABadAvatar
 // components, and the original-Xbox emulator packs with their per-title
-// configs. Every BadAvatar field falls back to a built-in release, and its
+// configs. Every ABadAvatar field falls back to a built-in release, and its
 // reset button brings it back; the built-in emulator packs are fixed, and
 // packs of the user's own come after them.
 export component DownloadSourcesCard inherits ToolboxCard {
     // The tools read these when they start: changing them mid-run would
     // mislead, since the run in progress keeps the URLs it started with.
-    disabled: UiState.creating-badavatar || UiState.badavatar-hdd-busy || UiState.compat-busy;
+    disabled: UiState.creating-abadavatar || UiState.abadavatar-hdd-busy || UiState.compat-busy;
     disabled-tooltip: "Available once the running Toolbox tool is done.";
 
     CardHeader {
@@ -53,49 +53,49 @@ export component DownloadSourcesCard inherits ToolboxCard {
     }
 
     SectionTitle {
-        text: "BadAvatar";
+        text: "ABadAvatar";
     }
 
-    BadAvatarUrlField {
+    ABadAvatarUrlField {
         label: "ABadAvatar 1.0-beta";
-        url: UiState.badavatar.abadavatar-v10-url;
-        default-url: UiState.badavatar.abadavatar-v10-default-url;
+        url: UiState.abadavatar.abadavatar-v10-url;
+        default-url: UiState.abadavatar.abadavatar-v10-default-url;
         field-key: "abadavatar_v10";
     }
 
-    BadAvatarUrlField {
+    ABadAvatarUrlField {
         label: "ABadAvatar 1.3-beta (also used for the hard drive)";
-        url: UiState.badavatar.abadavatar-v13-url;
-        default-url: UiState.badavatar.abadavatar-v13-default-url;
+        url: UiState.abadavatar.abadavatar-v13-url;
+        default-url: UiState.abadavatar.abadavatar-v13-default-url;
         field-key: "abadavatar_v13";
     }
 
-    BadAvatarUrlField {
+    ABadAvatarUrlField {
         label: "XeUnshackle";
-        url: UiState.badavatar.xeunshackle-url;
-        default-url: UiState.badavatar.xeunshackle-default-url;
+        url: UiState.abadavatar.xeunshackle-url;
+        default-url: UiState.abadavatar.xeunshackle-default-url;
         field-key: "xeunshackle";
     }
 
-    BadAvatarUrlField {
+    ABadAvatarUrlField {
         label: "XeUnshackle Max (used when Aurora starts without delay)";
-        url: UiState.badavatar.xeunshackle-max-url;
-        default-url: UiState.badavatar.xeunshackle-max-default-url;
+        url: UiState.abadavatar.xeunshackle-max-url;
+        default-url: UiState.abadavatar.xeunshackle-max-default-url;
         field-key: "xeunshackle_max";
     }
 
-    BadAvatarUrlField {
+    ABadAvatarUrlField {
         label: "Aurora";
-        url: UiState.badavatar.aurora-url;
-        default-url: UiState.badavatar.aurora-default-url;
+        url: UiState.abadavatar.aurora-url;
+        default-url: UiState.abadavatar.aurora-default-url;
         field-key: "aurora";
-        sources: UiState.badavatar.aurora-sources;
+        sources: UiState.abadavatar.aurora-sources;
     }
 
-    BadAvatarUrlField {
+    ABadAvatarUrlField {
         label: "System update";
-        url: UiState.badavatar.system-update-url;
-        default-url: UiState.badavatar.system-update-default-url;
+        url: UiState.abadavatar.system-update-url;
+        default-url: UiState.abadavatar.system-update-default-url;
         field-key: "system_update";
     }
 

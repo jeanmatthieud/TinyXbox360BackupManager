@@ -7,10 +7,10 @@ import { RemovableDrivePicker } from "removable-drive-picker.slint";
 import { UiState } from "../ui-state.slint";
 import { Message, Dispatcher } from "../messages.slint";
 
-// Removable-drive chooser for the BadAvatar USB key, reusing the same picker as
+// Removable-drive chooser for the ABadAvatar USB key, reusing the same picker as
 // the target-selection modal. Confirming hands the chosen mount point back to
-// the BadAvatar flow (which then shows the overwrite-confirmation modal).
-export component BadAvatarTargetModal inherits Modal {
+// the ABadAvatar flow (which then shows the overwrite-confirmation modal).
+export component ABadAvatarTargetModal inherits Modal {
     max-h: 600px;
 
     // Index into UiState.removable-drives, -1 until the user picks one.
@@ -21,7 +21,7 @@ export component BadAvatarTargetModal inherits Modal {
         spacing: 15px;
 
         RemovableDrivePicker {
-            title: "Select the USB key for BadAvatar";
+            title: "Select the USB key for ABadAvatar";
             selected-drive <=> root.selected-drive;
         }
     }
@@ -38,7 +38,7 @@ export component BadAvatarTargetModal inherits Modal {
             IconButton {
                 label: "Close";
                 clicked => {
-                    UiState.selecting-badavatar-target = false;
+                    UiState.selecting-abadavatar-target = false;
                 }
             }
 
@@ -51,8 +51,8 @@ export component BadAvatarTargetModal inherits Modal {
                 kind: IconButtonKind.Primary;
                 disabled: selected-drive < 0;
                 clicked => {
-                    UiState.selecting-badavatar-target = false;
-                    Dispatcher.dispatch(Message.SelectBadAvatarDrive, UiState.removable-drives[selected-drive].mount-point);
+                    UiState.selecting-abadavatar-target = false;
+                    Dispatcher.dispatch(Message.SelectABadAvatarDrive, UiState.removable-drives[selected-drive].mount-point);
                 }
             }
         }

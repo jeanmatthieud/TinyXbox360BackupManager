@@ -14,7 +14,7 @@ use std::{
     sync::{Arc, atomic::AtomicBool},
 };
 use txbm_core::{
-    badavatar_hdd::HddInspection, config::Config, drive_info::DriveInfo, ftp::FtpConfig,
+    abadavatar_hdd::HddInspection, config::Config, drive_info::DriveInfo, ftp::FtpConfig,
     game::Game, job_queue::QueuedJob, ogxbox_compat::OgXboxCompatConfig,
 };
 
@@ -99,32 +99,32 @@ pub struct State {
     /// TitleIDs (upper-cased) that already have a folder in Aurora's import
     /// folder on the target, as last read with the storage status.
     pub aurora_import_titles: std::collections::HashSet<String>,
-    pub is_creating_badavatar: bool,
-    /// Destination picked for the BadAvatar key, awaiting confirmation in the
+    pub is_creating_abadavatar: bool,
+    /// Destination picked for the ABadAvatar key, awaiting confirmation in the
     /// modal before the creation thread actually starts.
-    pub badavatar_pending_dest: Option<PathBuf>,
+    pub abadavatar_pending_dest: Option<PathBuf>,
     /// The `launch.ini` shown in the Dashlaunch card, which its switches
     /// write back to. `None` when the target has none.
     pub dashlaunch_location: Option<txbm_core::dashlaunch::IniLocation>,
-    /// True from the start of a BadAvatar install on the connected hard
+    /// True from the start of an ABadAvatar install on the connected hard
     /// drive, or of its removal, until it is over. It writes to the target
     /// outside the job queue, so the queue holds its jobs back meanwhile.
-    pub badavatar_hdd_busy: bool,
-    /// True while the drive picked by the BadAvatar install tool is being
+    pub abadavatar_hdd_busy: bool,
+    /// True while the drive picked by the ABadAvatar install tool is being
     /// read, before its confirmation modal can open.
-    pub is_inspecting_badavatar_hdd: bool,
-    /// Drive picked by the BadAvatar install tool, and what was found on it,
+    pub is_inspecting_abadavatar_hdd: bool,
+    /// Drive picked by the ABadAvatar install tool, and what was found on it,
     /// awaiting confirmation in the modal before the install thread actually
     /// starts.
-    pub badavatar_hdd_pending: Option<(PathBuf, HddInspection)>,
-    /// True while the connected drive's BadAvatar state is being read. One
+    pub abadavatar_hdd_pending: Option<(PathBuf, HddInspection)>,
+    /// True while the connected drive's ABadAvatar state is being read. One
     /// read at a time: each opens its own session (a whole FAT read), and
     /// they share one result slot.
-    pub is_fetching_badavatar_hdd: bool,
-    /// A read of the BadAvatar state was asked for while one was in flight:
+    pub is_fetching_abadavatar_hdd: bool,
+    /// A read of the ABadAvatar state was asked for while one was in flight:
     /// the drive may have changed since that one started, so it is dropped
     /// and the drive read again.
-    pub badavatar_hdd_refetch: bool,
+    pub abadavatar_hdd_refetch: bool,
     pub is_installing_compat: bool,
     /// True while the read-only inspection of a picked console is in flight.
     /// A second one must not start: both threads deposit their answer in the
@@ -155,11 +155,11 @@ pub struct State {
     pub ftp_scan_cancel: Arc<AtomicBool>,
     /// Flag shared with the running job thread to cancel it.
     pub job_cancel: Arc<AtomicBool>,
-    /// Flag shared with the BadAvatar creation thread to cancel it.
-    pub badavatar_cancel: Arc<AtomicBool>,
-    /// Flag shared with the BadAvatar hard-drive install thread to cancel it,
+    /// Flag shared with the ABadAvatar creation thread to cancel it.
+    pub abadavatar_cancel: Arc<AtomicBool>,
+    /// Flag shared with the ABadAvatar hard-drive install thread to cancel it,
     /// honoured until it starts writing.
-    pub badavatar_hdd_cancel: Arc<AtomicBool>,
+    pub abadavatar_hdd_cancel: Arc<AtomicBool>,
     /// Flag shared with the compatibility-install thread to cancel it.
     pub compat_cancel: Arc<AtomicBool>,
     /// Raised by the compatibility-install thread once it has started changing
@@ -203,14 +203,14 @@ impl State {
             rescan_deferred: false,
             aurora_import_wanted: false,
             aurora_import_titles: std::collections::HashSet::new(),
-            is_creating_badavatar: false,
-            badavatar_pending_dest: None,
+            is_creating_abadavatar: false,
+            abadavatar_pending_dest: None,
             dashlaunch_location: None,
-            badavatar_hdd_busy: false,
-            is_inspecting_badavatar_hdd: false,
-            badavatar_hdd_pending: None,
-            is_fetching_badavatar_hdd: false,
-            badavatar_hdd_refetch: false,
+            abadavatar_hdd_busy: false,
+            is_inspecting_abadavatar_hdd: false,
+            abadavatar_hdd_pending: None,
+            is_fetching_abadavatar_hdd: false,
+            abadavatar_hdd_refetch: false,
             is_installing_compat: false,
             is_inspecting_compat: false,
             compat_action: CompatAction::Install,
@@ -222,8 +222,8 @@ impl State {
             scan_cancel: Arc::new(AtomicBool::new(false)),
             ftp_scan_cancel: Arc::new(AtomicBool::new(false)),
             job_cancel: Arc::new(AtomicBool::new(false)),
-            badavatar_cancel: Arc::new(AtomicBool::new(false)),
-            badavatar_hdd_cancel: Arc::new(AtomicBool::new(false)),
+            abadavatar_cancel: Arc::new(AtomicBool::new(false)),
+            abadavatar_hdd_cancel: Arc::new(AtomicBool::new(false)),
             compat_cancel: Arc::new(AtomicBool::new(false)),
             compat_started_writing: Arc::new(AtomicBool::new(false)),
             games_filter: String::new(),

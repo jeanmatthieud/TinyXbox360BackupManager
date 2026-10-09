@@ -7,7 +7,7 @@
 //! partition's superblock, plus a `BSTORAGE` marker at 0x858; the stock kernel
 //! takes the root directory for corrupt until Bad Storage patches it to 1. The
 //! app must use the drive as a FATX target all the same (add and delete games)
-//! while refusing to install BadAvatar on it, and must never write that 0 back.
+//! while refusing to install ABadAvatar on it, and must never write that 0 back.
 //!
 //! The image is left behind, blank again, so it can be opened in the app with
 //! "Pick FATX image". It is sparse: its `data` partition spans 16 GiB — enough
@@ -19,7 +19,7 @@
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
-use txbm_core::badavatar_hdd::{self, HddStatus};
+use txbm_core::abadavatar_hdd::{self, HddStatus};
 use txbm_core::fatx::FatxConfig;
 use txbm_core::remote_fs::RemoteFs;
 use txbm_core::target::{StorageConfig, Target};
@@ -53,12 +53,12 @@ fn main() -> anyhow::Result<()> {
     println!("probe: {probe:?} — {}", probe.label());
     assert!(probe.is_usable(), "the image was not recognized");
 
-    // BadAvatar: reported as incompatible, and refused.
+    // ABadAvatar: reported as incompatible, and refused.
     let target = Target::Fatx(FatxConfig::new(image.clone()));
-    let inspection = badavatar_hdd::inspect(&target)?;
-    println!("BadAvatar: {:?}", inspection.status);
+    let inspection = abadavatar_hdd::inspect(&target)?;
+    println!("ABadAvatar: {:?}", inspection.status);
     assert!(matches!(inspection.status, HddStatus::BadStorage));
-    let refusal = badavatar_hdd::ensure_installable(&inspection).unwrap_err();
+    let refusal = abadavatar_hdd::ensure_installable(&inspection).unwrap_err();
     println!("install refused: {refusal}");
 
     // A FATX target like any other.
