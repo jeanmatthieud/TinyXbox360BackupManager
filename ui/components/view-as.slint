@@ -28,7 +28,7 @@ export component ViewAs inherits Card {
             width: 25px;
             height: 38px;
 
-            tooltip: "View as grid";
+            tooltip: "Afficher en grille";
             background: get-bg(UiState.config.view-as == "Grid", self.has-hover);
             clicked => Dispatcher.dispatch(Message.SetViewAs, "Grid");
 
@@ -43,7 +43,7 @@ export component ViewAs inherits Card {
             width: 25px;
             height: 38px;
 
-            tooltip: "View as table";
+            tooltip: "Afficher en tableau";
             background: get-bg(UiState.config.view-as == "Table", self.has-hover);
             clicked => Dispatcher.dispatch(Message.SetViewAs, "Table");
 

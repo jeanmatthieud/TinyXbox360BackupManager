@@ -94,11 +94,11 @@ export component AuroraCard inherits ToolboxCard {
 
     SectionTitle {
         icon: IconSet.FolderSearch;
-        title: "Scan paths";
+        title: "Chemins d’analyse";
     }
 
     if UiState.fetching-aurora-paths && !UiState.aurora-paths-loaded: Text {
-        text: "Reading Aurora's scan paths…";
+        text: "Lecture des chemins d’analyse d’Aurora…";
     }
 
     // Read failure: reported here, not as a notification.
@@ -116,7 +116,7 @@ export component AuroraCard inherits ToolboxCard {
             }
 
             Text {
-                text: "Couldn't read Aurora's scan paths.";
+                text: "Impossible de lire les chemins d’analyse d’Aurora.";
                 color: MyPalette.destructive;
             }
         }
@@ -145,19 +145,19 @@ export component AuroraCard inherits ToolboxCard {
             }
 
             Text {
-                text: "Aurora isn't scanning any location.";
+                text: "Aucun dossier n’est analysé par Aurora.";
                 color: #e0a12f;
             }
         }
 
         Text {
-            text: "No game will show up until you add scan paths in Aurora for your Xbox 360 (GOD) and OG Xbox games. Add them on the console, then refresh.";
+            text: "Ajoutez dans Aurora les chemins d’analyse de vos jeux Xbox 360 (GOD) et Xbox originale pour les faire apparaître. Faites-le sur la console, puis actualisez ici.";
             wrap: word-wrap;
         }
 
         CardActionRow {
             icon: IconSet.CircleQuestionMark;
-            text: "Help me add the content paths to Aurora";
+            text: "Aide pour ajouter les chemins dans Aurora";
             clicked => { UiState.showing-aurora-help = true };
         }
     }
@@ -166,7 +166,7 @@ export component AuroraCard inherits ToolboxCard {
         spacing: 3px;
 
         Text {
-            text: "The following paths are scanned by Aurora :";
+            text: "Aurora analyse les chemins suivants :";
         }
 
         for path in UiState.aurora-scan-paths: Text {
@@ -182,7 +182,7 @@ export component AuroraCard inherits ToolboxCard {
 
     if UiState.aurora-install-dir != "": SectionTitle {
         icon: IconSet.Images;
-        title: "Game assets";
+        title: "Ressources des jeux";
     }
 
     // Pinned to its min-height, like every wrapped text in the cards: left to
@@ -193,7 +193,7 @@ export component AuroraCard inherits ToolboxCard {
         spacing: 10px;
 
         Text {
-            text: "Give Aurora the assets of your games, so the console doesn't need an internet connection to show them. It takes two steps:";
+            text: "Préparez les ressources de vos jeux pour qu’Aurora les affiche sans connexion Internet. Deux étapes :";
             wrap: word-wrap;
         }
 
@@ -202,34 +202,34 @@ export component AuroraCard inherits ToolboxCard {
 
             Step {
                 number: "1";
-                text: "Prepare the files here. They are copied into Aurora's import folder.";
+                text: "Préparez les fichiers ici. Ils seront copiés dans le dossier d’importation d’Aurora.";
             }
 
             Step {
                 number: "2";
-                text: "On the console, open Aurora and go to Settings > Assets > Import.";
+                text: "Sur la console, ouvrez Aurora : Settings > Assets > Import.";
             }
         }
 
         // Aurora never removes the files and applies them on every run.
         InfoNote {
-            text: "Each import replaces what Aurora shows for these games, including the customizations you made in Aurora.";
+            text: "Chaque importation remplace les ressources affichées pour ces jeux, y compris vos personnalisations dans Aurora.";
         }
     }
 
     if UiState.aurora-install-dir != "": CardActionRow {
         icon: IconSet.ImagePlus;
         text: root.import-remaining == 1
-            ? "Prepare the Aurora game assets of the remaining game"
+            ? "Préparer les ressources Aurora du jeu restant"
             : root.import-remaining > 1
-            ? "Prepare the Aurora game assets of the " + root.import-remaining + " remaining games"
-            : "Prepare the Aurora game assets";
+            ? "Préparer les ressources Aurora des " + root.import-remaining + " jeux restants"
+            : "Préparer les ressources Aurora";
         disabled: root.import-remaining <= 0 || UiState.fetching-aurora-paths;
         tooltip: root.import-remaining > 0
-            ? "Games already prepared are left untouched"
+            ? "Les jeux déjà préparés sont conservés"
             : UiState.aurora-import-total == 0
-            ? "Add games first"
-            : "Nothing left to prepare";
+            ? "Ajoutez d’abord des jeux"
+            : "Tout est déjà prêt";
         clicked => {
             Dispatcher.dispatch(Message.PrepareAuroraImport, "");
         }
@@ -237,11 +237,11 @@ export component AuroraCard inherits ToolboxCard {
 
     if UiState.aurora-install-dir != "": CardActionRow {
         icon: IconSet.Trash;
-        text: "Delete the Aurora game assets to import";
+        text: "Supprimer les ressources Aurora à importer";
         disabled: UiState.aurora-import-folders <= 0 || UiState.fetching-aurora-paths;
         tooltip: UiState.aurora-import-folders > 0
-            ? "Empties Aurora's import folder. What Aurora has already imported is kept."
-            : "Aurora's import folder is empty";
+            ? "Vide le dossier d’importation d’Aurora. Les ressources déjà importées sont conservées."
+            : "Le dossier d’importation d’Aurora est vide";
         clicked => {
             UiState.confirming-clear-aurora-import = true;
         }
@@ -262,7 +262,7 @@ export component AuroraCard inherits ToolboxCard {
         }
 
         Text {
-            text: "Aurora found at: " + UiState.aurora-install-dir;
+            text: "Aurora trouvé dans : " + UiState.aurora-install-dir;
             font-size: 11px;
             wrap: word-wrap;
             horizontal-stretch: 1;
@@ -282,7 +282,7 @@ export component AuroraCard inherits ToolboxCard {
         }
 
         Text {
-            text: "Aurora game assets ready to import: " + UiState.aurora-import-ready + " of " + UiState.aurora-import-total + (UiState.aurora-import-total == 1 ? " game" : " games");
+            text: "Ressources Aurora prêtes à importer : " + UiState.aurora-import-ready + " sur " + UiState.aurora-import-total + (UiState.aurora-import-total == 1 ? " jeu" : " jeux");
             font-size: 11px;
             wrap: word-wrap;
             horizontal-stretch: 1;

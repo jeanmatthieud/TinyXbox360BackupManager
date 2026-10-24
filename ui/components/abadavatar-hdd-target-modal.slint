@@ -23,7 +23,7 @@ export component ABadAvatarHddTargetModal inherits Modal {
         spacing: 15px;
 
         FatxDrivePicker {
-            title: "Select the console hard drive for ABadAvatar";
+            title: "Choisir le disque dur de la console pour ABadAvatar";
             selected-drive <=> root.selected-drive;
         }
     }
@@ -38,7 +38,7 @@ export component ABadAvatarHddTargetModal inherits Modal {
             spacing: 8px;
 
             IconButton {
-                label: "Close";
+                label: "Fermer";
                 clicked => {
                     UiState.selecting-abadavatar-hdd-target = false;
                 }
@@ -49,7 +49,7 @@ export component ABadAvatarHddTargetModal inherits Modal {
             }
 
             IconButton {
-                label: "Next";
+                label: "Suivant";
                 kind: IconButtonKind.Primary;
                 disabled: selected-drive < 0;
                 clicked => {

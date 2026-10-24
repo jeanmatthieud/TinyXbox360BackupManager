@@ -6,6 +6,14 @@ use std::sync::LazyLock;
 
 /// Application data folder (config, covers cache).
 pub static DATA_DIR: LazyLock<PathBuf> = LazyLock::new(|| {
+    // Optional isolated profile for validating the French build without
+    // reading or updating the user's normal configuration and caches.
+    if let Some(path) = std::env::var_os("TXBM_FR_DATA_DIR")
+        .map(PathBuf::from)
+        .filter(|path| path.is_absolute())
+    {
+        return path;
+    }
     ProjectDirs::from("net", "jeanm", "TinyXbox360BackupManager")
         .map(|dirs| dirs.data_dir().to_path_buf())
         .unwrap_or_default()

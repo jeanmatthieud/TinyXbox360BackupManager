@@ -174,7 +174,7 @@ pub fn install(
             abadavatar::stage_components(&work, &cfg, need_aurora, false, cancel, status)?;
         check_cancel(cancel)?;
 
-        status("Preparing the files…");
+        status("Préparation des fichiers…");
         let root = work.join("hdd");
         let _ = fs::remove_dir_all(&root);
         fs::create_dir_all(&root)?;
@@ -199,7 +199,7 @@ pub fn install(
             .join(PROFILE_XUID)
             .is_file()
         {
-            bail!("the ABadAvatar release holds no trigger profile");
+            bail!("la version d’ABadAvatar ne contient aucun profil de déclenchement");
         }
 
         let manifest = HddManifest {
@@ -234,7 +234,7 @@ pub fn install(
 /// anything else goes, then the files at the root, the Aurora folder when we
 /// installed it, and the payload folder last.
 pub fn uninstall(target: &Target, status: &dyn Fn(&str)) -> Result<()> {
-    status("Removing ABadAvatar from the hard drive…");
+    status("Retrait d’ABadAvatar du disque dur…");
     let mut session = open(target, true)?;
     let res = uninstall_remote(&mut session, status);
     // Flushed even after a failure: whatever was removed must reach the disk
@@ -247,7 +247,7 @@ pub fn uninstall(target: &Target, status: &dyn Fn(&str)) -> Result<()> {
 fn open(target: &Target, writable: bool) -> Result<RemoteSession> {
     match target {
         Target::Fatx(_) => target.open_remote(writable),
-        _ => bail!("ABadAvatar can only be installed on a console hard drive connected here"),
+        _ => bail!("ABadAvatar s’installe uniquement sur un disque dur de console branché à cet ordinateur"),
     }
 }
 
@@ -260,19 +260,17 @@ fn check_cancel(cancel: &AtomicBool) -> Result<()> {
 pub fn ensure_installable(inspection: &HddInspection) -> Result<()> {
     match &inspection.status {
         HddStatus::Retail => {}
-        HddStatus::Installed { .. } => bail!("ABadAvatar is already installed on this hard drive"),
+        HddStatus::Installed { .. } => bail!("ABadAvatar est déjà installé sur ce disque dur"),
         HddStatus::BadStorage => bail!(
-            "this hard drive is formatted for Bad Storage: the console can only read it once \
-             the exploit has run, so ABadAvatar cannot start from it — keep it on the USB key"
+            "ce disque utilise Bad Storage : la console le lit seulement après l’exécution de l’exploit ; ABadAvatar ne peut donc pas démarrer depuis ce disque. Gardez-le sur la clé USB"
         ),
         HddStatus::Foreign { found } => bail!(
-            "this hard drive already holds another ABadAvatar or BadUpdate setup ({}) — restore \
-             it to its retail state first",
+            "ce disque contient déjà une autre installation ABadAvatar ou BadUpdate ({}) ; rétablissez d’abord son état d’origine",
             found.join(", ")
         ),
     }
     if let Some(dir) = &inspection.stray_aurora {
-        bail!("{dir} holds no Aurora.xex — nothing was installed");
+        bail!("{dir} ne contient pas Aurora.xex : aucune installation effectuée");
     }
     Ok(())
 }
@@ -280,11 +278,10 @@ pub fn ensure_installable(inspection: &HddInspection) -> Result<()> {
 /// Refuses a `GamerProfile.xex` that isn't the release's own.
 fn check_gamer_profile(path: &Path) -> Result<()> {
     let sha1 = crate::util::sha1_hex_file(path)
-        .with_context(|| format!("reading {GAMER_PROFILE} from the ABadAvatar release"))?;
+        .with_context(|| format!("lecture de {GAMER_PROFILE} dans la version d’ABadAvatar"))?;
     if sha1 != GAMER_PROFILE_SHA1 {
         bail!(
-            "the {GAMER_PROFILE} in the downloaded ABadAvatar release is not the expected \
-             one — nothing was installed"
+            "le {GAMER_PROFILE} téléchargé ne correspond pas au fichier attendu : aucune installation effectuée"
         );
     }
     Ok(())
@@ -298,7 +295,7 @@ fn check_space(session: &mut RemoteSession, root: &Path) -> Result<()> {
         let needed = crate::util::dir_size_on(root, space.bytes_per_cluster);
         if needed > space.free_bytes {
             bail!(
-                "not enough space on the console drive: {} needed, {} free",
+                "espace insuffisant sur le disque de la console : {} nécessaires, {} libres",
                 crate::util::human_size(needed),
                 crate::util::human_size(space.free_bytes)
             );
@@ -360,20 +357,20 @@ fn read_layout(fs: &mut dyn RemoteFs) -> Result<Layout> {
     let root = format!("/{}", remote_hdd_root(fs));
     let entries = fs
         .try_list_dir(&root)
-        .context("listing the hard drive's root")?;
+        .context("lecture de la racine du disque dur")?;
 
     let payload = find_ci(&entries, PAYLOAD_DIR, true).map(|e| e.name.clone());
     let (mut manifest, mut has_gamer_profile) = (None, false);
     if let Some(name) = &payload {
         let dir = format!("{root}/{name}");
-        let files = fs.try_list_dir(&dir).context("listing the payload folder")?;
+        let files = fs.try_list_dir(&dir).context("lecture du dossier de la charge utile (payload)")?;
         has_gamer_profile = find_ci(&files, GAMER_PROFILE, false).is_some();
         if let Some(entry) = find_ci(&files, MANIFEST_NAME, false) {
             // A read error is reported as such: taken for an unparsable file,
             // it would make our own install pass for someone else's.
             let bytes = fs
                 .download_file(&format!("{dir}/{}", entry.name))
-                .context("reading the install manifest")?;
+                .context("lecture du manifeste d’installation")?;
             manifest = Some(serde_json::from_slice(&bytes).ok());
         }
     }
@@ -464,7 +461,7 @@ fn removal_list(layout: &Layout, manifest: &HddManifest) -> Vec<String> {
     let mut list = Vec::new();
     if layout.profile.is_some() {
         list.push(format!(
-            "The ABadAvatar profile ({})",
+            "Le profil ABadAvatar ({})",
             console_path(&format!("{}/{PROFILE_XUID}", PROFILE_DIRS.join("/")))
         ));
     }
@@ -478,14 +475,13 @@ fn removal_list(layout: &Layout, manifest: &HddManifest) -> Vec<String> {
     }
     if let Some(dir) = &manifest.aurora_installed {
         list.push(format!(
-            "{} — Aurora, with its settings, databases and cached covers",
+            "{} — Aurora, ses paramètres, bases de données et jaquettes en cache",
             console_path(dir)
         ));
     }
     if let Some(name) = &layout.payload {
         list.push(format!(
-            "{} — the whole folder, including what XeUnshackle saved there (such as its \
-             backup of the console's MAC address)",
+            "{} — tout le dossier, y compris les données de XeUnshackle (par exemple la sauvegarde de l’adresse MAC de la console)",
             console_path(name)
         ));
     }
@@ -506,7 +502,7 @@ fn install_remote(
     let layout = read_layout(fs)?;
     ensure_installable(&inspection_of(&layout, bad_storage))?;
     if layout.aurora.is_some() == manifest.aurora_installed.is_some() {
-        bail!("Aurora came or went on this hard drive since it was checked — nothing was installed");
+        bail!("la présence d’Aurora sur le disque a changé depuis la vérification : aucune installation effectuée");
     }
     let hdd = layout.root;
     // The copies below have no reason to stop halfway once started.
@@ -514,25 +510,24 @@ fn install_remote(
 
     // 1. The manifest first: from here on, whatever happens, the drive reads
     //    as our install and can be removed from the card.
-    status("Writing ABadAvatar to the hard drive…");
+    status("Écriture d’ABadAvatar sur le disque dur…");
     let payload = format!("{hdd}/{PAYLOAD_DIR}");
     fs.ensure_dir(&payload)?;
     let json = serde_json::to_vec_pretty(manifest)?;
     fs.put_bytes(&payload, MANIFEST_NAME, &json)
-        .context("writing the install manifest")?;
+        .context("écriture du manifeste d’installation")?;
 
     // 2. The payload, then the copy of GamerProfile.xex read back: it is the
     //    one file that can end up in flash.
     fs.upload_dir(&root.join(PAYLOAD_DIR), &payload, &never, &mut |_, _| {})
-        .context("writing the payload folder")?;
+        .context("écriture du dossier de la charge utile (payload)")?;
     let written = fs
         .sha1_file(&format!("{payload}/{GAMER_PROFILE}"))
-        .context("reading GamerProfile.xex back")?;
+        .context("relecture de GamerProfile.xex")?;
     if written != GAMER_PROFILE_SHA1 {
         let _ = fs.remove_file(&payload, GAMER_PROFILE);
         bail!(
-            "{GAMER_PROFILE} did not read back intact from the hard drive — the install \
-             stopped before the exploit could trigger"
+            "la relecture de {GAMER_PROFILE} sur le disque ne correspond pas au fichier attendu : installation arrêtée avant le déclenchement de l’exploit"
         );
     }
 
@@ -548,19 +543,19 @@ fn install_remote(
         let dest = format!("{hdd}/{dir}");
         fs.upload_dir(&root.join(dir), &dest, &never, &mut |sent, total| {
             if let Some(percent) = (sent * 100).checked_div(total) {
-                status(&format!("Writing Aurora… {percent}%"));
+                status(&format!("Écriture d’Aurora… {percent}%"));
             }
         })
-        .context("writing Aurora")?;
-        status("Writing ABadAvatar to the hard drive…");
+        .context("écriture d’Aurora")?;
+        status("Écriture d’ABadAvatar sur le disque dur…");
     }
 
     // 5. The profile last: it is what arms the exploit at the next boot.
     let rel: std::path::PathBuf = PROFILE_DIRS.iter().collect();
-    let bytes = fs::read(root.join(&rel).join(PROFILE_XUID)).context("reading the profile")?;
+    let bytes = fs::read(root.join(&rel).join(PROFILE_XUID)).context("lecture du profil")?;
     let dir = format!("{hdd}/{}", PROFILE_DIRS.join("/"));
     fs.put_bytes(&dir, PROFILE_XUID, &bytes)
-        .context("writing the ABadAvatar profile")?;
+        .context("écriture du profil ABadAvatar")?;
     Ok(())
 }
 
@@ -568,7 +563,7 @@ fn uninstall_remote(fs: &mut dyn RemoteFs, status: &dyn Fn(&str)) -> Result<()> 
     let layout = read_layout(fs)?;
     let manifest = match &layout.manifest {
         Some(Some(manifest)) => manifest.clone(),
-        _ => bail!("ABadAvatar wasn't installed on this hard drive by TinyXbox360BackupManager"),
+        _ => bail!("ABadAvatar n’a pas été installé sur ce disque par TinyXbox360BackupManager"),
     };
     let hdd = layout.root.clone();
     let never = AtomicBool::new(false);
@@ -578,7 +573,7 @@ fn uninstall_remote(fs: &mut dyn RemoteFs, status: &dyn Fn(&str)) -> Result<()> 
     //    stays.
     if let Some((dir, name)) = &layout.profile {
         fs.remove_file(dir, name)
-            .context("removing the ABadAvatar profile")?;
+            .context("suppression du profil ABadAvatar")?;
         let mut dir = dir.clone();
         for _ in 1..PROFILE_DIRS.len() {
             if !fs.remove_empty_dir(&dir).unwrap_or(false) {
@@ -608,18 +603,18 @@ fn uninstall_remote(fs: &mut dyn RemoteFs, status: &dyn Fn(&str)) -> Result<()> 
         // The folder's real name, which may not be spelled as the manifest has
         // it.
         if let Some(dir) = walk_ci(fs, &hdd, &rel.split('/').collect::<Vec<_>>())? {
-            status("Removing Aurora…");
+            status("Suppression d’Aurora…");
             fs.remove_dir_recursive(&dir, &never, &mut |_, _| {})
-                .context("removing Aurora")?;
+                .context("suppression d’Aurora")?;
         }
     }
 
     // 4. The payload folder, manifest included, last: until it goes, the drive
     //    still reads as our install and the removal can be run again.
     if let Some(name) = &layout.payload {
-        status("Removing ABadAvatar from the hard drive…");
+        status("Retrait d’ABadAvatar du disque dur…");
         fs.remove_dir_recursive(&format!("{hdd}/{name}"), &never, &mut |_, _| {})
-            .context("removing the payload folder")?;
+            .context("suppression du dossier de la charge utile (payload)")?;
     }
     Ok(())
 }

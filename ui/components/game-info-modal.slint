@@ -66,13 +66,13 @@ component ContentRow inherits Rectangle {
 
     pure function status-text(s: ComponentStatus) -> string {
         if s == ComponentStatus.Installed {
-            "Installed"
+            "Installé"
         } else if s == ComponentStatus.Corrupted {
-            "Corrupted"
+            "Endommagé"
         } else if s == ComponentStatus.Missing {
-            "Missing"
+            "Manquant"
         } else {
-            "Uploading"
+            "Transfert en cours"
         }
     }
 
@@ -100,7 +100,7 @@ component ContentRow inherits Rectangle {
             }
 
             Text {
-                text: comp.kind;
+                text: comp.kind == "Game" ? "Jeu" : comp.kind == "Disc" ? "Disque" : comp.kind;
                 vertical-alignment: center;
             }
         }
@@ -113,7 +113,7 @@ component ContentRow inherits Rectangle {
         }
 
         Text {
-            text: comp.size-gib > 0 ? "\{comp.size-gib.to-fixed(2)} GiB" : "—";
+            text: comp.size-gib > 0 ? "\{comp.size-gib.to-fixed(2)} Gio" : "—";
             width: col-size;
             vertical-alignment: center;
         }
@@ -231,11 +231,11 @@ export component GameInfoModal inherits Modal {
                     }
 
                     if UiState.current-game.is-x360: Text {
-                        text: "System: Xbox 360";
+                        text: "Console : Xbox 360";
                     }
 
                     if !UiState.current-game.is-x360: Text {
-                        text: "System: Original Xbox";
+                        text: "Console : Xbox originale";
                     }
                 }
 
@@ -250,7 +250,7 @@ export component GameInfoModal inherits Modal {
                     }
 
                     Text {
-                        text: "Size: \{UiState.current-game.size-gib.to-fixed(2)} GiB";
+                        text: "Taille : \{UiState.current-game.size-gib.to-fixed(2)} Gio";
                     }
                 }
 
@@ -348,7 +348,7 @@ export component GameInfoModal inherits Modal {
             spacing: 10px;
 
             Text {
-                text: "Content";
+                text: "Contenu";
                 width: col-kind;
                 font-weight: 600;
                 color: MyPalette.foreground.transparentize(0.35);
@@ -362,14 +362,14 @@ export component GameInfoModal inherits Modal {
             }
 
             Text {
-                text: "Size";
+                text: "Taille";
                 width: col-size;
                 font-weight: 600;
                 color: MyPalette.foreground.transparentize(0.35);
             }
 
             Text {
-                text: "Status";
+                text: "État";
                 width: col-status;
                 font-weight: 600;
                 color: MyPalette.foreground.transparentize(0.35);
@@ -393,7 +393,7 @@ export component GameInfoModal inherits Modal {
                 // Safety net only: every format now yields at least one row,
                 // so an empty table means the listing itself failed.
                 if !UiState.fetching-game-details && UiState.current-game-components.length == 0: Text {
-                    text: "No content found";
+                    text: "Aucun contenu trouvé";
                     color: MyPalette.foreground.transparentize(0.4);
                     horizontal-alignment: left;
                 }
@@ -426,7 +426,7 @@ export component GameInfoModal inherits Modal {
                 padding: 10px;
 
                 IconButton {
-                    label: "Delete game";
+                    label: "Supprimer le jeu";
                     kind: IconButtonKind.DestructiveText;
                     clicked => {
                         // Open the delete-confirmation modal for this game and
@@ -444,7 +444,7 @@ export component GameInfoModal inherits Modal {
 
                 // - TODO : Proper title update listing
                 if false && UiState.config.expert-mode && UiState.current-game.is-x360 && !UiState.current-game.id.is-empty: IconButton {
-                    label: "Title Updates";
+                    label: "Mises à jour des jeux (TU)";
                     icon: IconSet.Download;
                     kind: IconButtonKind.Secondary;
                     clicked => {
@@ -453,7 +453,7 @@ export component GameInfoModal inherits Modal {
                 }
 
                 IconButton {
-                    label: "Close";
+                    label: "Fermer";
                     kind: IconButtonKind.Primary;
                     clicked => {
                         UiState.current-game = { };

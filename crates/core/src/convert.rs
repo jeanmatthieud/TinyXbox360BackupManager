@@ -84,10 +84,10 @@ fn cleanup_dir(path: &Path, label: &str, status: &dyn Fn(&str)) {
 }
 
 /// Status line shown while dropping the output of a cancelled conversion.
-const CLEANUP_PARTIAL: &str = "🗑  Cleaning up partial files…";
+const CLEANUP_PARTIAL: &str = "🗑  Nettoyage des fichiers partiels…";
 /// Status line shown while dropping intermediate work folders (staging, archive
 /// extraction), on success as well as on failure.
-const CLEANUP_TEMP: &str = "🗑  Cleaning up temporary files…";
+const CLEANUP_TEMP: &str = "🗑  Nettoyage des fichiers temporaires…";
 
 /// Kind of input file accepted by the conversion pipeline.
 pub enum InputKind {
@@ -113,8 +113,7 @@ pub fn inspect_input(path: &Path) -> Result<InputKind> {
     }
     // Last resort: maybe a renamed ISO.
     iso_info::inspect(path).map(InputKind::Iso).context(
-        "unrecognized file: neither an ISO image, a .7z/.zip/.rar archive, \
-         nor an STFS package (CON/LIVE/PIRS)",
+        "fichier non reconnu : ni image ISO, ni archive .7z/.zip/.rar, ni paquet STFS (CON/LIVE/PIRS)",
     )
 }
 
@@ -138,7 +137,7 @@ pub fn perform(
     phase: &dyn Fn(&str),
 ) -> Result<()> {
     let target =
-        Target::from_config(&config.contents).context("no target selected")?;
+        Target::from_config(&config.contents).context("aucune destination sélectionnée")?;
     let x360_format = config.contents.xbox360_format;
 
     match &target {
@@ -185,7 +184,7 @@ pub fn perform(
 
                 // Direct upload to the console, to its resolved storage
                 // locations: 50-100%.
-                phase("Uploading to the console");
+                phase("Transfert vers la console");
                 let mut session = target.open_remote(true)?;
                 let hdd = remote_hdd_root(&mut session);
                 let storage = remote_layout(&mut session, &hdd).storage;
@@ -206,7 +205,7 @@ pub fn perform(
                     let needed = crate::util::dir_size_on(&staging, space.bytes_per_cluster);
                     if needed > space.free_bytes {
                         bail!(
-                            "not enough space on the console drive: {} needed, {} free",
+                            "espace insuffisant sur le disque de la console : {} nécessaires, {} libres",
                             crate::util::human_size(needed),
                             crate::util::human_size(space.free_bytes)
                         );
@@ -341,7 +340,7 @@ fn convert_into(
 ) -> Result<()> {
     let info = match inspect_input(in_path)? {
         InputKind::StfsPackage(package) => {
-            phase("Copying the package");
+            phase("Copie du paquet");
             install_stfs_package(&package, dest, cancel, &mut |done, total| {
                 update_progress((done * 100 / total.max(1)) as u32, None);
             })?;
@@ -407,7 +406,7 @@ fn convert_into(
             // Same overwrite semantics as the Xbox 360 extraction above.
             let existed = game_dir.exists();
 
-            phase("Extracting the Original Xbox game (XBE)");
+            phase("Extraction du jeu Xbox originale (XBE)");
             let res = extract::extract_iso(in_path, &game_dir, cancel, &mut |done, total| {
                 update_progress((done * 100 / total.max(1)) as u32, None);
             });
@@ -431,19 +430,18 @@ fn convert_into(
             }
 
             let result = (|| -> Result<()> {
-                phase("Extracting the disc");
+                phase("Extraction du disque");
                 extract::extract_iso(in_path, &tmp, cancel, &mut |done, total| {
                     update_progress((done * 100 / total.max(1)) as u32, None);
                 })?;
 
-                phase("Merging the content");
+                phase("Fusion du contenu");
 
                 // Expected structure: Content/0000000000000000/<TitleID>/...
                 let extracted_content = crate::util::find_dir_ci(&tmp, "Content")
                     .and_then(|c| crate::util::find_dir_ci(&c, "0000000000000000"))
                     .context(
-                        "unexpected structure: no Content/0000000000000000 folder \
-                         in this image (is it really an install disc / DLC?)",
+                        "structure inattendue : aucun dossier Content/0000000000000000 dans cette image (s’agit-il bien d’un disque d’installation / DLC ?)",
                     )?;
 
                 // Each entry is a `<TitleID>` folder: merge it into wherever
@@ -554,7 +552,7 @@ fn apply_quirk(
             let existed = game_dir.exists();
             std::fs::create_dir_all(&game_dir)?;
 
-            phase("Extracting the installation data");
+            phase("Extraction des données d’installation");
             let res = extract::extract_iso_subtree_contents(
                 in_path,
                 &game_dir,
@@ -641,7 +639,7 @@ fn extract_game_into(
 ) -> Result<()> {
     let existed = game_dir.exists();
 
-    phase("Extracting the Xbox 360 game (XEX)");
+    phase("Extraction du jeu Xbox 360 (XEX)");
     let mut meter = crate::util::RateMeter::new();
     let res = extract::extract_iso_excluding(
         in_path,
@@ -689,7 +687,7 @@ fn swap_entry_point(game_dir: &Path, entry: &str) -> Result<()> {
     }
 
     std::fs::copy(&source, game_dir.join("default.xex"))
-        .with_context(|| format!("installing {entry} as default.xex"))?;
+        .with_context(|| format!("installation de {entry} comme default.xex"))?;
     Ok(())
 }
 
@@ -732,7 +730,7 @@ fn install_game(
     };
     std::fs::create_dir_all(&content_dir)?;
 
-    phase("GOD conversion");
+    phase("Conversion GOD");
     let mut meter = crate::util::RateMeter::new();
     god::convert_to_god(in_path, &content_dir, title.as_deref(), cancel, &mut |done, total| {
         update_progress((done * 100 / total.max(1)) as u32, meter.record(done));
@@ -763,7 +761,7 @@ fn install_bundled_content(
 
     let result = (|| -> Result<()> {
         // Extraction: 0-80%.
-        phase("Extracting the disc");
+        phase("Extraction du disque");
         extract::extract_iso(in_path, &tmp, cancel, &mut |done, total| {
             update_progress((done * 80 / total.max(1)) as u32);
         })?;
@@ -777,13 +775,12 @@ fn install_bundled_content(
         let packages = find_installable_packages_excluding(&tmp, &["$SystemUpdate"])?;
         if packages.is_empty() {
             bail!(
-                "no installable DLC/title-update/Arcade package found \
-                 in this image's bundled content"
+                "aucun paquet DLC, mise à jour ou Arcade installable trouvé dans le contenu de cette image"
             );
         }
 
         // Installation: 80-100%.
-        phase("Installing the packages");
+        phase("Installation des paquets");
         install_packages(&packages, dest, cancel, &|p| {
             update_progress(80 + p * 20 / 100)
         })?;
@@ -811,8 +808,7 @@ fn install_stfs_package(
         | stfs::CONTENT_TYPE_DLC
         | stfs::CONTENT_TYPE_TITLE_UPDATE => {}
         other => bail!(
-            "unsupported STFS content type {other:08X} in {} \
-             (expected Arcade, DLC or title update)",
+            "type de contenu STFS {other:08X} non pris en charge dans {} (Arcade, DLC ou mise à jour attendu)",
             info.path.display()
         ),
     }
@@ -906,7 +902,7 @@ fn install_archive(
 
     let result = (|| -> Result<()> {
         // Extraction: 0-50%.
-        phase("Extracting the archive");
+        phase("Extraction de l’archive");
         archive::extract_to(in_path, &tmp, cancel, &mut |done, total| {
             update_progress((done * 50 / total.max(1)) as u32, None);
         })?;
@@ -933,13 +929,12 @@ fn install_archive(
             .any(|p| p.content_type == stfs::CONTENT_TYPE_ARCADE)
         {
             bail!(
-                "no ISO and no Arcade package (content type 000D0000) found in this \
-                 archive: is it really an XBLA game or an ISO archive?"
+                "aucun ISO ni paquet Arcade (type 000D0000) dans cette archive : est-ce bien un jeu XBLA ou une archive ISO ?"
             );
         }
 
         // Installation: 50-100%, weighted by package size.
-        phase("Installing the packages");
+        phase("Installation des paquets");
         install_packages(&packages, dest, cancel, &|p| {
             update_progress(50 + p * 50 / 100, None)
         })?;
@@ -972,8 +967,7 @@ fn single_iso_in(dir: &Path) -> Result<Option<PathBuf>> {
     }
     if isos.len() > 1 {
         bail!(
-            "archive contains {} ISO images; only a single ISO (plus optional \
-             .txt/.md notes) is supported",
+            "l’archive contient {} images ISO ; un seul ISO est accepté (avec éventuellement des notes .txt/.md)",
             isos.len()
         );
     }
@@ -985,8 +979,7 @@ fn single_iso_in(dir: &Path) -> Result<Option<PathBuf>> {
         .collect();
     if let Some(unexpected) = extra.first() {
         bail!(
-            "archive contains an ISO alongside an unexpected file ({}); only \
-             .txt/.md notes may accompany the ISO",
+            "l’archive contient un ISO et un fichier inattendu ({}) ; seules des notes .txt/.md peuvent accompagner l’ISO",
             unexpected
                 .file_name()
                 .map(|n| n.to_string_lossy().into_owned())
@@ -1077,7 +1070,7 @@ fn merge_move(src: &Path, dst: &Path) -> Result<()> {
         std::fs::create_dir_all(dst.parent().unwrap_or(dst))?;
         let options = fs_extra::dir::CopyOptions::new().copy_inside(true);
         fs_extra::dir::move_dir(src, dst, &options)
-            .map_err(|e| anyhow::anyhow!("moving to {}: {e}", dst.display()))?;
+            .map_err(|e| anyhow::anyhow!("déplacement vers {} : {e}", dst.display()))?;
         return Ok(());
     }
     if src.is_dir() && dst.is_dir() {
@@ -1210,7 +1203,7 @@ mod tests {
 
         let root = dir.join("root");
         let err = convert_into(&zip_path, &ConvertDest::under(&root), Xbox360Format::God, &AtomicBool::new(false), &|_, _| {}, &|_| {}, &|_| {}).unwrap_err();
-        assert!(err.to_string().contains("no Arcade package"));
+        assert!(err.to_string().contains("aucun ISO ni paquet Arcade"));
 
         std::fs::remove_dir_all(&dir).unwrap();
     }

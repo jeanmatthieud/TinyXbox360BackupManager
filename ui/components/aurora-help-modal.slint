@@ -30,13 +30,13 @@ export component AuroraHelpModal inherits Modal {
             }
 
             Text {
-                text: "Add scan paths in Aurora";
+                text: "Ajouter des chemins d’analyse dans Aurora";
                 font-size: 16px;
             }
         }
 
         Text {
-            text: "Aurora only lists games from the folders it is told to scan. On the console:";
+            text: "Aurora affiche uniquement les jeux des dossiers configurés pour l’analyse. Sur la console :";
             wrap: word-wrap;
         }
 
@@ -44,12 +44,12 @@ export component AuroraHelpModal inherits Modal {
             spacing: 8px;
 
             Text {
-                text: "1.  Open Aurora and go to 'Settings' → 'Content' → 'Manage Paths'";
+                text: "1.  Ouvrez Aurora : « Settings » → « Content » → « Manage Paths »";
                 wrap: word-wrap;
             }
 
             Text {
-                text: "2.  Add a scan path for each folder this app uses:";
+                text: "2.  Ajoutez un chemin d’analyse pour chaque dossier utilisé ici :";
                 wrap: word-wrap;
             }
 
@@ -60,18 +60,18 @@ export component AuroraHelpModal inherits Modal {
             }
 
             Text {
-                text: "3.  Enable 'AutoScan'.";
+                text: "3.  Activez « AutoScan ».";
                 wrap: word-wrap;
             }
 
             Text {
-                text: "4.  Save, then let Aurora rescan with 'Scan now'.";
+                text: "4.  Enregistrez puis relancez l’analyse avec « Scan now ».";
                 wrap: word-wrap;
             }
         }
 
         Text {
-            text: "Back here, hit the refresh button on the card to read the updated paths.";
+            text: "Revenez ici et actualisez cette carte pour relire les chemins.";
             wrap: word-wrap;
             color: MyPalette.foreground.transparentize(0.4);
             font-size: 12px;
@@ -88,7 +88,7 @@ export component AuroraHelpModal inherits Modal {
             padding: 10px;
 
             IconButton {
-                label: "Close";
+                label: "Fermer";
                 kind: IconButtonKind.Primary;
                 clicked => {
                     UiState.showing-aurora-help = false;

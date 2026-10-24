@@ -108,7 +108,7 @@ impl Target {
                 let Some(path) = find_child_ci(mount, INI_NAME).filter(|p| p.is_file()) else {
                     return Ok(None);
                 };
-                let text = read_text(fs::read(&path).context("reading launch.ini")?)?;
+                let text = read_text(fs::read(&path).context("lecture de launch.ini")?)?;
                 Ok(Some(LaunchIni {
                     location: IniLocation::Local(path),
                     settings: DashlaunchSettings::parse(&text),
@@ -133,13 +133,13 @@ impl Target {
     ) -> Result<DashlaunchSettings> {
         match (self, location) {
             (Target::Local(_), IniLocation::Local(path)) => {
-                let text = read_text(fs::read(path).context("reading launch.ini")?)?;
+                let text = read_text(fs::read(path).context("lecture de launch.ini")?)?;
                 let text = apply(&text, changes)?;
                 // Written beside it then renamed over it, so a pulled USB key
                 // never leaves a half-written launch.ini behind.
                 let tmp = path.with_extension("ini.txbm-tmp");
-                fs::write(&tmp, &text).context("writing launch.ini")?;
-                fs::rename(&tmp, path).context("replacing launch.ini")?;
+                fs::write(&tmp, &text).context("écriture de launch.ini")?;
+                fs::rename(&tmp, path).context("remplacement de launch.ini")?;
                 Ok(DashlaunchSettings::parse(&text))
             }
             (Target::Ftp(_) | Target::Fatx(_), IniLocation::Remote { dir, name }) => {
@@ -151,7 +151,7 @@ impl Target {
                 session.quit()?;
                 Ok(DashlaunchSettings::parse(&text))
             }
-            _ => bail!("the target changed since launch.ini was found"),
+            _ => bail!("la destination a changé depuis la détection de launch.ini"),
         }
     }
 }
@@ -191,7 +191,7 @@ fn find_remote(session: &mut dyn RemoteFs) -> Result<Option<LaunchIni>> {
 }
 
 fn read_text(bytes: Vec<u8>) -> Result<String> {
-    String::from_utf8(bytes).context("launch.ini isn't a plain text file")
+    String::from_utf8(bytes).context("launch.ini n’est pas un fichier texte")
 }
 
 /// Splits a line into `(key, value)` when it is a `key = value` entry. A
@@ -281,7 +281,7 @@ fn set_bool(text: &str, key: &str, value: bool) -> Result<String> {
         // Dashlaunch reads the first occurrence, but a duplicate is rewritten
         // too so the file never says two things.
         found_key = true;
-        let eq = line.find('=').expect("an entry has an '='");
+        let eq = line.find('=').expect("une entrée contient un signe « = »");
         let rest = &line[eq + 1..];
         let start = eq + 1 + (rest.len() - rest.trim_start_matches([' ', '\t']).len());
         let end = start
@@ -292,7 +292,7 @@ fn set_bool(text: &str, key: &str, value: bool) -> Result<String> {
     }
 
     if !found_section {
-        bail!("launch.ini has no [Settings] section");
+        bail!("launch.ini ne contient aucune section [Settings]");
     }
     if !found_key {
         let at = insert_after.expect("set with the section");

@@ -98,9 +98,9 @@ pub fn perform_job(
                     dispatcher.invoke_dispatch(Message::NotifyInfoSticky, text);
                 } else if let Some(count) = cleared {
                     let text = match count {
-                        0 => slint::format!("No Aurora game assets were waiting to be imported"),
-                        1 => slint::format!("Aurora game assets to import deleted (1 game)"),
-                        n => slint::format!("Aurora game assets to import deleted ({n} games)"),
+                        0 => slint::format!("Aucune ressource Aurora n’était en attente d’importation"),
+                        1 => slint::format!("Ressources Aurora à importer supprimées (1 jeu)"),
+                        n => slint::format!("Ressources Aurora à importer supprimées ({n} jeux)"),
                     };
                     dispatcher.invoke_dispatch(Message::NotifyInfo, text);
                 } else if let Some(text) = success_text(&job) {
@@ -161,43 +161,43 @@ fn is_cancellation(e: &anyhow::Error) -> bool {
 fn success_text(job: &QueuedJob) -> Option<SharedString> {
     match job {
         QueuedJob::Add { .. } => None,
-        QueuedJob::Delete(game) => Some(slint::format!("{} deleted", game.title)),
-        QueuedJob::DeleteContent { .. } => Some("Content deleted".into()),
+        QueuedJob::Delete(game) => Some(slint::format!("{} supprimé", game.title)),
+        QueuedJob::DeleteContent { .. } => Some("Contenu supprimé".into()),
         QueuedJob::AuroraImport { .. } | QueuedJob::AuroraImportClear => None,
     }
 }
 
 fn cancelled_text(job: &QueuedJob) -> SharedString {
     match job {
-        QueuedJob::Add { .. } => "Conversion cancelled".into(),
+        QueuedJob::Add { .. } => "Conversion annulée".into(),
         // Unlike a conversion, a cancelled deletion leaves whatever it already
         // removed removed: say so instead of implying nothing happened.
         QueuedJob::Delete(game) => slint::format!(
-            "Deletion cancelled\n{} is only partially removed; delete it again to finish",
+            "Suppression annulée\n{} est partiellement supprimé ; relancez la suppression pour terminer",
             game.title
         ),
         QueuedJob::DeleteContent { .. } => {
-            "Deletion cancelled\nThe content is only partially removed".into()
+            "Suppression annulée\nLe contenu est partiellement supprimé".into()
         }
         QueuedJob::AuroraImport { .. } => {
-            "Preparation cancelled\nThe games already prepared stay ready to import".into()
+            "Préparation annulée\nLes jeux déjà préparés restent prêts à importer".into()
         }
         QueuedJob::AuroraImportClear => {
-            "Deletion cancelled\nSome Aurora game assets are still waiting to be imported".into()
+            "Suppression annulée\nCertaines ressources Aurora sont encore en attente d’importation".into()
         }
     }
 }
 
 fn failure_text(job: &QueuedJob, e: &anyhow::Error) -> SharedString {
     match job {
-        QueuedJob::Add { .. } => slint::format!("Conversion failed: {e:#}"),
-        QueuedJob::Delete(_) => slint::format!("Failed to delete game: {e:#}"),
-        QueuedJob::DeleteContent { .. } => slint::format!("Failed to delete content: {e:#}"),
+        QueuedJob::Add { .. } => slint::format!("Échec de la conversion : {e:#}"),
+        QueuedJob::Delete(_) => slint::format!("Impossible de supprimer le jeu : {e:#}"),
+        QueuedJob::DeleteContent { .. } => slint::format!("Impossible de supprimer le contenu : {e:#}"),
         QueuedJob::AuroraImport { .. } => {
-            slint::format!("Failed to prepare the Aurora game assets: {e:#}")
+            slint::format!("Impossible de préparer les ressources Aurora : {e:#}")
         }
         QueuedJob::AuroraImportClear => {
-            slint::format!("Failed to delete the Aurora game assets to import: {e:#}")
+            slint::format!("Impossible de supprimer les ressources Aurora à importer : {e:#}")
         }
     }
 }
@@ -207,29 +207,29 @@ fn failure_text(job: &QueuedJob, e: &anyhow::Error) -> SharedString {
 /// nothing worth saying — a preparation queued by the app itself (`auto`)
 /// that found every game already prepared.
 fn import_text(report: ImportReport, auto: bool) -> Option<SharedString> {
-    let games = |n: usize| if n == 1 { "1 game".to_string() } else { format!("{n} games") };
+    let games = |n: usize| if n == 1 { "1 jeu".to_string() } else { format!("{n} jeux") };
 
     let mut text = match report {
         ImportReport { prepared: 0, unavailable: 0, failed: 0 } if auto => return None,
         ImportReport { prepared: 0, unavailable: 0, failed: 0 } => {
-            "The Aurora game assets of every game are already prepared".to_string()
+            "Les ressources Aurora de tous les jeux sont déjà préparées".to_string()
         }
         ImportReport { prepared: 0, unavailable: 0, .. } => {
-            "The game assets sources could not be reached\nTry again later".to_string()
+            "Les sources des ressources sont inaccessibles\nRéessayez plus tard".to_string()
         }
         ImportReport { prepared: 0, unavailable, .. } => {
-            format!("No assets were found online for {}", games(unavailable))
+            format!("Aucune ressource trouvée en ligne pour {}", games(unavailable))
         }
         ImportReport { prepared, .. } => format!(
-            "Aurora game assets ready for {}\nIn Aurora: Settings > Assets > Import",
+            "Ressources Aurora prêtes pour {}\nDans Aurora : Settings > Assets > Import",
             games(prepared)
         ),
     };
     if report.prepared > 0 && report.unavailable > 0 {
-        text.push_str(&format!("\n{} without assets online", games(report.unavailable)));
+        text.push_str(&format!("\n{} sans ressources en ligne", games(report.unavailable)));
     }
     if report.failed > 0 && (report.prepared > 0 || report.unavailable > 0) {
-        text.push_str(&format!("\n{} skipped: sources unreachable", games(report.failed)));
+        text.push_str(&format!("\n{} ignoré(s) : sources inaccessibles", games(report.failed)));
     }
     Some(text.into())
 }
@@ -248,9 +248,9 @@ fn perform_add(
     let update_progress = move |percentage: u32, speed: Option<f64>| {
         let status = match speed {
             Some(mbps) => {
-                slint::format!("↑  Adding  {filename}  {percentage}%  ({mbps:.1} MB/s)")
+                slint::format!("↑  Ajout  {filename}  {percentage}%  ({mbps:.1} Mo/s)")
             }
-            None => slint::format!("↑  Adding  {filename}  {percentage}%"),
+            None => slint::format!("↑  Ajout  {filename}  {percentage}%"),
         };
 
         // The same progress feeds the status bar (visible from every
@@ -258,7 +258,7 @@ fn perform_add(
         // A missing speed (first callback of each uploaded file, before
         // any time has elapsed) keeps the previous one rather than
         // blanking the card once per file.
-        let speed = speed.map(|mbps| slint::format!("{mbps:.1} MB/s"));
+        let speed = speed.map(|mbps| slint::format!("{mbps:.1} Mo/s"));
 
         let _ = weak2.upgrade_in_event_loop(move |app| {
             let ui = app.global::<UiState<'_>>();
@@ -314,7 +314,7 @@ fn perform_add(
     // this is a notice rather than a failed job.
     if config.contents.remove_sources_games && in_path.exists() {
         let text = slint::format!(
-            "{} was added, but its source file could not be deleted",
+            "{} a été ajouté, mais son fichier source n’a pas pu être supprimé",
             txbm_core::util::display_file_name(in_path)
         );
         let _ = weak.upgrade_in_event_loop(move |app| {
@@ -337,7 +337,7 @@ fn perform_delete(
     let target = target_or_err(config)?;
     let update_progress = progress_reporter(
         weak.clone(),
-        slint::format!("✕  Deleting  {}", game.title),
+        slint::format!("✕  Suppression  {}", game.title),
     );
 
     target.delete_game(game, cancel, &update_progress)
@@ -354,13 +354,13 @@ fn perform_delete_content(
 ) -> anyhow::Result<()> {
     let target = target_or_err(config)?;
     let update_progress =
-        progress_reporter(weak.clone(), SharedString::from("✕  Deleting content"));
+        progress_reporter(weak.clone(), SharedString::from("✕  Suppression du contenu"));
 
     target.delete_content(game, kind, file_name, cancel, &update_progress)
 }
 
 fn target_or_err(config: &Config) -> anyhow::Result<Target> {
-    Target::from_config(&config.contents).ok_or_else(|| anyhow::anyhow!("no target selected"))
+    Target::from_config(&config.contents).ok_or_else(|| anyhow::anyhow!("aucune destination sélectionnée"))
 }
 
 /// Aurora's import folder written for every game of `titles` that has none.
@@ -374,8 +374,8 @@ fn perform_aurora_import(
     let weak = weak.clone();
     let mut progress = move |done: usize, total: usize, title: &str| {
         let percentage = (done * 100 / total.max(1)) as u32;
-        let status = slint::format!("⟳  Preparing Aurora game assets  {percentage}%");
-        let phase = slint::format!("{} of {total}  ·  {title}", done + 1);
+        let status = slint::format!("⟳  Préparation des ressources Aurora  {percentage}%");
+        let phase = slint::format!("{} sur {total}  ·  {title}", done + 1);
         let _ = weak.upgrade_in_event_loop(move |app| {
             let ui = app.global::<UiState<'_>>();
             ui.set_status(status);
@@ -403,7 +403,7 @@ fn perform_aurora_import_clear(
     let weak = weak.clone();
     let mut progress = move |done: usize, total: usize| {
         let percentage = (done * 100 / total.max(1)) as u32;
-        let status = slint::format!("⟳  Deleting Aurora game assets to import  {percentage}%");
+        let status = slint::format!("⟳  Suppression des ressources Aurora à importer  {percentage}%");
         let _ = weak.upgrade_in_event_loop(move |app| {
             let ui = app.global::<UiState<'_>>();
             ui.set_status(status);

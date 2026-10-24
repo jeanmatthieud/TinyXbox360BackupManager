@@ -21,7 +21,7 @@ export component ABadAvatarTargetModal inherits Modal {
         spacing: 15px;
 
         RemovableDrivePicker {
-            title: "Select the USB key for ABadAvatar";
+            title: "Choisir la clé USB pour ABadAvatar";
             selected-drive <=> root.selected-drive;
         }
     }
@@ -36,7 +36,7 @@ export component ABadAvatarTargetModal inherits Modal {
             spacing: 8px;
 
             IconButton {
-                label: "Close";
+                label: "Fermer";
                 clicked => {
                     UiState.selecting-abadavatar-target = false;
                 }
@@ -47,7 +47,7 @@ export component ABadAvatarTargetModal inherits Modal {
             }
 
             IconButton {
-                label: "Next";
+                label: "Suivant";
                 kind: IconButtonKind.Primary;
                 disabled: selected-drive < 0;
                 clicked => {

@@ -117,27 +117,22 @@ pub struct CompatPack {
 pub const COMPAT_PACKS: &[CompatPack] = &[
     CompatPack {
         key: "retail",
-        label: "Retail — unmodified",
-        description: "The eight official emulator revisions, as a factory drive carried them. \
-                      Signed by Microsoft, so it runs on a stock console.",
+        label: "D’origine — non modifié",
+        description: "Les huit versions officielles de l’émulateur présentes sur un disque d’origine. Signées par Microsoft : fonctionnent sur une console non modifiée.",
         url: "https://web.archive.org/web/20260805050419id_/https://consolemods.org/wiki/images/2/28/Unmodified_Retail_Xefu_Pack.zip",
         needs_exploit: false,
     },
     CompatPack {
         key: "hacked",
-        label: "Hacked — no whitelist",
-        description: "The official revisions with every restriction and the game whitelist \
-                      removed, plus the four emulators taken from Xbox One/Series releases \
-                      and the per-game config loader.",
+        label: "Modifié — sans liste blanche",
+        description: "Les versions officielles sans restrictions ni liste blanche, avec les quatre émulateurs issus des versions Xbox One/Series et le chargeur de configurations par jeu.",
         url: "https://web.archive.org/web/20260805050419id_/https://consolemods.org/wiki/images/9/9d/Hacked_Xefu_Pack.zip",
         needs_exploit: true,
     },
     CompatPack {
         key: "hacked_hud",
-        label: "Hacked — no whitelist, with HUD",
-        description: "Same as the hacked pack, but the Xbox 360 guide stays available while \
-                      an original Xbox game runs. The extra memory it uses can make some \
-                      games behave worse.",
+        label: "Modifié — sans liste blanche, avec HUD",
+        description: "Identique au pack modifié, mais le guide Xbox 360 reste accessible pendant les jeux Xbox originale. La mémoire supplémentaire utilisée peut perturber certains jeux.",
         url: "https://web.archive.org/web/20260805050419id_/https://consolemods.org/wiki/images/c/c4/Hacked_Xefu_Pack_with_HUD.zip",
         needs_exploit: true,
     },
@@ -159,7 +154,7 @@ pub struct CustomPack {
 const CUSTOM_KEY_PREFIX: &str = "custom-";
 
 /// Shown for a custom pack left without a name.
-const UNNAMED_PACK: &str = "Unnamed pack";
+const UNNAMED_PACK: &str = "Pack sans nom";
 
 /// One entry of the drop-down: a built-in pack or one the user added. A
 /// borrowing view, so the built-ins stay `'static` constants and the custom
@@ -319,7 +314,7 @@ pub fn check_cancel(cancel: &AtomicBool) -> Result<()> {
 /// was opened, so `list_root` answers `HddX` by construction and this check
 /// costs nothing.
 fn has_compat_volume(fs: &mut dyn RemoteFs) -> Result<bool> {
-    let devices = fs.list_root().context("listing the target's volumes")?;
+    let devices = fs.list_root().context("lecture des volumes de la destination")?;
     Ok(devices
         .iter()
         .any(|d| d.eq_ignore_ascii_case(COMPAT_VOLUME)))
@@ -331,7 +326,7 @@ fn ensure_compat_volume(fs: &mut dyn RemoteFs) -> Result<()> {
         return Ok(());
     }
     bail!(
-        "this console has no original-Xbox compatibility partition ({COMPAT_VOLUME})."
+        "cette console n’a pas de partition de rétrocompatibilité Xbox originale ({COMPAT_VOLUME})."
     );
 }
 
@@ -348,10 +343,10 @@ fn ensure_compat_volume(fs: &mut dyn RemoteFs) -> Result<()> {
 pub fn zip_holds_compatibility(path: &Path) -> Result<bool> {
     let file = fs::File::open(path).with_context(|| format!("opening {}", path.display()))?;
     let mut zip = zip::ZipArchive::new(file)
-        .with_context(|| format!("reading {} as a zip archive", path.display()))?;
+        .with_context(|| format!("lecture de {} comme archive ZIP", path.display()))?;
 
     for i in 0..zip.len() {
-        let entry = zip.by_index(i).context("reading the archive's index")?;
+        let entry = zip.by_index(i).context("lecture de l’index de l’archive")?;
         // `enclosed_name` refuses the traversal tricks a hand-made archive
         // could carry, and is what the extractor will honour later.
         let Some(name) = entry.enclosed_name() else {
@@ -385,7 +380,7 @@ pub fn stage_backup(
     let label = archive_path
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())
-        .unwrap_or_else(|| "the backup".to_string());
+        .unwrap_or_else(|| "la sauvegarde".to_string());
     extract_and_locate(archive_path, &work, &label, cancel, status)
 }
 
@@ -408,7 +403,7 @@ fn extract_and_locate(
     status: &dyn Fn(&str),
 ) -> Result<PathBuf> {
     check_cancel(cancel)?;
-    status(&format!("Extracting {label}…"));
+    status(&format!("Extraction de {label}…"));
     let extracted = work.join("pack");
     let res = archive::extract_to(archive_path, &extracted, cancel, &mut |_done, _total| {});
     // A cancelled extraction is reported with this module's own marker, as the
@@ -420,7 +415,7 @@ fn extract_and_locate(
     // directory named after the release, others have it at the root. So it is
     // found by name rather than at a fixed path.
     find_entry(&extracted, COMPAT_DIR, true).with_context(|| {
-        format!("{label}: no `{COMPAT_DIR}` folder inside the archive — is this really a XeFu pack?")
+        format!("{label} : aucun dossier `{COMPAT_DIR}` dans l’archive ; est-ce bien un pack XeFu ?")
     })
 }
 
@@ -436,13 +431,13 @@ pub fn stage_pack(
     // as a failed extraction.
     if url.is_empty() {
         bail!(
-            "No download URL configured for the “{}” pack. Set one in the settings.",
+            "Aucune adresse de téléchargement pour le pack « {} ». Renseignez-la dans les paramètres.",
             pack.label()
         );
     }
     let ext = archive_extension(url).with_context(|| {
         format!(
-            "{}: only .zip, .7z and .rar archives are supported (got {url}).",
+            "{} : seules les archives .zip, .7z et .rar sont acceptées (adresse : {url}).",
             pack.label()
         )
     })?;
@@ -454,7 +449,7 @@ pub fn stage_pack(
     // Named as a pack: the labels alone ("Retail — unmodified") read as
     // nothing in a status line or an error message.
     let label = format!("the “{}” pack", pack.label());
-    status(&format!("Downloading {label}…"));
+    status(&format!("Téléchargement de {label}…"));
     let res = download::download_to_file(
         url,
         &archive_path,
@@ -537,7 +532,7 @@ pub fn inspect_fatx(device: &Path) -> Result<CompatPartition> {
     let unreadable = |why: &anyhow::Error| CompatPartition::Present {
         has_files: true,
         readable: false,
-        damage: Some(format!("it cannot be read: {why:#}")),
+        damage: Some(format!("lecture impossible : {why:#}")),
     };
 
     let config = FatxConfig::for_partition(device.to_path_buf(), COMPAT_PARTITION);
@@ -597,16 +592,16 @@ fn describe_damage(audit: &fatx::Audit, cluster_bytes: u64) -> Option<String> {
     let mut parts = Vec::new();
     if audit.lost_clusters > 0 {
         parts.push(format!(
-            "{} marked as used by no file",
+            "{} marqués comme utilisés sans fichier associé",
             human_size(audit.lost_clusters * cluster_bytes)
         ));
     }
     if audit.invalid_entries > 0 {
-        parts.push(format!("{} unreadable directory entries", audit.invalid_entries));
+        parts.push(format!("{} entrées de dossier illisibles", audit.invalid_entries));
     }
     let chains = audit.broken_chains + audit.cross_linked_clusters;
     if chains > 0 {
-        parts.push(format!("{chains} broken cluster chains"));
+        parts.push(format!("{chains} chaînes de clusters endommagées"));
     }
     Some(parts.join(", "))
 }
@@ -647,8 +642,7 @@ pub fn check_room(
         let available = space.free_bytes / cluster + remote_clusters(fatx, COMPAT_PATH, cluster)?;
         if available < needed {
             bail!(
-                "not enough room on the compatibility partition: {} needed, {} available. \
-                 Nothing was changed.",
+                "espace insuffisant sur la partition de rétrocompatibilité : {} nécessaires, {} disponibles. Aucune modification effectuée.",
                 human_size(needed * cluster),
                 human_size(available * cluster)
             );
@@ -671,7 +665,7 @@ pub fn check_room(
     }
 
     status(&format!(
-        "Checking the room on the console ({})…",
+        "Vérification de l’espace sur la console ({})…",
         human_size(missing)
     ));
     let volume = format!("/{COMPAT_VOLUME}");
@@ -690,13 +684,11 @@ pub fn check_room(
             // still fits on a partition that is merely full, and fails on one
             // that is not reachable — in which case `e` is the real story.
             if ftp.put_bytes(&volume, ROOM_PROBE_NAME, b"x").is_err() {
-                return Err(e).context("checking the room on the console");
+                return Err(e).context("vérification de l’espace sur la console");
             }
             ensure_scratch_removed(&ftp.remove_file(&volume, ROOM_PROBE_NAME))?;
             bail!(
-                "not enough room on the compatibility partition: {} more are needed. Format \
-                 it from a hard drive plugged into this computer (expert mode). Nothing was \
-                 changed.",
+                "espace insuffisant sur la partition de rétrocompatibilité : il manque {}. Formatez-la depuis le disque dur branché à cet ordinateur (mode expert). Aucune modification effectuée.",
                 human_size(missing)
             );
         }
@@ -716,8 +708,7 @@ pub fn remove_room_probe(fs: &mut dyn RemoteFs) {
 fn ensure_scratch_removed(removed: &Result<()>) -> Result<()> {
     if let Err(e) = removed {
         bail!(
-            "the room check left {ROOM_PROBE_NAME} on the console's compatibility partition \
-             and could not remove it ({e:#}). Nothing else was changed."
+            "le contrôle d’espace a laissé {ROOM_PROBE_NAME} sur la partition de rétrocompatibilité sans pouvoir le supprimer ({e:#}). Rien d’autre n’a été modifié."
         );
     }
     Ok(())
@@ -799,8 +790,7 @@ pub fn format_fatx(device: &Path) -> Result<bool> {
             bail!("{}: {}", device.display(), probe.label())
         }
         _ => bail!(
-            "{} has no Xbox 360 games partition where the console puts it, so the place of \
-             the compatibility partition cannot be trusted. Nothing was written.",
+            "{} n’a pas de partition de jeux Xbox 360 à l’emplacement attendu ; l’emplacement de la partition de rétrocompatibilité est incertain. Aucune écriture effectuée.",
             device.display()
         ),
     }
@@ -817,8 +807,7 @@ pub fn format_fatx(device: &Path) -> Result<bool> {
             FatxSession::open(&config, false).map_or_else(|_| new_volume_id(), |s| s.volume_id()),
         ),
         other => bail!(
-            "{}: unexpected content where the compatibility partition goes ({}). Nothing was \
-             written.",
+            "{} : contenu inattendu à l’emplacement de la partition de rétrocompatibilité ({}). Aucune écriture effectuée.",
             device.display(),
             other.label()
         ),
@@ -833,7 +822,7 @@ pub fn format_fatx(device: &Path) -> Result<bool> {
     let entries = session.try_list_dir(&format!("/{COMPAT_VOLUME}"))?;
     session.quit()?;
     if !audit.is_clean() || !entries.is_empty() {
-        bail!("the compatibility partition did not read back blank after formatting ({audit:?})");
+        bail!("la partition de rétrocompatibilité n’est pas vide à la relecture après formatage ({audit:?})");
     }
     Ok(created)
 }
@@ -922,7 +911,7 @@ pub fn backup_remote(
 ) -> Result<u64> {
     ensure_compat_volume(fs)?;
 
-    let total = count_files(fs, COMPAT_PATH).context("listing the compatibility files")?;
+    let total = count_files(fs, COMPAT_PATH).context("lecture de la liste des fichiers de rétrocompatibilité")?;
     progress(0, total);
     if total == 0 {
         return Ok(0);
@@ -944,7 +933,7 @@ pub fn backup_remote(
             progress,
         };
         backup.walk(fs, COMPAT_PATH, COMPAT_DIR)?;
-        backup.zip.finish().context("closing the backup archive")?;
+        backup.zip.finish().context("fermeture de l’archive de sauvegarde")?;
         backup.done
     };
 
@@ -958,8 +947,7 @@ pub fn backup_remote(
         // that looks like a complete one is worse than none.
         let _ = fs::remove_file(&staged);
         bail!(
-            "backed up {done} of {total} compatibility files — the console's answers did \
-             not add up, so the backup cannot be trusted. Nothing was changed on the console."
+            "{done} fichiers de rétrocompatibilité sauvegardés sur {total} : les réponses de la console sont incohérentes, la sauvegarde n’est pas fiable. Aucune modification sur la console."
         );
     }
 
@@ -1000,7 +988,7 @@ impl Backup<'_> {
         let options = SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
         self.zip
             .add_directory(format!("{zip_dir}/"), options)
-            .with_context(|| format!("adding {zip_dir}/ to the archive"))?;
+            .with_context(|| format!("ajout de {zip_dir}/ à l’archive"))?;
 
         for entry in list_dir(fs, remote_dir)? {
             check_cancel(self.cancel)?;
@@ -1014,10 +1002,10 @@ impl Backup<'_> {
                     .with_context(|| format!("reading {remote}"))?;
                 self.zip
                     .start_file(&inside, options)
-                    .with_context(|| format!("adding {inside} to the archive"))?;
+                    .with_context(|| format!("ajout de {inside} à l’archive"))?;
                 self.zip
                     .write_all(&bytes)
-                    .with_context(|| format!("writing {inside} to the archive"))?;
+                    .with_context(|| format!("écriture de {inside} dans l’archive"))?;
                 self.done += 1;
                 (self.progress)(self.done, self.total);
             }
@@ -1053,7 +1041,7 @@ pub fn install_remote(
     // Listed the strict way: an unreadable folder must not be taken for one
     // that has never held the emulator, which would leave a previous set's
     // stray files under the one about to be written.
-    let existing = list_dir(fs, COMPAT_PATH).context("listing the compatibility files")?;
+    let existing = list_dir(fs, COMPAT_PATH).context("lecture de la liste des fichiers de rétrocompatibilité")?;
 
     check_cancel(cancel)?;
     started_writing.store(true, std::sync::atomic::Ordering::Relaxed);
@@ -1066,13 +1054,13 @@ pub fn install_remote(
         // `to_string()`, which returns the outermost context rather than the
         // chain. Re-raising here makes this module's marker the top-level one.
         check_cancel(cancel)?;
-        res.context("removing the previous compatibility files")?;
+        res.context("suppression des anciens fichiers de rétrocompatibilité")?;
     }
 
     check_cancel(cancel)?;
     let res = fs.upload_dir(staged, COMPAT_PATH, cancel, progress);
     check_cancel(cancel)?;
-    res.context("writing the compatibility files")
+    res.context("écriture des fichiers de rétrocompatibilité")
 }
 
 /// Downloads the community config repository from the configured URL and
@@ -1087,13 +1075,13 @@ pub fn stage_configs(
     cancel: &AtomicBool,
     status: &dyn Fn(&str),
 ) -> Result<PathBuf> {
-    let label = "the compatibility configs";
+    let label = "les configurations de rétrocompatibilité";
     let url = cfg.configs_url().trim();
     if url.is_empty() {
-        bail!("No download URL configured for {label}. Set one in the settings.");
+        bail!("Aucune adresse de téléchargement pour {label}. Renseignez-la dans les paramètres.");
     }
     let ext = archive_extension(url).with_context(|| {
-        format!("{label}: only .zip, .7z and .rar archives are supported (got {url}).")
+        format!("{label} : seules les archives .zip, .7z et .rar sont acceptées (adresse : {url}).")
     })?;
 
     let work = TMP_DIR.join(WORK_SUBDIR);
@@ -1101,7 +1089,7 @@ pub fn stage_configs(
 
     check_cancel(cancel)?;
     let archive_path = work.join(format!("configs.{ext}"));
-    status("Downloading the compatibility configs…");
+    status("Téléchargement des configurations de rétrocompatibilité…");
     let res = download::download_to_file(
         url,
         &archive_path,
@@ -1116,7 +1104,7 @@ pub fn stage_configs(
     res?;
 
     check_cancel(cancel)?;
-    status("Extracting the compatibility configs…");
+    status("Extraction des configurations de rétrocompatibilité…");
     // Unpacked beside the pack rather than into it, so the `Configs` folder is
     // looked for in the repository only.
     let extracted = work.join("configs");
@@ -1131,7 +1119,7 @@ pub fn stage_configs(
     // second `Configs` folder somewhere would otherwise have one picked by
     // directory order and written to the console unnoticed.
     configs_at_repo_root(&extracted).with_context(|| {
-        format!("no `{CONFIGS_DIR}` folder at the root of the config repository — has its layout changed?")
+        format!("aucun dossier `{CONFIGS_DIR}` à la racine du dépôt de configurations ; sa structure a-t-elle changé ?")
     })
 }
 
@@ -1181,5 +1169,5 @@ pub fn install_configs_remote(
     check_cancel(cancel)?;
     let res = fs.upload_dir(staged, CONFIGS_PATH, cancel, progress);
     check_cancel(cancel)?;
-    res.context("writing the compatibility configs")
+    res.context("écriture des configurations de rétrocompatibilité")
 }

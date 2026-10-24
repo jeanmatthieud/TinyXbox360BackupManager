@@ -20,11 +20,11 @@ pub const HEADER_PREFIX_SIZE: usize = 64 * 1024;
 
 /// Reads the TitleID from a XEX stream.
 pub fn read_title_id(reader: &mut (impl Read + Seek)) -> Result<u32> {
-    let header = XexHeader::read(reader).context("reading XEX header")?;
+    let header = XexHeader::read(reader).context("lecture de l’en-tête XEX")?;
     let info = header
         .fields
         .execution_info
-        .context("no execution info in XEX header")?;
+        .context("aucune information d’exécution dans l’en-tête XEX")?;
     Ok(info.title_id)
 }
 

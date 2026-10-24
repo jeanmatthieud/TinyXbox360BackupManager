@@ -29,11 +29,11 @@ export component ABadAvatarHddCard inherits ToolboxCard {
     private property <ABadAvatarHddState> state: UiState.abadavatar-hdd.state;
 
     disabled: (UiState.job-running || UiState.writing-dashlaunch) && !UiState.abadavatar-hdd-busy;
-    disabled-tooltip: "Available once the queue has finished.";
+    disabled-tooltip: "Disponible lorsque la file d’attente sera terminée.";
 
     CardHeader {
         icon: IconSet.HardDrive;
-        title: "ABadAvatar on the hard drive";
+        title: "ABadAvatar sur le disque dur";
 
         if UiState.abadavatar-hdd-busy: Spinner {
             width: 27px;
@@ -44,7 +44,7 @@ export component ABadAvatarHddCard inherits ToolboxCard {
         if !UiState.abadavatar-hdd-busy: IconButton {
             icon: IconSet.RefreshCcw;
             width: self.height;
-            tooltip: "Read the hard drive again";
+            tooltip: "Relire le disque dur";
             clicked => Dispatcher.dispatch(Message.FetchABadAvatarHdd, "");
         }
     }
@@ -57,12 +57,12 @@ export component ABadAvatarHddCard inherits ToolboxCard {
 
     // Retail: nothing to do here; the install is a Toolbox tool.
     if state == ABadAvatarHddState.Retail: Text {
-        text: "ABadAvatar isn't installed on this hard drive.";
+        text: "ABadAvatar n’est pas installé sur ce disque dur.";
         wrap: word-wrap;
     }
 
     if state == ABadAvatarHddState.Retail: Hint {
-        text: "To install it, disconnect from this drive, then use \"ABadAvatar on a console hard drive\" in the Toolbox.";
+        text: "Pour l’installer, déconnectez ce disque, puis utilisez « ABadAvatar sur un disque dur de console » dans les outils.";
     }
 
     // Ours: installed, or only partly.
@@ -76,22 +76,22 @@ export component ABadAvatarHddCard inherits ToolboxCard {
         }
 
         Text {
-            text: "ABadAvatar is installed on this hard drive.";
+            text: "ABadAvatar est installé sur ce disque dur.";
             horizontal-stretch: 1;
         }
     }
 
     if state == ABadAvatarHddState.Incomplete: WarningNote {
-        text: "ABadAvatar is only partly installed: an install was interrupted, or files were removed since. Remove it, then install it again.";
+        text: "ABadAvatar est partiellement installé : une installation a été interrompue ou des fichiers ont été supprimés. Retirez-le puis réinstallez-le.";
     }
 
     if state == ABadAvatarHddState.Installed: Hint {
-        text: "It triggers at every boot, on the profile screen. To start the console without it, keep pressing B as that screen loads. Unplug any ABadAvatar USB key: the console looks for one first.";
+        text: "Il se déclenche à chaque démarrage, à l’écran des profils. Pour démarrer sans lui, maintenez B pendant le chargement de cet écran. Retirez toute clé USB ABadAvatar : la console la recherche en priorité.";
     }
 
     // Someone else's setup: reported only.
     if state == ABadAvatarHddState.Foreign: WarningNote {
-        text: "Another ABadAvatar or BadUpdate setup is on this hard drive:";
+        text: "Une autre installation d’ABadAvatar ou de BadUpdate est présente sur ce disque :";
     }
 
     for item in (state == ABadAvatarHddState.Foreign ? UiState.abadavatar-hdd.found : []): Text {
@@ -102,7 +102,7 @@ export component ABadAvatarHddCard inherits ToolboxCard {
     }
 
     if state == ABadAvatarHddState.Foreign: Hint {
-        text: "Restore the drive to its retail state by removing these files to install TinyXbox360BackupManager's own from the Toolbox.";
+        text: "Rétablissez l’état d’origine du disque en retirant ces fichiers avant d’installer la version proposée dans les outils.";
     }
 
     // Bad Storage: the console only reads this drive once the exploit has run.
@@ -116,21 +116,21 @@ export component ABadAvatarHddCard inherits ToolboxCard {
         }
 
         Text {
-            text: "This hard drive is formatted for Bad Storage, which ABadAvatar can't be installed alongside.";
+            text: "Ce disque est formaté pour Bad Storage, qui ne peut pas cohabiter avec ABadAvatar.";
             wrap: word-wrap;
             horizontal-stretch: 1;
         }
     }
 
     if state == ABadAvatarHddState.BadStorage: Hint {
-        text: "The console only reads this drive once the exploit has run, so the exploit can't start from it. Keep ABadAvatar on its USB key.";
+        text: "La console lit ce disque seulement après l’exécution de l’exploit : celui-ci ne peut donc pas démarrer depuis ce disque. Gardez ABadAvatar sur sa clé USB.";
     }
 
     if state == ABadAvatarHddState.Installed || state == ABadAvatarHddState.Incomplete: HorizontalLine { }
 
     if state == ABadAvatarHddState.Installed || state == ABadAvatarHddState.Incomplete: CardActionRow {
         icon: IconSet.Trash2;
-        text: UiState.abadavatar-hdd-busy ? "Working… see the status bar below." : "Remove ABadAvatar from this hard drive";
+        text: UiState.abadavatar-hdd-busy ? "En cours… consultez la barre d’état en bas." : "Retirer ABadAvatar de ce disque dur";
         disabled: UiState.abadavatar-hdd-busy;
         clicked => Dispatcher.dispatch(Message.UninstallABadAvatarHdd, "");
     }

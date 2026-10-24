@@ -31,7 +31,7 @@ pub fn open_session(target: &CompatTarget, writable: bool) -> Result<RemoteSessi
         }
         CompatTarget::Ftp(config) => Ok(RemoteSession::Ftp(
             FtpSession::connect(config).with_context(|| {
-                format!("connecting to {}:{}", config.host, config.port)
+                format!("connexion à {}:{}", config.host, config.port)
             })?,
         )),
     }
@@ -63,18 +63,16 @@ pub fn install_blocker(target: &CompatTarget, found: &CompatPartition) -> Option
     match found {
         CompatPartition::Missing => Some(match target {
             CompatTarget::Fatx(device) => format!(
-                "{} has no original-Xbox compatibility partition. Create it first (expert mode).",
+                "{} n’a pas de partition de rétrocompatibilité Xbox originale. Créez-la d’abord (mode expert).",
                 txbm_core::util::display_path(device)
             ),
-            CompatTarget::Ftp(_) => "This console has no original-Xbox compatibility \
-                partition. Create it first, with its hard drive plugged into this computer \
-                (expert mode)."
+            CompatTarget::Ftp(_) => "Cette console n’a pas de partition de rétrocompatibilité Xbox originale. Créez-la d’abord en branchant son disque dur à cet ordinateur (mode expert)."
                 .to_string(),
         }),
         CompatPartition::Present {
             damage: Some(why), ..
         } => Some(format!(
-            "The compatibility partition is damaged ({why}). Format it first (expert mode)."
+            "La partition de rétrocompatibilité est endommagée ({why}). Formatez-la d’abord (mode expert)."
         )),
         CompatPartition::Present { .. } => None,
     }
@@ -86,7 +84,7 @@ pub fn install_summary(found: &CompatPartition) -> &'static str {
     match found {
         CompatPartition::Present {
             has_files: true, ..
-        } => "The existing compatibility files will be permanently deleted.",
+        } => "Les fichiers de rétrocompatibilité existants seront définitivement supprimés.",
         _ => "",
     }
 }
@@ -128,15 +126,14 @@ pub fn format_summary(found: &CompatPartition) -> String {
             readable,
         } => {
             let lost = match has_files {
-                true => "Everything on it, the compatibility files included, will be erased.",
-                false => "Everything on it will be erased.",
+                true => "Tout son contenu sera effacé, y compris les fichiers de rétrocompatibilité.",
+                false => "Tout son contenu sera effacé.",
             };
             match damage {
                 Some(why) if *readable && *has_files => format!(
-                    "The partition is damaged ({why}). {lost} The backup is a best effort: if it \
-                     fails, the format goes on."
+                    "La partition est endommagée ({why}). {lost} Une sauvegarde sera tentée : si elle échoue, le formatage se poursuivra."
                 ),
-                Some(why) => format!("The partition is damaged ({why}). {lost}"),
+                Some(why) => format!("La partition est endommagée ({why}). {lost}"),
                 None => lost.to_string(),
             }
         }
@@ -151,16 +148,16 @@ fn backup(
     cancel: &AtomicBool,
     status: &dyn Fn(&str),
 ) -> Result<u64> {
-    status("Backing up the current compatibility files…");
+    status("Sauvegarde des fichiers de rétrocompatibilité actuels…");
     let result = ogxbox_compat::backup_remote(session, dest, cancel, &mut |done, total| {
         if total > 0 {
-            status(&format!("Backing up…  {done}/{total} files"));
+            status(&format!("Sauvegarde…  {done}/{total} fichiers"));
         }
     });
     // Same rule as in `ogxbox_compat`: the cancellation marker has to stay the
     // top-level message for the GUI to recognise it.
     ogxbox_compat::check_cancel(cancel)?;
-    result.context("backing up the current compatibility files")
+    result.context("sauvegarde des fichiers de rétrocompatibilité actuels")
 }
 
 /// What a successful install did beyond succeeding, for the toasts at the end.
@@ -221,7 +218,7 @@ pub fn install(
     // cannot fit must leave the current files exactly where they are. A FATX
     // session answers exactly; over FTP the check writes a scratch file, which
     // a session has no way to refuse anyway.
-    status("Checking the room on the console…");
+    status("Vérification de l’espace sur la console…");
     let mut session = open_session(target, false)?;
     let mut staged_dirs = vec![staged.as_path()];
     staged_dirs.extend(staged_configs.as_deref());
@@ -246,7 +243,7 @@ pub fn install(
     }
     closed?;
 
-    status("Opening the compatibility partition…");
+    status("Ouverture de la partition de rétrocompatibilité…");
     let mut session = open_session(target, true)?;
     let result = ogxbox_compat::install_remote(
         &mut session,
@@ -255,12 +252,12 @@ pub fn install(
         started_writing,
         &mut |done, total| {
             if total > 0 {
-                status(&format!("Removing the previous files…  {done}/{total}"));
+                status(&format!("Suppression des anciens fichiers…  {done}/{total}"));
             }
         },
         &mut |sent, total| {
             if let Some(percent) = (sent * 100).checked_div(total) {
-                status(&format!("Writing the compatibility files…  {percent}%"));
+                status(&format!("Écriture des fichiers de rétrocompatibilité…  {percent}%"));
             }
         },
     );
@@ -271,10 +268,10 @@ pub fn install(
     // reported as a partition left incomplete: the configs were asked for.
     let result = match (result, staged_configs.as_deref()) {
         (Ok(()), Some(configs)) => {
-            status("Writing the compatibility configs…");
+            status("Écriture des configurations de rétrocompatibilité…");
             ogxbox_compat::install_configs_remote(&mut session, configs, cancel, &mut |sent, total| {
                 if let Some(percent) = (sent * 100).checked_div(total) {
-                    status(&format!("Writing the compatibility configs…  {percent}%"));
+                    status(&format!("Écriture des configurations de rétrocompatibilité…  {percent}%"));
                 }
             })
         }
@@ -341,7 +338,7 @@ pub fn format(
     }
 
     ogxbox_compat::check_cancel(cancel)?;
-    status("Formatting the compatibility partition…");
+    status("Formatage de la partition de rétrocompatibilité…");
     started_writing.store(true, std::sync::atomic::Ordering::Relaxed);
     outcome.created = ogxbox_compat::format_fatx(device)?;
 

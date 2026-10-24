@@ -90,10 +90,10 @@ pub fn displayed_compat(config: &Config) -> DisplayedCompatConfig {
         pack_description: match pack.description() {
             Some(description) => description.to_shared_string(),
             None if pack.url().is_empty() => {
-                "Custom pack, with no URL yet: set one in Settings › Download sources."
+                "Pack personnalisé sans adresse : renseignez-la dans Paramètres › Sources de téléchargement."
                     .to_shared_string()
             }
-            None => slint::format!("Custom pack, downloaded from {}.", url_host(pack.url())),
+            None => slint::format!("Pack personnalisé, téléchargé depuis {}.", url_host(pack.url())),
         },
         needs_exploit: pack.needs_exploit(),
         configs_url: cfg.configs_url().to_shared_string(),
@@ -185,7 +185,7 @@ pub fn removable_drives() -> Vec<DisplayedRemovableDrive> {
         .map(|d| {
             let size_text = if d.total_bytes > 0 {
                 SharedString::from(format!(
-                    "{:.1} GiB free of {:.1} GiB",
+                    "{:.1} Gio libres sur {:.1} Gio",
                     d.available_bytes as f32 / GIB,
                     d.total_bytes as f32 / GIB
                 ))
@@ -227,7 +227,7 @@ pub fn displayed_fatx_drives(
             name: d.name.to_shared_string(),
             path: d.path.to_string_lossy().to_shared_string(),
             size_text: if d.size_bytes > 0 {
-                SharedString::from(format!("{:.1} GiB", d.size_bytes as f32 / GIB))
+                SharedString::from(format!("{:.1} Gio", d.size_bytes as f32 / GIB))
             } else {
                 SharedString::new()
             },

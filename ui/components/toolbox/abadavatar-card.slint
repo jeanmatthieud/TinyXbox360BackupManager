@@ -22,16 +22,16 @@ export component ABadAvatarCard inherits ToolboxCard {
     // — so veil the whole card rather than just its action row.
     disabled: UiState.creating-abadavatar || UiState.compat-busy || UiState.abadavatar-hdd-tool-busy || target-connected;
     disabled-tooltip: target-connected
-        ? "Disconnect from the current target first"
+        ? "Déconnectez d’abord la destination actuelle"
         : UiState.compat-busy
-            ? "Wait for the original Xbox compatibility install to finish."
+            ? "Attendez la fin de l’installation de la rétrocompatibilité Xbox originale."
             : UiState.abadavatar-hdd-tool-busy
-                ? "Wait for ABadAvatar to be written to the hard drive."
+                ? "Attendez la fin de l’écriture d’ABadAvatar sur le disque dur."
                 : "";
 
     CardHeader {
         icon: IconSet.Usb;
-        title: "ABadAvatar USB key";
+        title: "Clé USB ABadAvatar";
 
         if UiState.creating-abadavatar: Spinner {
             width: 27px;
@@ -44,7 +44,7 @@ export component ABadAvatarCard inherits ToolboxCard {
     HorizontalLine { }
 
     Text {
-        text: "Creates a homebrew boot USB key (ABadAvatar + XeUnshackle + Aurora).\nPlug in a FAT32-formatted USB key first.";
+        text: "Crée une clé de démarrage homebrew (ABadAvatar + XeUnshackle + Aurora).\nBranchez d’abord une clé USB formatée en FAT32.";
         wrap: word-wrap;
     }
 
@@ -58,7 +58,7 @@ export component ABadAvatarCard inherits ToolboxCard {
             alignment: center;
 
             Text {
-                text: "ABadAvatar version:";
+                text: "Version d’ABadAvatar :";
             }
         }
 
@@ -76,7 +76,7 @@ export component ABadAvatarCard inherits ToolboxCard {
     }
 
     CheckBox {
-        text: "Download and add the official system update";
+        text: "Télécharger et ajouter la mise à jour système officielle";
         checked: UiState.abadavatar.include-system-update;
         toggled => {
             Dispatcher.dispatch(Message.ToggleABadAvatarSystemUpdate, "");
@@ -84,7 +84,7 @@ export component ABadAvatarCard inherits ToolboxCard {
     }
 
     if UiState.config.expert-mode: CheckBox {
-        text: "Auto start Aurora without delay (XeUnshackle Max)";
+        text: "Démarrer Aurora sans délai (XeUnshackle Max)";
         checked: UiState.abadavatar.xeunshackle-autostart;
         toggled => {
             Dispatcher.dispatch(Message.ToggleABadAvatarAutostart, "");
@@ -95,7 +95,7 @@ export component ABadAvatarCard inherits ToolboxCard {
 
     CardActionRow {
         icon: IconSet.Hammer;
-        text: !UiState.creating-abadavatar ? "Create the ABadAvatar USB key" : "Working… see the status bar below.";
+        text: !UiState.creating-abadavatar ? "Créer la clé USB ABadAvatar" : "En cours… consultez la barre d’état en bas.";
         // Opens the in-app removable-drive picker. Hidden escape hatch: a long
         // press falls back to the native folder picker (any arbitrary path).
         long-press-duration: 1500ms;

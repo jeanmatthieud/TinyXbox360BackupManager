@@ -12,7 +12,7 @@ export component JobQueueToolbar inherits HorizontalLayout {
     height: 38px;
 
     PageTitle {
-        title: "Queue";
+        title: "File d’attente";
     }
 
     VerticalLayout {
@@ -26,7 +26,7 @@ export component JobQueueToolbar inherits HorizontalLayout {
             // the page carries the "terminate now" escape hatch).
             if UiState.job-queue.length > 0: IconButton {
                 icon: IconSet.X;
-                label: UiState.cancelling-queue ? "Cancelling..." : "Cancel all jobs";
+                label: UiState.cancelling-queue ? "Annulation…" : "Annuler toutes les tâches";
                 kind: IconButtonKind.Primary;
                 disabled: UiState.cancelling-queue;
                 clicked => {

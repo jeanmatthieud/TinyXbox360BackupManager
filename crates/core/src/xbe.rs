@@ -12,22 +12,22 @@ pub fn read_title_id(reader: &mut (impl Read + Seek)) -> Result<u32> {
     let mut header = [0u8; 0x11C];
     reader
         .read_exact(&mut header)
-        .context("reading XBE header")?;
+        .context("lecture de l’en-tête XBE")?;
     if &header[0..4] != b"XBEH" {
-        bail!("not an XBE file (bad magic)");
+        bail!("ce fichier n’est pas un XBE (signature incorrecte)");
     }
 
     let base_addr = u32::from_le_bytes(header[0x104..0x108].try_into().unwrap());
     let cert_addr = u32::from_le_bytes(header[0x118..0x11C].try_into().unwrap());
     let cert_offset = cert_addr
         .checked_sub(base_addr)
-        .context("invalid XBE certificate address")?;
+        .context("adresse du certificat XBE invalide")?;
 
     reader.seek(SeekFrom::Start(cert_offset as u64 + 0x8))?;
     let mut title_id = [0u8; 4];
     reader
         .read_exact(&mut title_id)
-        .context("reading XBE TitleID")?;
+        .context("lecture du TitleID XBE")?;
     Ok(u32::from_le_bytes(title_id))
 }
 

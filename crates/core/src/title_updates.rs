@@ -86,8 +86,7 @@ impl Target {
             Target::Local(path) => {
                 let Some((file_name, bytes)) = find_cached_local(path, &game.id, hash)? else {
                     bail!(
-                        "this title update is not in Aurora's cache; \
-                         download it from within Aurora first"
+                        "cette mise à jour de jeu n’est pas dans le cache d’Aurora ; téléchargez-la d’abord depuis Aurora"
                     );
                 };
                 let dest_dir = game.content_dir().join(TITLE_UPDATE_DIR);
@@ -102,8 +101,7 @@ impl Target {
                     let Some((file_name, bytes)) = find_cached_remote(&mut session, &game.id, hash)?
                     else {
                         bail!(
-                            "this title update is not in Aurora's cache; \
-                             download it from within Aurora first"
+                            "cette mise à jour de jeu n’est pas dans le cache d’Aurora ; téléchargez-la d’abord depuis Aurora"
                         );
                     };
                     let remote_dir = format!(

@@ -33,11 +33,11 @@ export component DeviceStatusPage inherits VerticalLayout {
     }
 
     PageHeader {
-        title: "Device status";
+        title: "État du stockage";
     }
 
     if UiState.config.target.is-empty: NoTarget {
-        description: "Connect a USB drive or your console to see its filesystem and storage folders";
+        description: "Connectez un disque USB ou votre console pour voir son système de fichiers et ses dossiers";
     }
 
     if !UiState.config.target.is-empty: ScrollView {

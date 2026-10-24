@@ -113,10 +113,10 @@ impl DownloadError {
 impl fmt::Display for DownloadFailure {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::HttpStatus(code) => write!(f, "the server answered with error {code}"),
-            Self::Unreachable => f.write_str("the server could not be reached"),
-            Self::Timeout => f.write_str("the server stopped responding"),
-            Self::Interrupted => f.write_str("the connection was interrupted"),
+            Self::HttpStatus(code) => write!(f, "le serveur a répondu avec l’erreur {code}"),
+            Self::Unreachable => f.write_str("le serveur est inaccessible"),
+            Self::Timeout => f.write_str("le serveur ne répond plus"),
+            Self::Interrupted => f.write_str("la connexion a été interrompue"),
         }
     }
 }
@@ -183,11 +183,11 @@ pub fn download_to_file(
             last_report = done;
             match total {
                 Some(t) if t > 0 => {
-                    status(&format!("Downloading {label}…  {}%", done * 100 / t));
+                    status(&format!("Téléchargement de {label}…  {}%", done * 100 / t));
                 }
                 _ => {
                     let mib = done as f64 / (1024.0 * 1024.0);
-                    status(&format!("Downloading {label}…  {mib:.1} MiB"));
+                    status(&format!("Téléchargement de {label}…  {mib:.1} Mio"));
                 }
             }
         }

@@ -13,14 +13,14 @@ import { Message, Dispatcher } from "../../messages.slint";
 export component CoversCacheCard inherits ToolboxCard {
     CardHeader {
         icon: IconSet.Image;
-        title: "Covers cache";
+        title: "Cache des jaquettes";
     }
 
     HorizontalLine { }
 
     CardActionRow {
         icon: IconSet.Play;
-        text: "Redownload all covers (clears the local cache first)";
+        text: "Retélécharger toutes les jaquettes (vide d’abord le cache local)";
         clicked => Dispatcher.dispatch(Message.RedownloadAllCovers, "");
     }
 }

@@ -14,7 +14,7 @@ import { Message, Dispatcher } from "../../messages.slint";
 export component ConsoleCard inherits ToolboxCard {
     CardHeader {
         icon: IconSet.MonitorUp;
-        title: "Console (Aurora FTP)";
+        title: "Console (FTP Aurora)";
     }
 
     HorizontalLine { }
@@ -23,7 +23,7 @@ export component ConsoleCard inherits ToolboxCard {
         height: self.min-height;
 
         Text {
-            text: "The library is managed directly on the console at \{UiState.config.target}.\nOnce games are added, add the content paths in Aurora (Settings > Content Paths, Scan Depth 3+) and rescan.";
+            text: "La bibliothèque est gérée directement sur la console : \{UiState.config.target}.\nAprès l’ajout des jeux, ajoutez les chemins dans Aurora (Settings > Content Paths, profondeur 3 ou plus), puis relancez l’analyse.";
             wrap: word-wrap;
         }
     }
@@ -32,13 +32,13 @@ export component ConsoleCard inherits ToolboxCard {
 
     if UiState.config.expert-mode: CardActionRow {
         icon: IconSet.Cable;
-        text: "Test the FTP connection";
+        text: "Tester la connexion FTP";
         clicked => Dispatcher.dispatch(Message.TestFtp, "");
     }
 
     CardActionRow {
         icon: IconSet.RotateCw;
-        text: "Restart Aurora";
+        text: "Redémarrer Aurora";
         clicked => Dispatcher.dispatch(Message.RestartAurora, "");
     }
 }

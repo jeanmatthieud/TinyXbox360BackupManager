@@ -17,7 +17,7 @@ export component GamesToolbar inherits HorizontalLayout {
     height: 38px;
 
     PageTitle {
-        title: "Games";
+        title: "Jeux";
     }
 
     if !UiState.config.target.is-empty: HorizontalLayout {
@@ -37,7 +37,7 @@ export component GamesToolbar inherits HorizontalLayout {
 
                 IconButton {
                     icon: IconSet.RotateCw;
-                    tooltip: "Refresh games";
+                    tooltip: "Actualiser les jeux";
                     rounded: true;
                     kind: IconButtonKind.Primary;
                     font-size: 18px;

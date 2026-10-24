@@ -108,7 +108,7 @@ export component DownloadUrlField inherits VerticalLayout {
             sources-button := IconButton {
                 icon: IconSet.ChevronDown;
                 width: self.height;
-                tooltip: "Choose another download source";
+                tooltip: "Choisir une autre source de téléchargement";
                 clicked => sources-popup.show();
             }
 
@@ -151,7 +151,7 @@ export component DownloadUrlField inherits VerticalLayout {
         if url != default-url: IconButton {
             icon: IconSet.RotateCcw;
             width: self.height;
-            tooltip: "Restore the default URL";
+            tooltip: "Rétablir l’adresse par défaut";
             clicked => root.reset-requested();
         }
     }

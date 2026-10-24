@@ -1,0 +1,51 @@
+TinyXbox360BackupManager — édition française non officielle, FR 1
+Préparée le 24 octobre 2026.
+
+Base : version officielle 0.18.0
+Révision : 3059f881f9a2bf7a54808cd0478cea4000ea3e8f
+Projet original : https://github.com/jeanmatthieud/TinyXbox360BackupManager
+Auteurs d’origine : Manuel Quarneti et Jean-Matthieu Dechriste.
+Licence : GPL-3.0-only ; texte complet dans COPYING.
+
+Cette édition traduit les écrans Slint, les dialogues Windows, les notifications,
+les étapes de transfert et la plupart des messages d’erreur propres au logiciel.
+Les noms de jeux, les informations reçues des services externes et les erreurs
+des bibliothèques ou de Windows peuvent encore être dans une autre langue.
+Les noms de menus d’Aurora dans les instructions sont conservés pour permettre
+de les retrouver sur la console.
+
+Les identifiants internes (formats GOD/XEX/XBE, clés de configuration, types de
+contenu, préfixes de tri, chemins Xbox et commandes FTP) sont conservés.
+Les ressources françaises des jeux restent un réglage distinct dans Paramètres.
+La traduction ne modifie pas les langues disponibles dans les jeux eux-mêmes.
+
+L’application utilise le même dossier de données que la version officielle.
+Il faut fermer cette dernière avant de lancer la version française. L’exécutable
+officiel n’est pas remplacé. Pour revenir en anglais, fermez la version française
+et relancez l’exécutable officiel.
+Le lien de mise à jour mène aux versions officielles, qui peuvent être en anglais.
+
+Pour les essais uniquement : la variable TXBM_FR_DATA_DIR, si elle contient un
+chemin absolu, permet d’utiliser un profil distinct. Sans cette variable, le
+comportement du logiciel d’origine est conservé.
+
+RECOMPILATION
+Les sources modifiées complètes sont fournies avec l’édition française.
+Outils utilisés : Rust 1.97.0, cible x86_64-pc-windows-gnu ; WinLibs GCC 16.2.0,
+MinGW-w64 UCRT 14.0.0. Placez MinGW dans un chemin sans espaces.
+Pour un dossier de sources contenant des espaces, utilisez llvm-windres
+(LLVM-MinGW 20261020) via le paramètre -LlvmWindres du script.
+Cargo doit être accessible ; la cible Rust doit être installée.
+
+Depuis PowerShell, à la racine des sources :
+  .\translation-fr\build-windows.ps1 -MingwBin 'C:\outils\mingw64\bin'
+Résultat : target\x86_64-pc-windows-gnu\release\txbm-gui.exe
+Conserver la taille de pile de 8 Mo indiquée dans le script.
+
+VÉRIFICATION
+  python .\translation-fr\verify.py
+Ce contrôle compare les variables des traductions, les clés des réglages et les
+identifiants de tri au relevé de la révision originale fourni avec les sources.
+Les catalogues JSON documentent les correspondances anglais/français.
+  .\translation-fr\build-windows.ps1 -MingwBin 'C:\outils\mingw64\bin' -TestCore
+Cette commande lance les tests du noyau fournis par le projet.

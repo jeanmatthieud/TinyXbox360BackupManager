@@ -115,8 +115,8 @@ impl QueuedJob {
             Self::DeleteContent {
                 game, description, ..
             } => format!("{}  ·  {description}", game.title),
-            Self::AuroraImport { .. } => "Aurora game assets".to_string(),
-            Self::AuroraImportClear => "Aurora game assets to import".to_string(),
+            Self::AuroraImport { .. } => "Ressources Aurora des jeux".to_string(),
+            Self::AuroraImportClear => "Ressources Aurora à importer".to_string(),
         }
     }
 

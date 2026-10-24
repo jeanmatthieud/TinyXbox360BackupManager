@@ -59,10 +59,10 @@ pub fn search_titles(query: &str) -> Result<Vec<TitleListItem>> {
         .query("category", "0")
         .query("filter", "0")
         .call()
-        .context("TitleList request")?
+        .context("requête TitleList")?
         .body_mut()
         .read_json()
-        .context("invalid TitleList response")?;
+        .context("réponse TitleList invalide")?;
     Ok(response.items)
 }
 
@@ -88,10 +88,10 @@ pub fn cover_info(title_id: &str) -> Result<Vec<CoverEntry>> {
     let response: CoverInfoResponse = AGENT.get(format!("{BASE}/CoverInfo.php"))
         .query("titleid", title_id)
         .call()
-        .context("CoverInfo request")?
+        .context("requête CoverInfo")?
         .body_mut()
         .read_json()
-        .context("invalid CoverInfo response")?;
+        .context("réponse CoverInfo invalide")?;
     Ok(response.covers)
 }
 
@@ -121,18 +121,18 @@ pub fn sort_covers_best_first(covers: &mut [CoverEntry]) {
 pub fn download_best_cover(title_id: &str) -> Result<Vec<u8>> {
     let mut covers = cover_info(title_id)?;
     if covers.is_empty() {
-        bail!("no cover for title {title_id}");
+        bail!("aucune jaquette pour le jeu {title_id}");
     }
     sort_covers_best_first(&mut covers);
 
     let bytes = AGENT.get(cover_url(&covers[0].cover_id, true))
         .call()
-        .context("downloading cover")?
+        .context("téléchargement de la jaquette")?
         .body_mut()
         .with_config()
         .limit(DOWNLOAD_LIMIT)
         .read_to_vec()
-        .context("reading cover")?;
+        .context("lecture de la jaquette")?;
     Ok(bytes)
 }
 
@@ -174,10 +174,10 @@ pub fn title_updates(title_id: &str) -> Result<Vec<TitleUpdateEntry>> {
     let response: TitleUpdateInfoResponse = AGENT.get(format!("{BASE}/TitleUpdateInfo.php"))
         .query("titleid", title_id)
         .call()
-        .context("TitleUpdateInfo request")?
+        .context("requête TitleUpdateInfo")?
         .body_mut()
         .read_json()
-        .context("invalid TitleUpdateInfo response")?;
+        .context("réponse TitleUpdateInfo invalide")?;
 
     let mut updates = Vec::new();
     for group in response.media_ids {
@@ -195,7 +195,7 @@ pub fn download_title_update(title_update_id: &str) -> Result<(String, Vec<u8>)>
     let mut response = AGENT.get(format!("{BASE}/TitleUpdate.php"))
         .query("tuid", title_update_id)
         .call()
-        .context("downloading title update")?;
+        .context("téléchargement de la mise à jour du jeu")?;
 
     let filename = response
         .headers()
@@ -209,7 +209,7 @@ pub fn download_title_update(title_update_id: &str) -> Result<(String, Vec<u8>)>
         .with_config()
         .limit(DOWNLOAD_LIMIT)
         .read_to_vec()
-        .context("reading title update")?;
+        .context("lecture de la mise à jour du jeu")?;
     Ok((filename, bytes))
 }
 

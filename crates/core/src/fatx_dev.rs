@@ -46,11 +46,11 @@ impl FatxProbe {
     /// Short explanation shown under the device's name in the picker.
     pub fn label(&self) -> &'static str {
         match self {
-            FatxProbe::Xbox360 => "Xbox 360 hard drive",
-            FatxProbe::OriginalXbox => "Original Xbox disk — not supported",
-            FatxProbe::NoFilesystem => "no Xbox filesystem on this disk",
-            FatxProbe::AccessDenied => "access denied — raw disk access needs privileges",
-            FatxProbe::Unreadable => "could not be read",
+            FatxProbe::Xbox360 => "Disque dur Xbox 360",
+            FatxProbe::OriginalXbox => "Disque Xbox originale — non pris en charge",
+            FatxProbe::NoFilesystem => "aucun système de fichiers Xbox sur ce disque",
+            FatxProbe::AccessDenied => "accès refusé — l’accès direct au disque nécessite des droits spécifiques",
+            FatxProbe::Unreadable => "lecture impossible",
         }
     }
 }
@@ -303,7 +303,7 @@ fn candidates() -> Vec<FatxDrive> {
         .map(|n| {
             let path = PathBuf::from(format!("\\\\.\\PhysicalDrive{n}"));
             FatxDrive {
-                name: format!("Physical drive {n}"),
+                name: format!("Disque physique {n}"),
                 // The size of a raw disk needs an IOCTL Windows only answers on
                 // an already-open handle; the picker shows nothing rather than
                 // a wrong number.

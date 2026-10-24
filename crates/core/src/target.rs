@@ -104,7 +104,7 @@ impl Target {
         match self {
             Target::Ftp(ftp) => Ok(RemoteSession::Ftp(FtpSession::connect(ftp)?)),
             Target::Fatx(fatx) => Ok(RemoteSession::Fatx(FatxSession::open(fatx, writable)?)),
-            Target::Local(_) => bail!("this target is a local drive, not a console"),
+            Target::Local(_) => bail!("cette destination est un disque local, pas une console"),
         }
     }
 
@@ -617,7 +617,7 @@ fn find_aurora_databases(session: &mut dyn RemoteFs) -> Option<String> {
 /// via the MountedDevices table (content.db).
 pub fn aurora_paths(session: &mut dyn RemoteFs) -> Result<AuroraScan> {
     let db_dir = find_aurora_databases(session)
-        .context("Aurora installation not found on console / drive")?;
+        .context("installation d’Aurora introuvable sur la console / le disque")?;
     let install_dir = db_dir
         .strip_suffix("/Data/Databases")
         .map(str::to_string);
@@ -659,12 +659,12 @@ fn read_aurora_databases(
     install_dir: Option<String>,
 ) -> Result<AuroraScan> {
     let content_db =
-        rusqlite::Connection::open(content_path).context("opening content.db")?;
+        rusqlite::Connection::open(content_path).context("ouverture de content.db")?;
     let mut devices = std::collections::HashMap::new();
     {
         let mut stmt = content_db
             .prepare("SELECT DeviceId, DeviceName FROM MountedDevices")
-            .context("reading MountedDevices")?;
+            .context("lecture de MountedDevices")?;
         let rows = stmt.query_map([], |row| {
             Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
         })?;
@@ -674,10 +674,10 @@ fn read_aurora_databases(
     }
 
     let settings_db =
-        rusqlite::Connection::open(settings_path).context("opening settings.db")?;
+        rusqlite::Connection::open(settings_path).context("ouverture de settings.db")?;
     let mut stmt = settings_db
         .prepare("SELECT Path, DeviceId, Depth FROM ScanPaths")
-        .context("reading ScanPaths")?;
+        .context("lecture de ScanPaths")?;
     let rows = stmt.query_map([], |row| {
         Ok((
             row.get::<_, String>(0)?,
@@ -1048,12 +1048,12 @@ fn storage_path_rows(
     };
     vec![
         row(
-            "GOD Storage - Xbox360 games",
+            "Stockage GOD - Jeux Xbox 360",
             &storage.god_dir,
             storage.god_layout.title_levels(),
         ),
-        row("XEX Storage - Xbox360 extracted games", &storage.xex_dir, 1),
-        row("XBE Storage - Xbox OG games", &storage.xbe_dir, 1),
+        row("Stockage XEX - Jeux Xbox 360 extraits", &storage.xex_dir, 1),
+        row("Stockage XBE - Jeux Xbox originale", &storage.xbe_dir, 1),
     ]
 }
 
@@ -1192,7 +1192,7 @@ fn local_aurora_databases(mount: &Path) -> Option<(PathBuf, PathBuf, PathBuf)> {
 /// drive (e.g. a bootable USB key), if present.
 pub fn local_aurora_paths(mount: &Path) -> Result<AuroraScan> {
     let (settings, content, aurora_dir) =
-        local_aurora_databases(mount).context("no Aurora databases on this drive")?;
+        local_aurora_databases(mount).context("aucune base de données Aurora sur ce disque")?;
     read_aurora_databases(
         &settings,
         &content,
@@ -1652,9 +1652,7 @@ impl Target {
         && let Some(location) = elsewhere.first()
     {
         bail!(
-            "{} is not on the connected drive: this is the console's {} hard drive, and that \
-             folder is on another device. Connect over FTP to reach it, or point the library at \
-             a folder on this drive.",
+            "{} n’est pas sur le disque connecté : le disque dur {} de la console est connecté, mais ce dossier est sur un autre périphérique. Utilisez le FTP ou choisissez un dossier de ce disque.",
             location.path,
             crate::fatx::FATX_VOLUME
         );

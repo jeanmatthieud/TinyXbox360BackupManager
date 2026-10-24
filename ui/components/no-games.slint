@@ -11,10 +11,10 @@ import { Message, Dispatcher } from "../messages.slint";
 export component NoGames inherits EmptyState {
     boxed: true;
     icon: IconSet.Gamepad2;
-    title: "No games yet";
-    description: "Add an ISO or XBLA backup to get started";
+    title: "Aucun jeu pour le moment";
+    description: "Ajoutez une sauvegarde ISO ou XBLA pour commencer";
     action-icon: IconSet.Plus;
-    action-label: "Add a game";
+    action-label: "Ajouter un jeu";
     action => {
         Dispatcher.dispatch(Message.PickGames, "false");
     }

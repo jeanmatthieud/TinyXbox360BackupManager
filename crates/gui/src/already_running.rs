@@ -3,7 +3,7 @@
 //! What a second copy of the app shows before it exits (see
 //! `txbm_core::instance`).
 
-pub const MESSAGE: &str = "TinyXbox360BackupManager is already running.";
+pub const MESSAGE: &str = "TinyXbox360BackupManager est déjà ouvert.";
 
 // On Linux `rfd` draws message boxes by running `zenity`, which many desktops
 // and the Flatpak runtime do not have: the call then returns at once and the

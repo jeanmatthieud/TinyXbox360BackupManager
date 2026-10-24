@@ -56,9 +56,9 @@ impl XdvdImage {
         let file =
             File::open(path).with_context(|| format!("opening {}", path.display()))?;
         let mut dev = OffsetWrapper::new(BufReader::new(file))
-            .map_err(|e| anyhow!("invalid XDVDFS image: {e}"))?;
+            .map_err(|e| anyhow!("image XDVDFS invalide : {e}"))?;
         let volume = xdvdfs::read::read_volume(&mut dev)
-            .map_err(|e| anyhow!("reading XDVDFS volume: {e}"))?;
+            .map_err(|e| anyhow!("lecture du volume XDVDFS : {e}"))?;
         Ok(Self { dev, volume })
     }
 
@@ -103,10 +103,10 @@ impl XdvdImage {
                 .dirent
                 .data
                 .offset::<std::io::Error>(0)
-                .map_err(|e| anyhow!("invalid file region: {e}"))?;
+                .map_err(|e| anyhow!("zone de fichier invalide : {e}"))?;
             self.dev
                 .read(offset, &mut buf)
-                .context("reading file data")?;
+                .context("lecture des données du fichier")?;
         }
         Ok(buf)
     }
@@ -122,7 +122,7 @@ impl XdvdImage {
         self.volume
             .root_table
             .file_tree(&mut self.dev)
-            .map_err(|e| anyhow!("reading file tree: {e}"))
+            .map_err(|e| anyhow!("lecture de l’arborescence : {e}"))
     }
 
     /// Size of the used part of the volume: the end of the furthest region any
@@ -145,11 +145,11 @@ impl XdvdImage {
         if let Some(node) = self.find("/default.xex")? {
             let buf = self.read_prefix(&node, EXECUTABLE_PREFIX_SIZE)?;
             let header = XexHeader::read(std::io::Cursor::new(buf))
-                .context("reading default.xex")?;
+                .context("lecture de default.xex")?;
             let execution_info = header
                 .fields
                 .execution_info
-                .context("no execution info in the default.xex header")?;
+                .context("aucune information d’exécution dans l’en-tête de default.xex")?;
             Ok(ImageTitleInfo {
                 content_type: ContentType::GamesOnDemand,
                 execution_info,
@@ -157,17 +157,17 @@ impl XdvdImage {
         } else if let Some(node) = self.find("/default.xbe")? {
             let buf = self.read_prefix(&node, EXECUTABLE_PREFIX_SIZE)?;
             let header = XbeHeader::read(std::io::Cursor::new(buf))
-                .context("reading default.xbe")?;
+                .context("lecture de default.xbe")?;
             let execution_info = header
                 .fields
                 .execution_info
-                .context("no execution info in the default.xbe header")?;
+                .context("aucune information d’exécution dans l’en-tête de default.xbe")?;
             Ok(ImageTitleInfo {
                 content_type: ContentType::XboxOriginal,
                 execution_info,
             })
         } else {
-            anyhow::bail!("no default.xex or default.xbe in this image")
+            anyhow::bail!("aucun default.xex ni default.xbe dans cette image")
         }
     }
 
@@ -186,7 +186,7 @@ impl XdvdImage {
         }
         let entries = table
             .walk_dirent_tree(&mut self.dev)
-            .map_err(|e| anyhow!("reading directory table: {e}"))?;
+            .map_err(|e| anyhow!("lecture de la table des dossiers : {e}"))?;
         for entry in entries {
             // A name that does not decode as WINDOWS-1252 cannot be the one we
             // are looking for, and must not fail the whole lookup: a single odd

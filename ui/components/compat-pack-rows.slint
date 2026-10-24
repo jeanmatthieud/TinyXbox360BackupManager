@@ -39,7 +39,7 @@ export component BuiltinPackRow inherits VerticalLayout {
             }
 
             Text {
-                text: "Built-in";
+                text: "Intégré";
                 font-size: 11px;
                 color: MyPalette.foreground.transparentize(0.45);
                 vertical-alignment: center;
@@ -84,7 +84,7 @@ export component CustomPackRow inherits VerticalLayout {
         name-edit := LineEdit {
             horizontal-stretch: 1;
             text: pack.label;
-            placeholder-text: "Pack name";
+            placeholder-text: "Nom du pack";
             edited => Dispatcher.dispatch(Message.SetCompatPackLabel, pack.key + "\n" + self.text);
         }
 
@@ -95,7 +95,7 @@ export component CustomPackRow inherits VerticalLayout {
                 icon: IconSet.Trash2;
                 kind: IconButtonKind.DestructiveText;
                 width: self.height;
-                tooltip: "Remove this pack";
+                tooltip: "Retirer ce pack";
                 clicked => Dispatcher.dispatch(Message.RemoveCompatPack, pack.key);
             }
         }
@@ -103,7 +103,7 @@ export component CustomPackRow inherits VerticalLayout {
 
     url-edit := LineEdit {
         text: pack.url;
-        placeholder-text: "https://… (.zip, .7z or .rar)";
+        placeholder-text: "https://… (.zip, .7z ou .rar)";
         edited => Dispatcher.dispatch(Message.SetCompatPackUrl, pack.key + "\n" + self.text);
     }
 }

@@ -20,14 +20,14 @@ component GodLayoutField inherits VerticalLayout {
     spacing: 6px;
 
     Text {
-        text: "GOD Storage Layout";
+        text: "Organisation du stockage GOD";
         font-weight: 700;
     }
 
     Text {
-        text: "How <TitleID> folders are arranged inside GOD Storage. Aurora accepts a nested "
-            + "layout, the console's own dashboard may not. Only new games follow this — an "
-            + "installed game is always updated where it already sits.";
+        text: "Organisation des dossiers <TitleID> dans le stockage GOD. Aurora accepte les "
+            + "sous-dossiers, mais pas forcément le dashboard d’origine. Ce choix concerne les nouveaux jeux ; "
+            + "un jeu déjà installé sera toujours mis à jour à son emplacement actuel.";
         color: MyPalette.foreground.transparentize(0.35);
         font-size: 12px;
         wrap: word-wrap;
@@ -55,10 +55,10 @@ component GodLayoutField inherits VerticalLayout {
     ComboBox {
         height: 34px;
         model: [
-            "TitleID (standard, recommended)",
-            "Name / TitleID (experimental)",
-            "Name - TitleID / TitleID (experimental)",
-            "TitleID - Name / TitleID (experimental)",
+            "TitleID (standard, recommandé)",
+            "Nom / TitleID (expérimental)",
+            "Nom - TitleID / TitleID (expérimental)",
+            "TitleID - Nom / TitleID (expérimental)",
         ];
         current-index: row-for(UiState.storage-god-layout);
         selected => {
@@ -77,7 +77,7 @@ component LocationField inherits VerticalLayout {
 
     // Sentinel value of the last drop-down entry (kept in sync with the one
     // appended to storage-candidates in update.rs).
-    property <string> OTHER: "Other…";
+    property <string> OTHER: "Autre…";
     // Index of that sentinel, i.e. the last row of the drop-down.
     property <int> other-index: UiState.storage-candidates.length - 1;
     // True while the user is entering a path not in the detected list. Derived
@@ -145,7 +145,7 @@ component LocationField inherits VerticalLayout {
             height: 34px;
             horizontal-stretch: 1;
             text: value;
-            placeholder-text: UiState.storage-is-console ? "/Hdd1/…" : "e.g. Games or a sub-folder";
+            placeholder-text: UiState.storage-is-console ? "/Hdd1/…" : "Ex. : Games ou un sous-dossier";
             edited => {
                 value = self.text;
             }
@@ -154,7 +154,7 @@ component LocationField inherits VerticalLayout {
         // Local drives get a system folder picker; consoles use free text.
         if !UiState.storage-is-console: IconButton {
             icon: IconSet.FolderOpen;
-            tooltip: "Browse…";
+            tooltip: "Parcourir…";
             width: 34px;
             height: self.width;
             clicked => {
@@ -191,7 +191,7 @@ export component StorageConfigModal inherits Modal {
         padding-bottom: 0px;
 
         Text {
-            text: "Target content storage";
+            text: "Dossiers de stockage des jeux";
             font-size: 18px;
         }
     }
@@ -221,7 +221,7 @@ export component StorageConfigModal inherits Modal {
                 VerticalLayout {
                     alignment: center;
                     Text {
-                        text: "Looking at what is already on this location…";
+                        text: "Analyse du contenu déjà présent…";
                         wrap: word-wrap;
                     }
                 }
@@ -232,29 +232,29 @@ export component StorageConfigModal inherits Modal {
                 spacing: 16px;
 
                 Text {
-                    text: "Choose where your games are stored. The defaults work for a fresh drive.";
+                    text: "Choisissez où stocker les jeux. Les valeurs proposées conviennent à un disque neuf.";
                     color: MyPalette.foreground.transparentize(0.35);
                     wrap: word-wrap;
                     height: self.preferred-height;
                 }
 
                 LocationField {
-                    title: "GOD Storage";
-                    subtitle: "Folder holding Xbox 360 games, one sub-folder per game ID.\nUsually ends with Content/0000000000000000.";
+                    title: "Stockage GOD";
+                    subtitle: "Dossier des jeux Xbox 360, avec un sous-dossier par identifiant de jeu.\nSe termine généralement par Content/0000000000000000.";
                     value <=> UiState.storage-god-dir;
                     pick-message: Message.PickStorageGodDir;
                 }
 
                 LocationField {
-                    title: "XEX Storage";
-                    subtitle: "Folder holding extracted Xbox 360 games (default.xex), one sub-folder each.";
+                    title: "Stockage XEX";
+                    subtitle: "Dossier des jeux Xbox 360 extraits (default.xex), avec un sous-dossier par jeu.";
                     value <=> UiState.storage-xex-dir;
                     pick-message: Message.PickStorageXexDir;
                 }
 
                 LocationField {
-                    title: "XBE Storage";
-                    subtitle: "Folder holding extracted Original Xbox games (default.xbe), one sub-folder each.";
+                    title: "Stockage XBE";
+                    subtitle: "Dossier des jeux Xbox originale extraits (default.xbe), avec un sous-dossier par jeu.";
                     value <=> UiState.storage-xbe-dir;
                     pick-message: Message.PickStorageXbeDir;
                 }
@@ -280,14 +280,14 @@ export component StorageConfigModal inherits Modal {
             spacing: 10px;
 
             IconButton {
-                label: "Cancel";
+                label: "Annuler";
                 clicked => {
                     Dispatcher.dispatch(Message.CancelStorageConfig, "");
                 }
             }
 
             IconButton {
-                label: "Confirm";
+                label: "Confirmer";
                 icon: IconSet.Check;
                 kind: IconButtonKind.Primary;
                 disabled: UiState.analyzing-target

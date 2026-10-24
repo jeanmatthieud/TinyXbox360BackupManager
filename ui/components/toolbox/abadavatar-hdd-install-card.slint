@@ -23,16 +23,16 @@ export component ABadAvatarHddInstallCard inherits ToolboxCard {
     // the status line and its cancel button.
     disabled: UiState.abadavatar-hdd-tool-busy || UiState.creating-abadavatar || UiState.compat-busy || target-connected;
     disabled-tooltip: target-connected
-        ? "Disconnect from the current target first"
+        ? "Déconnectez d’abord la destination actuelle"
         : UiState.creating-abadavatar
-            ? "Wait for the ABadAvatar USB key to be written."
+            ? "Attendez la fin de l’écriture de la clé USB ABadAvatar."
             : UiState.compat-busy
-                ? "Wait for the original Xbox compatibility install to finish."
+                ? "Attendez la fin de l’installation de la rétrocompatibilité Xbox originale."
                 : "";
 
     CardHeader {
         icon: IconSet.HardDrive;
-        title: "ABadAvatar on a console hard drive";
+        title: "ABadAvatar sur un disque dur de console";
 
         if UiState.abadavatar-hdd-tool-busy: Spinner {
             width: 27px;
@@ -44,26 +44,26 @@ export component ABadAvatarHddInstallCard inherits ToolboxCard {
     HorizontalLine { }
 
     Text {
-        text: "Installs ABadAvatar on the console's internal hard drive, connected to this computer, so the exploit boots with no USB key plugged in.";
+        text: "Installe ABadAvatar sur le disque dur interne de la console, branché à cet ordinateur, pour démarrer l’exploit sans clé USB.";
         wrap: word-wrap;
     }
 
     Text {
-        text: "ABadAvatar 1.3-beta, XeUnshackle and a launch.ini starting Aurora — Aurora itself too, when the drive has none.";
+        text: "ABadAvatar 1.3-beta, XeUnshackle et un launch.ini démarrant Aurora — ainsi qu’Aurora si le disque n’en contient pas.";
         font-size: 12px;
         wrap: word-wrap;
         color: MyPalette.foreground.transparentize(0.35);
     }
 
     WarningNote {
-        text: "Check the console first: Settings › System › Console Info must show dashboard 2.0.17559.0. The exploit only works on that version.";
+        text: "Vérifiez la console : Paramètres › Système › Infos console doit indiquer le dashboard 2.0.17559.0. L’exploit fonctionne uniquement avec cette version.";
     }
 
     HorizontalLine { }
 
     CardActionRow {
         icon: IconSet.Hammer;
-        text: !UiState.abadavatar-hdd-tool-busy ? "Install ABadAvatar on an internal console hard drive" : "Working… see the status bar below.";
+        text: !UiState.abadavatar-hdd-tool-busy ? "Installer ABadAvatar sur un disque dur interne de console" : "En cours… consultez la barre d’état en bas.";
         clicked => Dispatcher.dispatch(Message.InstallABadAvatarHdd, "");
     }
 }

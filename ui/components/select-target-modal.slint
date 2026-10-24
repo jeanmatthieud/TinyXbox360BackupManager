@@ -96,7 +96,7 @@ export component SelectTargetModal inherits Modal {
                 spacing: 10px;
 
                 Text {
-                    text: "Where is your game library?";
+                    text: "Où se trouve votre bibliothèque de jeux ?";
                     font-size: 18px;
                 }
 
@@ -104,8 +104,8 @@ export component SelectTargetModal inherits Modal {
 
                 SelectableCard {
                     icon: IconSet.Usb;
-                    title: "Local Removable USB Drive";
-                    subtitle: "Plug in your storage to scan games.";
+                    title: "Disque USB amovible local";
+                    subtitle: "Branchez votre support pour analyser les jeux.";
                     selected: choice == TargetChoice.usb;
                     // Hidden debug escape hatch: browse to any folder (e.g. an
                     // internal path) instead of a removable device.
@@ -121,8 +121,8 @@ export component SelectTargetModal inherits Modal {
 
                 SelectableCard {
                     icon: IconSet.Network;
-                    title: "Remote Xbox 360 over Network (WiFi / Ethernet)";
-                    subtitle: "Access shared folders or FTP on your console.";
+                    title: "Xbox 360 en réseau (Wi-Fi / Ethernet)";
+                    subtitle: "Accédez aux dossiers partagés ou au FTP de votre console.";
                     selected: choice == TargetChoice.network;
                     clicked => {
                         choice = TargetChoice.network;
@@ -133,8 +133,8 @@ export component SelectTargetModal inherits Modal {
                 // disk privileges on this computer.
                 if UiState.config.expert-mode: SelectableCard {
                     icon: IconSet.HardDrive;
-                    title: "Xbox 360 Internal Hard Drive (FATX)";
-                    subtitle: "Connect the console's own drive to this computer.";
+                    title: "Disque dur interne Xbox 360 (FATX)";
+                    subtitle: "Branchez le disque dur de la console à cet ordinateur.";
                     selected: choice == TargetChoice.fatx;
                     // Hidden debug escape hatch: open a raw disk image instead of a
                     // physical drive.
@@ -156,7 +156,7 @@ export component SelectTargetModal inherits Modal {
                 spacing: 10px;
 
                 history-label := Text {
-                    text: "Your history:";
+                    text: "Connexions récentes :";
                     color: MyPalette.foreground.transparentize(0.3);
                     font-size: 13px;
                 }
@@ -251,13 +251,13 @@ export component SelectTargetModal inherits Modal {
 
             // Step 1 dismisses the modal; step 2 goes back to the choices.
             if !picking: IconButton {
-                label: "Close";
+                label: "Fermer";
                 clicked => {
                     UiState.selecting-target = false;
                 }
             }
             if picking: IconButton {
-                label: "Previous";
+                label: "Précédent";
                 clicked => {
                     picking-drives = false;
                     picking-fatx = false;
@@ -270,7 +270,7 @@ export component SelectTargetModal inherits Modal {
 
             // Step 1: act on the current selection.
             if !picking: IconButton {
-                label: "Next";
+                label: "Suivant";
                 kind: IconButtonKind.Primary;
                 disabled: choice == TargetChoice.none;
                 clicked => {
@@ -298,7 +298,7 @@ export component SelectTargetModal inherits Modal {
 
             // Step 2: confirm the selected drive.
             if picking-drives: IconButton {
-                label: "Next";
+                label: "Suivant";
                 kind: IconButtonKind.Primary;
                 disabled: selected-drive < 0;
                 clicked => {
@@ -307,7 +307,7 @@ export component SelectTargetModal inherits Modal {
                 }
             }
             if picking-fatx: IconButton {
-                label: "Next";
+                label: "Suivant";
                 kind: IconButtonKind.Primary;
                 disabled: selected-drive < 0;
                 clicked => {

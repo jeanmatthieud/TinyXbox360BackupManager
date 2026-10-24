@@ -11,14 +11,14 @@ import { UiState } from "../ui-state.slint";
 export component NoTarget inherits EmptyState {
     boxed: true;
     icon: IconSet.HardDrive;
-    title: "No target connected";
-    description: "Connect a USB drive or your console to browse and manage its games";
+    title: "Aucune destination connectée";
+    description: "Connectez un disque USB ou votre console pour gérer ses jeux";
     action-icon: IconSet.Zap;
     // Same rule as the navbar: no target picking while a Toolbox tool is
     // busy with a console of its own.
     action-label: UiState.creating-abadavatar || UiState.compat-busy || UiState.abadavatar-hdd-tool-busy
         ? ""
-        : "Select a target";
+        : "Choisir une destination";
     action => {
         UiState.selecting-target = true;
     }

@@ -75,15 +75,15 @@ fn extract_filtered(
     let file = File::open(source_iso)
         .with_context(|| format!("opening {}", source_iso.display()))?;
     let mut dev = OffsetWrapper::new(BufReader::new(file))
-        .map_err(|e| anyhow!("invalid XDVDFS image: {e}"))?;
+        .map_err(|e| anyhow!("image XDVDFS invalide : {e}"))?;
 
     let volume = xdvdfs::read::read_volume(&mut dev)
-        .map_err(|e| anyhow!("reading XDVDFS volume: {e}"))?;
+        .map_err(|e| anyhow!("lecture du volume XDVDFS : {e}"))?;
 
     let mut tree = volume
         .root_table
         .file_tree(&mut dev)
-        .map_err(|e| anyhow!("reading file tree: {e}"))?;
+        .map_err(|e| anyhow!("lecture de l’arborescence : {e}"))?;
 
     // Filtering here rather than inside the loop keeps `total` honest: the
     // progress must count what will be written, not what the image holds. An
@@ -121,7 +121,7 @@ fn extract_filtered(
             .collect();
         if !missing.is_empty() {
             bail!(
-                "expected folder(s) {} hold no file in {}",
+                "les dossiers attendus {} ne contiennent aucun fichier dans {}",
                 missing.join(", "),
                 source_iso.display()
             );
@@ -145,7 +145,7 @@ fn extract_filtered(
         }
         let name = node
             .name_str::<std::io::Error>()
-            .map_err(|e| anyhow!("invalid file name: {e}"))?;
+            .map_err(|e| anyhow!("nom de fichier invalide : {e}"))?;
         let relative = format!("{}/{}", dir.trim_start_matches('/'), name);
         let relative = if strip_root {
             match relative.trim_start_matches('/').split_once('/') {
@@ -177,7 +177,7 @@ fn extract_filtered(
             node.node
                 .dirent
                 .seek_to(&mut dev)
-                .map_err(|e| anyhow!("seeking in image: {e}"))?;
+                .map_err(|e| anyhow!("déplacement dans l’image : {e}"))?;
             let copied = copy_cancellable(dev.get_mut(), &mut out, size, cancel, &mut |copied| {
                 let now = Instant::now();
                 if now.duration_since(last_notify) >= crate::util::PROGRESS_DEBOUNCE {
@@ -187,7 +187,7 @@ fn extract_filtered(
             })
             .with_context(|| format!("extracting {relative}"))?;
             if copied != size {
-                bail!("incomplete extraction of {relative} ({copied}/{size} bytes)");
+                bail!("extraction incomplète de {relative} ({copied}/{size} octets)");
             }
         }
 
@@ -243,7 +243,7 @@ fn join_secure(base: &Path, relative: &str) -> Result<std::path::PathBuf> {
             continue;
         }
         if part == ".." || part.contains(['\\', ':']) {
-            bail!("suspicious path in image: {relative}");
+            bail!("chemin suspect dans l’image : {relative}");
         }
         path.push(part);
     }

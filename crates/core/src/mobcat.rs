@@ -54,7 +54,7 @@ pub fn clear_db() {
 /// slightly outdated until a later attempt succeeds).
 pub fn ensure_db() {
     if let Err(e) = try_update_db() {
-        eprintln!("MobCat database update failed: {e:#}");
+        eprintln!("Échec de mise à jour de la base MobCat : {e:#}");
     }
 }
 
@@ -67,11 +67,11 @@ fn try_update_db() -> Result<()> {
         request = request.header("If-None-Match", etag.trim());
     }
 
-    let mut response = request.call().context("database request")?;
+    let mut response = request.call().context("requête à la base de données")?;
     match response.status().as_u16() {
         304 => return Ok(()),
         200 => {}
-        status => bail!("unexpected HTTP status {status}"),
+        status => bail!("statut HTTP inattendu {status}"),
     }
 
     let etag = response
@@ -84,7 +84,7 @@ fn try_update_db() -> Result<()> {
         .with_config()
         .limit(DB_DOWNLOAD_LIMIT)
         .read_to_vec()
-        .context("reading database")?;
+        .context("lecture de la base de données")?;
 
     // Atomic replacement: a truncated download must not clobber
     // a working database.
@@ -122,7 +122,7 @@ fn xmids_for_title_id(title_id: &str) -> Vec<String> {
 pub fn download_best_cover(title_id: &str) -> Result<Vec<u8>> {
     let xmids = xmids_for_title_id(title_id);
     if xmids.is_empty() {
-        bail!("title {title_id} not in the MobCat database");
+        bail!("jeu {title_id} absent de la base MobCat");
     }
 
     for xmid in &xmids {
@@ -140,5 +140,5 @@ pub fn download_best_cover(title_id: &str) -> Result<Vec<u8>> {
             }
         }
     }
-    bail!("no cover found for title {title_id}")
+    bail!("aucune jaquette trouvée pour le jeu {title_id}")
 }
