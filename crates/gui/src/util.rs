@@ -76,7 +76,7 @@ pub fn should_add_game(path: PathBuf) -> Result<PickedGame, Rejected> {
     {
         // Cheap validity check: XDVDFS magic must be found by the ISO reader.
         let info = txbm_core::iso_info::inspect(&path)
-            .map_err(|_| Rejected::invalid("not a readable Xbox disc image"))?;
+            .map_err(|_| Rejected::invalid("image disque Xbox illisible"))?;
         // A content/bundled disc installs under the TitleID of each package it
         // carries, not under the disc's own (often a placeholder), and merges
         // rather than replaces: no overwrite to announce. A disc's quirk can
@@ -101,7 +101,7 @@ pub fn should_add_game(path: PathBuf) -> Result<PickedGame, Rejected> {
         // during the conversion itself — and so is the game it installs:
         // see `installs_title_id` for why it stays unknown until then.
         if !txbm_core::archive::looks_valid(&path) {
-            return Err(Rejected::invalid("corrupted or mislabelled archive"));
+            return Err(Rejected::invalid("archive endommagée ou mal identifiée"));
         }
         // Once per volume: a recursive add of a split set is reported as a
         // batch of rejections rather than as one failed job per volume.
@@ -117,8 +117,8 @@ pub fn should_add_game(path: PathBuf) -> Result<PickedGame, Rejected> {
     // Anything else: accept installable STFS packages.
     let info = match txbm_core::stfs::inspect(&path) {
         Ok(Some(info)) => info,
-        Ok(None) => return Err(Rejected::unsupported("unsupported file type")),
-        Err(_) => return Err(Rejected::invalid("unreadable file")),
+        Ok(None) => return Err(Rejected::unsupported("type de fichier non pris en charge")),
+        Err(_) => return Err(Rejected::invalid("fichier illisible")),
     };
     if !matches!(
         info.content_type,
@@ -127,7 +127,7 @@ pub fn should_add_game(path: PathBuf) -> Result<PickedGame, Rejected> {
             | txbm_core::stfs::CONTENT_TYPE_TITLE_UPDATE
     ) {
         return Err(Rejected::unsupported(
-            "package is not a game, DLC or title update",
+            "ce paquet n’est ni un jeu, ni un DLC, ni une mise à jour de jeu",
         ));
     }
     Ok(PickedGame {

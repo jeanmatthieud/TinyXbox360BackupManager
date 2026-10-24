@@ -28,7 +28,7 @@ export component SortGamesAndHomebrewApps inherits Card {
             width: 24px;
             height: 38px;
 
-            tooltip: "Sort by name";
+            tooltip: "Trier par nom";
             background: get-bg(UiState.config.sort-by == "NameDescending" || UiState.config.sort-by == "NameAscending", self.has-hover);
             clicked => {
                 if UiState.config.sort-by == "NameAscending" {
@@ -49,7 +49,7 @@ export component SortGamesAndHomebrewApps inherits Card {
             width: 24px;
             height: 38px;
 
-            tooltip: "Sort by size";
+            tooltip: "Trier par taille";
             background: get-bg(UiState.config.sort-by == "SizeDescending" || UiState.config.sort-by == "SizeAscending", self.has-hover);
             clicked => {
                 if UiState.config.sort-by == "SizeAscending" {

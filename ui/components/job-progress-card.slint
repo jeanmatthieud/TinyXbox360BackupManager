@@ -56,12 +56,12 @@ export component JobProgressCard inherits Card {
                 horizontal-stretch: 0;
                 icon: IconSet.X;
                 tooltip: UiState.cancelling-current
-                    ? "Cancellation already requested"
+                    ? "Annulation déjà demandée"
                     : (UiState.job-kind == JobKind.Add
-                        ? "Cancel this conversion"
+                        ? "Annuler cette conversion"
                         : UiState.job-kind == JobKind.AuroraImport
-                        ? "Cancel this preparation"
-                        : "Cancel this deletion");
+                        ? "Annuler cette préparation"
+                        : "Annuler cette suppression");
                 disabled: UiState.cancelling-current || UiState.cancelling-queue;
                 height: 24px;
                 width: 24px;
@@ -103,10 +103,10 @@ export component JobProgressCard inherits Card {
             // files) is exactly what has to stay visible here.
             text: UiState.cancelling-current && details().is-empty
                 ? (UiState.job-kind == JobKind.Add
-                    ? "Cancelling this conversion..."
+                    ? "Annulation de la conversion…"
                     : UiState.job-kind == JobKind.AuroraImport
-                    ? "Cancelling this preparation..."
-                    : "Cancelling this deletion...")
+                    ? "Annulation de la préparation…"
+                    : "Annulation de la suppression…")
                 : details();
             color: UiState.cancelling-current
                 ? MyPalette.destructive

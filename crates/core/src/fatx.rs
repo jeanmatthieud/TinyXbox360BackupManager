@@ -126,10 +126,10 @@ impl FatxSession {
     /// access at all, so a bug here cannot damage the user's games.
     pub fn open(config: &FatxConfig, writable: bool) -> Result<Self> {
         if config.device.as_os_str().is_empty() {
-            bail!("no FATX device selected");
+            bail!("aucun périphérique FATX sélectionné");
         }
         if fatx::PartitionMapEntry::from_x360_name(config.partition_name()).is_none() {
-            bail!("unknown Xbox 360 partition '{}'", config.partition_name());
+            bail!("partition Xbox 360 inconnue « {} »", config.partition_name());
         }
 
         let fs_config = FatxFsConfig::new(config.device.to_string_lossy().to_string())
@@ -149,14 +149,14 @@ impl FatxSession {
 
     /// Total and free space of the partition.
     pub fn space(&mut self) -> Result<fatx::Space> {
-        self.fs.space().context("reading FATX free space")
+        self.fs.space().context("lecture de l’espace libre FATX")
     }
 
     /// Checks the whole partition for damage, without changing anything. Reads
     /// every directory, so it is meant for a small partition — the
     /// compatibility one — rather than for `data`.
     pub fn audit(&mut self) -> Result<fatx::Audit> {
-        self.fs.audit().context("checking the FATX filesystem")
+        self.fs.audit().context("vérification du système de fichiers FATX")
     }
 
     /// Serial number recorded in the partition's superblock.
@@ -171,7 +171,7 @@ impl FatxSession {
         if !self.writable {
             return Ok(());
         }
-        self.fs.sync().context("flushing the FATX filesystem")
+        self.fs.sync().context("synchronisation du système de fichiers FATX")
     }
 
     /// Closes the filesystem, mirroring [`crate::ftp::FtpSession::quit`].
@@ -217,7 +217,7 @@ impl FatxSession {
 
     fn resolve_or_err(&self, path: &str) -> Result<String> {
         self.resolve(path)
-            .ok_or_else(|| anyhow!("{path} is not on the connected FATX drive"))
+            .ok_or_else(|| anyhow!("{path} n’est pas sur le disque FATX connecté"))
     }
 
     /// Whether a path exists, and whether it is a directory.
@@ -234,7 +234,7 @@ impl FatxSession {
     fn mkdir_one(&mut self, resolved: &str) -> Result<()> {
         match self.fs.stat(resolved) {
             Ok(entry) if entry.is_directory() => return Ok(()),
-            Ok(_) => bail!("{resolved} already exists as a file"),
+            Ok(_) => bail!("{resolved} existe déjà comme fichier"),
             Err(_) => {}
         }
         self.fs
@@ -269,7 +269,7 @@ impl FatxSession {
         if self.writable {
             Ok(())
         } else {
-            bail!("this FATX drive is open read-only")
+            bail!("ce disque FATX est ouvert en lecture seule")
         }
     }
 
@@ -413,13 +413,13 @@ fn open_error(config: &FatxConfig, writable: bool, error: fatx::Error) -> anyhow
         match io.kind() {
             std::io::ErrorKind::PermissionDenied => {
                 return anyhow::Error::new(DeviceAccessError(format!(
-                    "no permission to open {device}{}.\nRaw disk access is reserved to the administrator.",
-                    if writable { " for writing" } else { "" }
+                    "permission refusée pour ouvrir {device}{}.\nL’accès direct au disque est réservé à l’administrateur.",
+                    if writable { " en écriture" } else { "" }
                 )));
             }
             std::io::ErrorKind::NotFound => {
                 return anyhow::Error::new(DeviceAccessError(format!(
-                    "{device} is no longer connected"
+                    "{device} n’est plus connecté"
                 )));
             }
             _ => {}
@@ -432,13 +432,11 @@ fn open_error(config: &FatxConfig, writable: bool, error: fatx::Error) -> anyhow
         // wrong and would send the user looking in the wrong place.
         if config.partition_name() == COMPAT_PARTITION {
             return anyhow!(
-                "{device} has no original-Xbox compatibility partition ({COMPAT_VOLUME})."
+                "{device} n’a pas de partition de rétrocompatibilité Xbox originale ({COMPAT_VOLUME})."
             );
         }
         return anyhow!(
-            "no Xbox 360 filesystem found on {device}: its `{}` partition holds no FATX \
-             filesystem. Make sure this really is an Xbox 360 hard drive, and that it is \
-             the whole disk rather than one of its partitions.",
+            "aucun système de fichiers Xbox 360 trouvé sur {device} : sa partition `{}` ne contient pas de FATX. Vérifiez qu’il s’agit bien d’un disque dur Xbox 360 complet, et non d’une seule partition.",
             config.partition_name()
         );
     }
@@ -473,10 +471,10 @@ pub const DEFAULT_SECTORS_PER_CLUSTER: u32 = 32;
 /// [`crate::ogxbox_compat::format_fatx`].
 pub fn format_partition(config: &FatxConfig, volume_id: u32) -> Result<()> {
     if config.device.as_os_str().is_empty() {
-        bail!("no FATX device selected");
+        bail!("aucun périphérique FATX sélectionné");
     }
     if fatx::PartitionMapEntry::from_x360_name(config.partition_name()).is_none() {
-        bail!("unknown Xbox 360 partition '{}'", config.partition_name());
+        bail!("partition Xbox 360 inconnue « {} »", config.partition_name());
     }
     let fs_config = FatxFsConfig::new(config.device.to_string_lossy().to_string())
         .x360_partition(config.partition_name())
@@ -494,7 +492,7 @@ pub fn format_partition(config: &FatxConfig, volume_id: u32) -> Result<()> {
             open_error(config, true, e)
         }
         _ => anyhow::Error::new(e).context(format!(
-            "formatting the `{}` partition of {}",
+            "formatage de la partition `{}` de {}",
             config.partition_name(),
             config.device.display()
         )),

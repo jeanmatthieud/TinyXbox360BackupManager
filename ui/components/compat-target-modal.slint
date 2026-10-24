@@ -49,7 +49,7 @@ export component CompatTargetModal inherits Modal {
             spacing: 10px;
 
             Text {
-                text: "Which Xbox 360 should get the compatibility files?";
+                text: "Sur quelle Xbox 360 installer les fichiers de rétrocompatibilité ?";
                 font-size: 18px;
             }
 
@@ -57,8 +57,8 @@ export component CompatTargetModal inherits Modal {
 
             SelectableCard {
                 icon: IconSet.Network;
-                title: "Remote Xbox 360 over Network (WiFi / Ethernet)";
-                subtitle: "Write over FTP, with the console powered on.";
+                title: "Xbox 360 en réseau (Wi-Fi / Ethernet)";
+                subtitle: "Transfert par FTP, avec la console allumée.";
                 selected: choice == CompatChoice.network;
                 clicked => {
                     choice = CompatChoice.network;
@@ -67,8 +67,8 @@ export component CompatTargetModal inherits Modal {
 
             SelectableCard {
                 icon: IconSet.HardDrive;
-                title: "Xbox 360 Internal Hard Drive (FATX)";
-                subtitle: "Connect the console's own drive to this computer.";
+                title: "Disque dur interne Xbox 360 (FATX)";
+                subtitle: "Branchez le disque dur de la console à cet ordinateur.";
                 selected: choice == CompatChoice.fatx;
                 clicked => {
                     choice = CompatChoice.fatx;
@@ -78,8 +78,8 @@ export component CompatTargetModal inherits Modal {
 
         if picking-fatx: FatxDrivePicker {
             title: UiState.compat-formatting
-                ? "Which drive's compatibility partition?"
-                : "Select an Xbox 360 hard drive";
+                ? "Sur quel disque se trouve la partition de rétrocompatibilité ?"
+                : "Choisir un disque dur Xbox 360";
             selected-drive <=> root.selected-drive;
         }
     }
@@ -94,7 +94,7 @@ export component CompatTargetModal inherits Modal {
             spacing: 8px;
 
             if !picking-fatx || UiState.compat-formatting: IconButton {
-                label: "Close";
+                label: "Fermer";
                 clicked => {
                     UiState.selecting-compat-target = false;
                     // The run prepared on the card goes no further.
@@ -102,7 +102,7 @@ export component CompatTargetModal inherits Modal {
                 }
             }
             if picking-fatx && !UiState.compat-formatting: IconButton {
-                label: "Previous";
+                label: "Précédent";
                 clicked => {
                     picking-fatx = false;
                 }
@@ -113,7 +113,7 @@ export component CompatTargetModal inherits Modal {
             }
 
             if !picking-fatx: IconButton {
-                label: "Next";
+                label: "Suivant";
                 kind: IconButtonKind.Primary;
                 disabled: choice == CompatChoice.none;
                 clicked => {
@@ -134,7 +134,7 @@ export component CompatTargetModal inherits Modal {
             }
 
             if picking-fatx: IconButton {
-                label: "Next";
+                label: "Suivant";
                 kind: IconButtonKind.Primary;
                 disabled: selected-drive < 0;
                 clicked => {

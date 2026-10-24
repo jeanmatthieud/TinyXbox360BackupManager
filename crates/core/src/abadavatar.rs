@@ -68,11 +68,11 @@ pub struct UrlSource {
 /// web.archive.org snapshot (same approach as [`crate::ogxbox_compat`]).
 pub const AURORA_SOURCES: &[UrlSource] = &[
     UrlSource {
-        label: "Aurora Website (default)",
+        label: "Site d’Aurora (par défaut)",
         url: DEFAULT_AURORA_URL,
     },
     UrlSource {
-        label: "ConsoleMods mirror",
+        label: "Miroir ConsoleMods",
         url: "https://web.archive.org/web/20241222195356id_/https://consolemods.org/wiki/images/d/dd/Aurora_0.7b.2_-_Release_Package.rar",
     },
     UrlSource {
@@ -179,7 +179,7 @@ impl UrlField {
             Self::Xeunshackle => "XeUnshackle",
             Self::XeunshackleMax => "XeUnshackle Max",
             Self::Aurora => "Aurora",
-            Self::SystemUpdate => "system update",
+            Self::SystemUpdate => "mise à jour système",
         }
     }
 }
@@ -304,13 +304,12 @@ pub fn create_abadavatar(
     status: &dyn Fn(&str),
 ) -> Result<()> {
     // 1. The key must be FAT32 (the console cannot read anything else off USB).
-    status("Checking the USB key…");
+    status("Vérification de la clé USB…");
     let info = DriveInfo::from_path(dest)
         .with_context(|| format!("inspecting {}", dest.display()))?;
     if info.fs_kind != FsKind::Fat32 {
         bail!(
-            "The selected drive is {} — the Xbox 360 only boots from a FAT32 USB key. \
-             Reformat it as FAT32 first, then try again.",
+            "Le disque sélectionné est en {} : la Xbox 360 démarre uniquement depuis une clé USB FAT32. Reformatez-la en FAT32 avant de réessayer.",
             info.fs_kind
         );
     }
@@ -322,7 +321,7 @@ pub fn create_abadavatar(
     check_cancel(cancel)?;
 
     // 4. Assemble the file structure directly on the key.
-    status("Assembling files on the USB key…");
+    status("Préparation des fichiers sur la clé USB…");
     assemble(dest, &staged.abadavatar, &staged.xeunshackle)?;
     if let Some(aurora_dir) = &staged.aurora {
         copy_aurora(aurora_dir, &dest.join("Aurora"))?;
@@ -338,7 +337,7 @@ pub fn create_abadavatar(
 
     // 6. Optional official system update.
     if let Some(su_dir) = &staged.system_update {
-        status("Adding the system update…");
+        status("Ajout de la mise à jour système…");
         copy_tree(su_dir, dest)?;
     }
 
@@ -436,17 +435,16 @@ fn download_component(
 
     if url.is_empty() {
         bail!(
-            "No download URL configured for {label}. Open the ABadAvatar advanced \
-             settings and paste a .zip/.7z/.rar URL for it."
+            "Aucune adresse de téléchargement pour {label}. Ouvrez les paramètres avancés d’ABadAvatar et indiquez une adresse .zip/.7z/.rar."
         );
     }
 
     let ext = archive_extension(url).with_context(|| {
-        format!("{label}: only .zip, .7z and .rar archives are supported (got {url}).")
+        format!("{label} : seules les archives .zip, .7z et .rar sont acceptées (adresse : {url}).")
     })?;
     let dest = work.join(format!("{}.{ext}", key_of(field)));
 
-    status(&format!("Downloading {label}…"));
+    status(&format!("Téléchargement de {label}…"));
     let res = download::download_to_file(url, &dest, label, cancel, status, ABADAVATAR_CANCELLED);
     // Like the extraction below: a cancelled download is reported with this
     // module's own marker as the top-level message, since the GUI matches on
@@ -468,7 +466,7 @@ fn extract_component(
     cancel: &AtomicBool,
     status: &dyn Fn(&str),
 ) -> Result<PathBuf> {
-    status(&format!("Extracting {}…", field.label()));
+    status(&format!("Extraction de {}…", field.label()));
     let out = archive_path
         .parent()
         .unwrap_or(archive_path)
@@ -497,7 +495,7 @@ pub(crate) fn assemble(dest: &Path, aba_dir: &Path, xe_dir: &Path) -> Result<()>
     // while the exploit triggers) writes back to flash right after deleting
     // the console's own — leaving it out would wipe that file from the NAND.
     let aba_content =
-        find_entry(aba_dir, "Content", true).context("ABadAvatar: Content folder not found")?;
+        find_entry(aba_dir, "Content", true).context("ABadAvatar : dossier Content introuvable")?;
     copy_tree(&aba_content, &content_dir)?;
     if let Some(aba_payload) = find_entry(aba_dir, "BadUpdatePayload", true) {
         copy_tree(&aba_payload, &payload_dir)?;
@@ -506,10 +504,10 @@ pub(crate) fn assemble(dest: &Path, aba_dir: &Path, xe_dir: &Path) -> Result<()>
     // XeUnshackle: the folder that directly contains launch.ini holds the full
     // BadUpdatePayload plus the JRPC2/Xbdm modules and launch.ini itself.
     let launch_ini =
-        find_entry(xe_dir, "launch.ini", false).context("XeUnshackle: launch.ini not found")?;
+        find_entry(xe_dir, "launch.ini", false).context("XeUnshackle : launch.ini introuvable")?;
     let xu_dir = launch_ini
         .parent()
-        .context("XeUnshackle: unexpected layout")?;
+        .context("XeUnshackle : structure inattendue")?;
     if let Some(xu_payload) = find_entry(xu_dir, "BadUpdatePayload", true) {
         copy_tree(&xu_payload, &payload_dir)?;
     }
@@ -527,8 +525,8 @@ pub(crate) fn assemble(dest: &Path, aba_dir: &Path, xe_dir: &Path) -> Result<()>
 /// into `aurora_out`, tolerating an extra wrapping folder inside the archive.
 pub(crate) fn copy_aurora(aurora_dir: &Path, aurora_out: &Path) -> Result<()> {
     let aurora_xex = find_entry(aurora_dir, "Aurora.xex", false)
-        .context("Aurora: Aurora.xex not found in the archive")?;
-    let aurora_src = aurora_xex.parent().context("Aurora: unexpected layout")?;
+        .context("Aurora : Aurora.xex introuvable dans l’archive")?;
+    let aurora_src = aurora_xex.parent().context("Aurora : structure inattendue")?;
     copy_tree(aurora_src, aurora_out)
 }
 
@@ -539,7 +537,7 @@ pub(crate) fn copy_aurora(aurora_dir: &Path, aurora_out: &Path) -> Result<()> {
 fn write_xeunshackle_max_config(dest: &Path) -> Result<()> {
     const CONFIG: &str = "AutoStartDelay=0\r\nPlayVideo=0\r\nShowKeys=1\r\nVideoVolume=100\r\n";
     fs::write(dest.join("BadUpdatePayload").join("XeUnshackleConfig.txt"), CONFIG)
-        .context("writing XeUnshackleConfig.txt")
+        .context("écriture de XeUnshackleConfig.txt")
 }
 
 /// Rewrites the `launch.ini` in `dest` so `aurora_xex` (a console path such as
@@ -547,7 +545,7 @@ fn write_xeunshackle_max_config(dest: &Path) -> Result<()> {
 pub(crate) fn set_launch_default(dest: &Path, aurora_xex: &str) -> Result<()> {
     let default_line = format!("Default = {aurora_xex}");
     let path = dest.join("launch.ini");
-    let text = fs::read_to_string(&path).context("reading launch.ini")?;
+    let text = fs::read_to_string(&path).context("lecture de launch.ini")?;
 
     // Preserve the file's existing line ending: these homebrew configs ship as
     // CRLF and the on-console INI parser can be line-ending sensitive, so we
@@ -574,7 +572,7 @@ pub(crate) fn set_launch_default(dest: &Path, aurora_xex: &str) -> Result<()> {
         out.push(default_line);
     }
 
-    fs::write(&path, out.join(newline) + newline).context("writing launch.ini")?;
+    fs::write(&path, out.join(newline) + newline).context("écriture de launch.ini")?;
     Ok(())
 }
 
@@ -585,7 +583,7 @@ pub(crate) fn set_launch_default(dest: &Path, aurora_xex: &str) -> Result<()> {
 /// are left as they are.
 pub(crate) fn retarget_launch_ini_to_hdd(dest: &Path) -> Result<()> {
     let path = dest.join("launch.ini");
-    let text = fs::read_to_string(&path).context("reading launch.ini")?;
+    let text = fs::read_to_string(&path).context("lecture de launch.ini")?;
     let out: String = text
         .split_inclusive('\n')
         .map(|line| {
@@ -603,17 +601,17 @@ pub(crate) fn retarget_launch_ini_to_hdd(dest: &Path) -> Result<()> {
             rewritten
         })
         .collect();
-    fs::write(&path, out).context("writing launch.ini")
+    fs::write(&path, out).context("écriture de launch.ini")
 }
 
 fn write_install_notes(dest: &Path, cfg: &ABadAvatarConfig) -> Result<()> {
     let mut notes = String::new();
     notes.push_str(&format!(
-        "ABadAvatar USB key — created by TinyXbox360BackupManager v{}\n",
+        "Clé USB ABadAvatar — créée par TinyXbox360BackupManager FR v{}\n",
         env!("CARGO_PKG_VERSION")
     ));
     notes.push_str("https://github.com/jeanmatthieud/TinyXbox360BackupManager\n\n");
-    notes.push_str("Components (source URLs used):\n");
+    notes.push_str("Composants (adresses utilisées) :\n");
     let aba_field = cfg.abadavatar_field();
     notes.push_str(&format!("- {:<14} {}\n", format!("{}:", aba_field.label()), cfg.url(aba_field)));
     let xe_field = cfg.xeunshackle_field();
@@ -621,25 +619,24 @@ fn write_install_notes(dest: &Path, cfg: &ABadAvatarConfig) -> Result<()> {
     notes.push_str(&format!("- Aurora:        {}\n", cfg.url(UrlField::Aurora)));
     if cfg.include_system_update {
         notes.push_str(&format!(
-            "- System update: {}\n",
+            "- Mise à jour système : {}\n",
             cfg.url(UrlField::SystemUpdate)
         ));
     }
-    notes.push_str("\nlaunch.ini Default set to: Usb:\\Aurora\\Aurora.xex\n");
+    notes.push_str("\nChemin Default dans launch.ini : Usb:\\Aurora\\Aurora.xex\n");
     if cfg.xeunshackle_autostart {
         notes.push_str(
-            "XeUnshackle Max: boot video off, exits to Aurora without delay \
-             (BadUpdatePayload\\XeUnshackleConfig.txt).\n",
+            "XeUnshackle Max : vidéo de démarrage désactivée, lancement d’Aurora sans délai (BadUpdatePayload\\XeUnshackleConfig.txt).\n",
         );
     }
     notes.push('\n');
-    notes.push_str("Usage reminders:\n");
-    notes.push_str("- Disconnect Wi-Fi/Ethernet before booting the console (avoids an Xbox Live ban).\n");
-    notes.push_str("- The boot chain triggers on the profile/avatar selection screen.\n");
-    notes.push_str("- Not persistent: repeat on every console reboot.\n");
-    notes.push_str("- FAT32 limits files to 4 GB: manage your game library with TinyXbox360BackupManager.\n");
+    notes.push_str("Rappels d’utilisation :\n");
+    notes.push_str("- Déconnectez le Wi-Fi/Ethernet avant de démarrer la console (pour éviter un bannissement Xbox Live).\n");
+    notes.push_str("- Le démarrage se déclenche à l’écran de sélection des profils/avatars.\n");
+    notes.push_str("- Non persistant : à répéter après chaque redémarrage de la console.\n");
+    notes.push_str("- FAT32 limite les fichiers à 4 Go : gérez vos jeux avec TinyXbox360BackupManager.\n");
 
-    fs::write(dest.join("INSTALL_NOTES.txt"), notes).context("writing INSTALL_NOTES.txt")?;
+    fs::write(dest.join("INSTALL_NOTES.txt"), notes).context("écriture de INSTALL_NOTES.txt")?;
     Ok(())
 }
 

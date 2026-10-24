@@ -69,7 +69,7 @@ export component GameRow inherits Rectangle {
 
         Text {
             width: GameTableColumns.size-width;
-            text: "\{game.size-gib.to-fixed(2)} GiB";
+            text: "\{game.size-gib.to-fixed(2)} Gio";
             horizontal-alignment: right;
             vertical-alignment: center;
         }
@@ -86,7 +86,7 @@ export component GameRow inherits Rectangle {
             IconButton {
                 x: 1px;
                 y: 0px;
-                tooltip: "Game info";
+                tooltip: "Informations sur le jeu";
                 icon: IconSet.Info;
                 height: 24px;
                 width: 24px;
@@ -107,7 +107,7 @@ export component GameRow inherits Rectangle {
                 x: 26px;
                 y: 0px;
                 icon: IconSet.Trash;
-                tooltip: "Delete game";
+                tooltip: "Supprimer le jeu";
                 height: 24px;
                 width: 24px;
                 squared: true;
@@ -123,6 +123,6 @@ export component GameRow inherits Rectangle {
     // last so it covers the row and swallows the clicks.
     if game.busy: TooltipArea {
         disabled: true;
-        tooltip: "Being written to — wait for the transfer to finish";
+        tooltip: "Écriture en cours — attendez la fin du transfert";
     }
 }

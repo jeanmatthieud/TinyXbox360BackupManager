@@ -33,13 +33,13 @@ export component DriveInfoCard inherits ToolboxCard {
 
     pure function fs-comment(fs-kind: string) -> string {
         if fs-kind == "FATX" {
-            "the Xbox 360's own filesystem"
+            "système de fichiers de la Xbox 360"
         } else if fs-kind == "FAT32" {
-            "optimal choice for Xbox 360 USB storage"
+            "choix optimal pour le stockage USB Xbox 360"
         } else if fs-kind == "NTFS" || fs-kind == "exFAT" {
-            "not readable by the Xbox 360 (fine for a local staging folder)"
+            "non lisible par la Xbox 360 (convient à un dossier temporaire sur PC)"
         } else {
-            "fine for a local staging folder, but not readable by the Xbox 360"
+            "convient à un dossier temporaire sur PC, mais non lisible par la Xbox 360"
         }
     }
 
@@ -53,17 +53,17 @@ export component DriveInfoCard inherits ToolboxCard {
 
     pure function allocation-granularity-comment(optimal: bool, fatx: bool) -> string {
         if fatx {
-            "cluster size chosen by the console"
+            "taille des clusters choisie par la console"
         } else if optimal {
             "optimal"
         } else {
-            "not optimal, but should work"
+            "non optimal, mais devrait fonctionner"
         }
     }
 
     CardHeader {
         icon: IconSet.HardDrive;
-        title: "Drive info";
+        title: "Informations du disque";
     }
 
     HorizontalLine { }
@@ -79,7 +79,7 @@ export component DriveInfoCard inherits ToolboxCard {
         }
 
         Text {
-            text: "Filesystem: \{UiState.drive-info.fs-kind}  (\{fs-comment(UiState.drive-info.fs-kind)})";
+            text: "Système de fichiers : \{UiState.drive-info.fs-kind}  (\{fs-comment(UiState.drive-info.fs-kind)})";
         }
     }
 
@@ -94,7 +94,7 @@ export component DriveInfoCard inherits ToolboxCard {
         }
 
         Text {
-            text: "Allocation granularity: \{UiState.drive-info.allocation-granularity}  (\{allocation-granularity-comment(is-optimal-allocation-granularity, is-fatx)})";
+            text: "Unité d’allocation : \{UiState.drive-info.allocation-granularity}  (\{allocation-granularity-comment(is-optimal-allocation-granularity, is-fatx)})";
         }
     }
 
@@ -110,7 +110,7 @@ export component DriveInfoCard inherits ToolboxCard {
         }
 
         Text {
-            text: "Bad Storage: \{UiState.drive-info.bad-storage ? "yes" : "no"}";
+            text: "Bad Storage : \{UiState.drive-info.bad-storage ? "oui" : "non"}";
         }
     }
 }

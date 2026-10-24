@@ -23,7 +23,7 @@ export component FtpTargetModal inherits Modal {
         spacing: 10px;
 
         Text {
-            text: "Remote Xbox 360 over WiFi / Ethernet";
+            text: "Xbox 360 en Wi-Fi / Ethernet";
             font-size: 18px;
         }
 
@@ -43,19 +43,19 @@ export component FtpTargetModal inherits Modal {
                 VerticalLayout {
                     alignment: center;
                     Text {
-                        text: "Searching for your Xbox360 on the network…";
+                        text: "Recherche de votre Xbox 360 sur le réseau…";
                         wrap: word-wrap;
                     }
                 }
             }
 
             if !UiState.ftp-scanning && UiState.ftp-scan-found-ip != "": Text {
-                text: "🎉 Xbox360 found at " + UiState.ftp-scan-found-ip;
+                text: "🎉 Xbox 360 trouvée à l’adresse " + UiState.ftp-scan-found-ip;
                 wrap: word-wrap;
             }
 
             if !UiState.ftp-scanning && UiState.ftp-scan-found-ip == "": Text {
-                text: "🥺 No Xbox360 found on the network.\nMake sure it is on with the 'FTP Server module' started, or enter its details manually.";
+                text: "🥺 Aucune Xbox 360 trouvée sur le réseau.\nVérifiez qu’elle est allumée et que le module « FTP Server » fonctionne, ou saisissez ses coordonnées.";
                 wrap: word-wrap;
             }
         }
@@ -65,7 +65,7 @@ export component FtpTargetModal inherits Modal {
             spacing: 10px;
 
             Text {
-                text: "On the Aurora dashboard, press 'Select' to reveal its IP, then\n'Start > Modules > FTP Server' for the credentials.";
+                text: "Dans Aurora, appuyez sur « Select » pour afficher l’adresse IP, puis\n« Start > Modules > FTP Server » pour les identifiants.";
                 wrap: word-wrap;
             }
 
@@ -77,7 +77,7 @@ export component FtpTargetModal inherits Modal {
                     width: 90px;
 
                     Text {
-                        text: "Xbox360 IP:";
+                        text: "IP Xbox 360 :";
                     }
                 }
 
@@ -92,7 +92,7 @@ export component FtpTargetModal inherits Modal {
                     alignment: center;
 
                     Text {
-                        text: "Port:";
+                        text: "Port :";
                     }
                 }
 
@@ -111,7 +111,7 @@ export component FtpTargetModal inherits Modal {
                     width: 90px;
 
                     Text {
-                        text: "User:";
+                        text: "Utilisateur :";
                     }
                 }
 
@@ -125,7 +125,7 @@ export component FtpTargetModal inherits Modal {
                     alignment: center;
 
                     Text {
-                        text: "Password:";
+                        text: "Mot de passe :";
                     }
                 }
 
@@ -152,7 +152,7 @@ export component FtpTargetModal inherits Modal {
             // "Test connection" only makes sense once credentials are shown.
             if UiState.ftp-show-manual: IconButton {
                 icon: IconSet.Cable;
-                label: "Test connection";
+                label: "Tester la connexion";
                 clicked => Dispatcher.dispatch(Message.TestFtp, "");
             }
 
@@ -163,7 +163,7 @@ export component FtpTargetModal inherits Modal {
                 // Back to the target-selection modal this was opened from.
                 IconButton {
                     horizontal-stretch: 0;
-                    label: "Previous";
+                    label: "Précédent";
                     clicked => {
                         Dispatcher.dispatch(Message.CancelFtpScan, "");
                         UiState.editing-ftp-target = false;
@@ -188,7 +188,7 @@ export component FtpTargetModal inherits Modal {
                     // the primary button.
                     if !UiState.ftp-show-manual: IconButton {
                         icon: IconSet.Keyboard;
-                        label: "Enter manually";
+                        label: "Saisir manuellement";
                         clicked => {
                             Dispatcher.dispatch(Message.CancelFtpScan, "");
                             UiState.ftp-show-manual = true;
@@ -199,7 +199,7 @@ export component FtpTargetModal inherits Modal {
                     // the scan, or entered manually).
                     IconButton {
                         icon: IconSet.MonitorUp;
-                        label: "Connect";
+                        label: "Connecter";
                         kind: IconButtonKind.Primary;
                         disabled: !UiState.ftp-show-manual && UiState.ftp-scan-found-ip == "";
                         clicked => {

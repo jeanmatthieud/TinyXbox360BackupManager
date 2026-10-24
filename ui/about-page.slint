@@ -38,13 +38,18 @@ export component AboutPage inherits Rectangle {
                     alignment: center;
 
                     Text {
-                        text: "TinyXbox360BackupManager v\{UiState.app-version}";
-                        font-size: 18px;
+                        text: "TinyXbox360BackupManager FR v\{UiState.app-version}";
+                        font-size: 16px;
                         font-weight: 700;
                     }
 
                     Text {
                         text: "Copyright © 2026 Jean-Matthieu";
+                    }
+
+                    Text {
+                        text: "Édition française non officielle · FR 1";
+                        font-size: 12px;
                     }
 
                     Link {
@@ -72,13 +77,13 @@ export component AboutPage inherits Rectangle {
                 }
 
                 Text {
-                    text: " Credits";
+                    text: " Crédits";
                     font-size: 16px;
                 }
             }
 
             Text {
-                text: "This app would not exist without the work of many passionate people: the creator of TinyWiiBackupManager, the developers, sceners and communities behind the tools, exploits and databases it builds on.";
+                text: "Cette application existe grâce au travail de nombreux passionnés : le créateur de TinyWiiBackupManager, les développeurs et les communautés à l’origine des outils, exploits et bases de données utilisés.";
                 wrap: word-wrap;
             }
 
@@ -86,7 +91,7 @@ export component AboutPage inherits Rectangle {
                 padding-bottom: 6px;
 
                 Link {
-                    label: "See the full credits";
+                    label: "Voir tous les crédits";
                     uri: "https://github.com/jeanmatthieud/TinyXbox360BackupManager#heart-credits";
                     icon: IconSet.BookOpen;
                 }
@@ -104,13 +109,13 @@ export component AboutPage inherits Rectangle {
                 }
 
                 Text {
-                    text: " Support the project";
+                    text: " Soutenir le projet";
                     font-size: 16px;
                 }
             }
 
             Text {
-                text: "TinyXbox360BackupManager is free and will stay free. Donations are what make it possible for me to keep working on it — new features, fixes, and testing on real hardware.";
+                text: "TinyXbox360BackupManager est gratuit et le restera. Les dons permettent à son auteur de poursuivre le développement : nouvelles fonctions, corrections et essais sur du matériel réel.";
                 wrap: word-wrap;
             }
 
@@ -147,7 +152,7 @@ export component AboutPage inherits Rectangle {
                 }
 
                 Text {
-                    text: "TinyXbox360BackupManager is intended strictly for legal backup use and is not affiliated with or endorsed by Microsoft. Use of TinyXbox360BackupManager for pirated or unauthorized copies of games is strictly prohibited.";
+                    text: "TinyXbox360BackupManager est réservé aux copies de sauvegarde légales et n’est ni affilié à Microsoft ni approuvé par Microsoft. Son utilisation avec des copies piratées ou non autorisées est strictement interdite.";
                     wrap: word-wrap;
                 }
             }
@@ -164,13 +169,13 @@ export component AboutPage inherits Rectangle {
         spacing: 10px;
 
         Link {
-            label: "Data directory";
+            label: "Dossier des données";
             uri: UiState.data-dir;
             icon: IconSet.Folder;
         }
 
         Link {
-            label: "Source code";
+            label: "Code source";
             uri: "https://github.com/jeanmatthieud/TinyXbox360BackupManager";
         }
     }

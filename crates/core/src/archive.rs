@@ -13,11 +13,11 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 /// Why a volume of a split RAR set is refused, at pick time
 /// ([`is_rar_volume`]) and again at extraction.
-pub const MULTI_VOLUME_RAR: &str = "multi-volume RAR archives are not supported yet";
+pub const MULTI_VOLUME_RAR: &str = "les archives RAR en plusieurs volumes ne sont pas encore prises en charge";
 
 /// Why a RAR with encrypted headers or members is refused: `rars` is built
 /// without its `encryption` feature, and the app never asks for a password.
-pub const ENCRYPTED_RAR: &str = "password-protected RAR archives are not supported";
+pub const ENCRYPTED_RAR: &str = "les archives RAR protégées par mot de passe ne sont pas prises en charge";
 
 /// True if the extension is a supported game archive format (.7z / .zip /
 /// .rar). Multi-volume RAR sets are not supported yet: see [`is_rar_volume`].
@@ -140,7 +140,7 @@ fn extract_zip(
     progress: &mut dyn FnMut(u64, u64),
 ) -> Result<()> {
     let file = File::open(path).with_context(|| format!("opening {}", path.display()))?;
-    let mut archive = zip::ZipArchive::new(file).context("reading zip archive")?;
+    let mut archive = zip::ZipArchive::new(file).context("lecture de l’archive ZIP")?;
     let total: u64 = archive
         .decompressed_size()
         .and_then(|s| u64::try_from(s).ok())
@@ -154,10 +154,10 @@ fn extract_zip(
         if is_cancelled(cancel) {
             bail!(CONVERSION_CANCELLED);
         }
-        let mut entry = archive.by_index(i).context("reading zip entry")?;
+        let mut entry = archive.by_index(i).context("lecture d’une entrée ZIP")?;
         // enclosed_name rejects absolute paths and `..` traversal.
         let Some(rel) = entry.enclosed_name() else {
-            bail!("unsafe path in archive: {}", entry.name());
+            bail!("chemin non sûr dans l’archive : {}", entry.name());
         };
         let out = dest.join(rel);
         if entry.is_dir() {
@@ -195,7 +195,7 @@ fn extract_7z(
             return Err(sevenz_rust2::Error::Other(CONVERSION_CANCELLED.into()));
         }
         let rel = sanitized_relative_path(entry.name()).ok_or_else(|| {
-            sevenz_rust2::Error::Other(format!("unsafe path in archive: {}", entry.name()).into())
+            sevenz_rust2::Error::Other(format!("chemin non sûr dans l’archive : {}", entry.name()).into())
         })?;
         let out = dest.join(rel);
         if entry.is_directory() {
@@ -247,7 +247,7 @@ fn extract_rar(
         Err(e) if matches!(e.root_cause(), rars::Error::FeatureDisabled { .. }) => {
             bail!(ENCRYPTED_RAR)
         }
-        Err(e) => return Err(e).context("reading rar archive"),
+        Err(e) => return Err(e).context("lecture de l’archive RAR"),
     };
     // Already refused at pick time; checked again for the Toolbox, whose
     // downloads are never picked.
@@ -277,7 +277,7 @@ fn extract_rar(
             archive.extract_to_with_options(options, |meta| {
                 let name = meta.name_lossy();
                 let rel = sanitized_relative_path(&name)
-                    .ok_or_else(|| io::Error::other(format!("unsafe path in archive: {name}")))?;
+                    .ok_or_else(|| io::Error::other(format!("chemin non sûr dans l’archive : {name}")))?;
                 let out = dest.join(rel);
                 if meta.is_directory {
                     std::fs::create_dir_all(&out)?;
@@ -312,7 +312,7 @@ fn extract_rar(
     if result.is_err() && (stop.is_cancelled() || is_cancelled(cancel)) {
         bail!(CONVERSION_CANCELLED);
     }
-    result.context("extracting rar archive")?;
+    result.context("extraction de l’archive RAR")?;
     progress(total, total);
     Ok(())
 }

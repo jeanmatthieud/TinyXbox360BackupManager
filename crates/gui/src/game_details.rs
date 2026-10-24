@@ -35,7 +35,7 @@ pub fn components(details: &GameDetails, game: &DisplayedGame) -> Vec<DisplayedG
         rows.push(DisplayedGameComponent {
             kind: "Disc".into(),
             id: "".into(),
-            description: "Game disc".into(),
+            description: "Disque de jeu".into(),
             size_gib: 0.0,
             status: ComponentStatus::Missing,
             license_lock: Default::default(),
@@ -77,9 +77,9 @@ pub fn components(details: &GameDetails, game: &DisplayedGame) -> Vec<DisplayedG
 /// `GameFormat::label` ("XBLA", "XEX", "XBE").
 fn base_description(game: &DisplayedGame) -> slint::SharedString {
     match game.format.as_str() {
-        "XBLA" => "Arcade package".into(),
-        "XEX" | "XBE" => "Extracted files".into(),
-        _ => "Game files".into(),
+        "XBLA" => "Paquet Arcade".into(),
+        "XEX" | "XBE" => "Fichiers extraits".into(),
+        _ => "Fichiers du jeu".into(),
     }
 }
 
@@ -90,9 +90,9 @@ fn license_tooltip(lock: Option<&LicenseLock>) -> slint::SharedString {
     let Some(lock) = lock else {
         return Default::default();
     };
-    let mut lines = vec!["Licensed to:".to_string()];
+    let mut lines = vec!["Licence attribuée à :".to_string()];
     lines.extend(lock.console_ids.iter().map(|id| format!("• Console {id:010X}")));
-    lines.extend(lock.xuids.iter().map(|id| format!("• Profile {id:016X}")));
+    lines.extend(lock.xuids.iter().map(|id| format!("• Profil {id:016X}")));
     lines.join("\n").into()
 }
 

@@ -28,9 +28,9 @@ impl IsoKind {
     pub fn label(&self) -> &'static str {
         match self {
             IsoKind::Xbox360Game => "Xbox 360 Game",
-            IsoKind::XboxOriginal => "Original Xbox Game",
-            IsoKind::ContentDisc => "Installation disc / DLC",
-            IsoKind::BundledContent => "Bonus disc (bundled DLC / updates)",
+            IsoKind::XboxOriginal => "Jeu Xbox originale",
+            IsoKind::ContentDisc => "Disque d’installation / DLC",
+            IsoKind::BundledContent => "Disque bonus (DLC / mises à jour inclus)",
         }
     }
 }
@@ -100,7 +100,7 @@ pub fn inspect(path: &Path) -> Result<IsoInfo> {
         });
     }
 
-    let title_info = image.title_info().context("reading game executable")?;
+    let title_info = image.title_info().context("lecture de l’exécutable du jeu")?;
     let exe = &title_info.execution_info;
 
     let kind = match title_info.content_type {

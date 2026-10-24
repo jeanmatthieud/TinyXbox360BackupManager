@@ -27,7 +27,7 @@ component CompatExpertBody inherits VerticalLayout {
             alignment: center;
 
             Text {
-                text: "Emulator pack:";
+                text: "Pack d’émulateur :";
             }
         }
 
@@ -62,12 +62,12 @@ component CompatExpertBody inherits VerticalLayout {
         padding-left: pack-label.width + picker.spacing;
 
         WarningNote {
-            text: "Requires Aurora + BadUpdate/ABadAvatar/RGH to run.";
+            text: "Nécessite Aurora + BadUpdate/ABadAvatar/RGH.";
         }
     }
 
     CheckBox {
-        text: "Backup the current compatibility files first (zip file)";
+        text: "Sauvegarder d’abord les fichiers de rétrocompatibilité actuels (ZIP)";
         checked: UiState.compat.backup-first;
         toggled => {
             Dispatcher.dispatch(Message.ToggleCompatBackup, "");
@@ -75,7 +75,7 @@ component CompatExpertBody inherits VerticalLayout {
     }
 
     CheckBox {
-        text: "Update the per-title configs to support more games";
+        text: "Mettre à jour les configurations par jeu pour améliorer la compatibilité";
         checked: UiState.compat.update-configs;
         toggled => {
             Dispatcher.dispatch(Message.ToggleCompatConfigs, "");
@@ -88,7 +88,7 @@ component CompatExpertBody inherits VerticalLayout {
         padding-left: 24px;
 
         Text {
-            text: "Community configs from " + UiState.compat.configs-source + ", written to Compatibility/Configs.";
+            text: "Configurations communautaires de " + UiState.compat.configs-source + ", copiées dans Compatibility/Configs.";
             font-size: 12px;
             wrap: word-wrap;
         }
@@ -99,8 +99,8 @@ component CompatExpertBody inherits VerticalLayout {
     CardActionRow {
         icon: IconSet.Hammer;
         text: !UiState.installing-compat
-            ? "Install the compatibility files"
-            : "Working… see the status bar below.";
+            ? "Installer les fichiers de rétrocompatibilité"
+            : "En cours… consultez la barre d’état en bas.";
         clicked => Dispatcher.dispatch(Message.InstallCompat, "");
     }
 
@@ -108,7 +108,7 @@ component CompatExpertBody inherits VerticalLayout {
     // it on a drive that has none. Asks which once the drive is picked.
     if !UiState.installing-compat: CardActionRow {
         icon: IconSet.HardDrive;
-        text: "Create / format the compatibility partition (🧪 boldly experimental)";
+        text: "Créer / formater la partition de rétrocompatibilité (🧪 très expérimental)";
         clicked => Dispatcher.dispatch(Message.FormatCompat, "");
     }
 }
@@ -121,7 +121,7 @@ component CompatSimpleBody inherits VerticalLayout {
     spacing: 10px;
 
     Text {
-        text: "The current files are saved to a zip file first: you pick where before anything is written.";
+        text: "Les fichiers actuels sont d’abord sauvegardés dans un ZIP : vous choisissez son emplacement avant toute écriture.";
         font-size: 12px;
         wrap: word-wrap;
     }
@@ -130,18 +130,18 @@ component CompatSimpleBody inherits VerticalLayout {
 
     CardActionRow {
         icon: IconSet.Undo2;
-        text: "Restore retail (as a factory drive carries it)";
+        text: "Restaurer la version d’origine du disque";
         clicked => Dispatcher.dispatch(Message.InstallCompat, "retail");
     }
 
     CardActionRow {
         icon: IconSet.Hammer;
-        text: "Apply patch (no whitelist, with HUD)";
+        text: "Appliquer le patch (sans liste blanche, avec HUD)";
         clicked => Dispatcher.dispatch(Message.InstallCompat, "hacked_hud");
     }
 
     WarningNote {
-        text: "The patch requires Aurora + BadUpdate/ABadAvatar/RGH to run.";
+        text: "Le patch nécessite Aurora + BadUpdate/ABadAvatar/RGH.";
     }
 }
 
@@ -158,16 +158,16 @@ export component OgXboxCompatCard inherits ToolboxCard {
     // cancellation unreadable.
     disabled: UiState.compat-busy || UiState.creating-abadavatar || UiState.abadavatar-hdd-tool-busy || target-connected;
     disabled-tooltip: target-connected
-        ? "Disconnect from the current target first"
+        ? "Déconnectez d’abord la destination actuelle"
         : UiState.creating-abadavatar
-            ? "Wait for the ABadAvatar USB key to be written."
+            ? "Attendez la fin de l’écriture de la clé USB ABadAvatar."
             : UiState.abadavatar-hdd-tool-busy
-                ? "Wait for ABadAvatar to be written to the hard drive."
+                ? "Attendez la fin de l’écriture d’ABadAvatar sur le disque dur."
                 : "";
 
     CardHeader {
         icon: IconSet.Gamepad2;
-        title: "Original Xbox compatibility";
+        title: "Rétrocompatibilité Xbox originale";
 
         if UiState.installing-compat: Spinner {
             width: 27px;
@@ -180,7 +180,7 @@ export component OgXboxCompatCard inherits ToolboxCard {
         if !UiState.installing-compat: IconButton {
             icon: IconSet.Upload;
             width: self.height;
-            tooltip: "Restore a compatibility backup (.zip)";
+            tooltip: "Restaurer une sauvegarde de rétrocompatibilité (.zip)";
             clicked => Dispatcher.dispatch(Message.RestoreCompat, "");
         }
     }
@@ -188,7 +188,7 @@ export component OgXboxCompatCard inherits ToolboxCard {
     HorizontalLine { }
 
     Text {
-        text: "Installs Xbox emulator files to HddX to expand original Xbox game compatibility.";
+        text: "Installe les fichiers d’émulation dans HddX pour étendre la compatibilité Xbox originale.";
         wrap: word-wrap;
     }
 

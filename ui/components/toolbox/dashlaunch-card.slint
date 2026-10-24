@@ -98,7 +98,7 @@ component ProtectionRow inherits HorizontalLayout {
             alignment: start;
 
             Text {
-                text: "To fix it, set in launch.ini:";
+                text: "Pour corriger cela, indiquez dans launch.ini :";
                 font-size: 12px;
                 color: MyPalette.foreground.transparentize(0.35);
             }
@@ -142,8 +142,8 @@ export component DashlaunchCard inherits ToolboxCard {
 
     disabled: UiState.job-running || UiState.abadavatar-hdd-busy;
     disabled-tooltip: UiState.abadavatar-hdd-busy
-        ? "Available once ABadAvatar is written to the hard drive."
-        : "Available once the queue has finished.";
+        ? "Disponible après l’écriture d’ABadAvatar sur le disque dur."
+        : "Disponible lorsque la file d’attente sera terminée.";
 
     CardHeader {
         icon: IconSet.SlidersHorizontal;
@@ -158,7 +158,7 @@ export component DashlaunchCard inherits ToolboxCard {
         if !UiState.writing-dashlaunch: IconButton {
             icon: IconSet.RefreshCcw;
             width: self.height;
-            tooltip: "Read launch.ini again";
+            tooltip: "Relire launch.ini";
             clicked => Dispatcher.dispatch(Message.FetchDashlaunch, "");
         }
     }
@@ -180,13 +180,13 @@ export component DashlaunchCard inherits ToolboxCard {
                 horizontal-stretch: 1;
 
                 Text {
-                    text: "Play content from another console";
+                    text: "Utiliser le contenu d’une autre console";
                     font-weight: 600;
                     wrap: word-wrap;
                 }
 
                 Text {
-                    text: "Lets Arcade games and add-ons (DLC) bought on another Xbox 360 run on this one.";
+                    text: "Permet d’exécuter les jeux Arcade et les extensions (DLC) achetés sur une autre Xbox 360.";
                     font-size: 12px;
                     wrap: word-wrap;
                     color: MyPalette.foreground.transparentize(0.35);
@@ -225,8 +225,8 @@ export component DashlaunchCard inherits ToolboxCard {
 
                 Text {
                     text: root.all-on
-                        ? "On · all 3 settings"
-                        : root.mixed ? "Custom · " + root.patches-on + " of 3 settings on" : "Off · all 3 settings";
+                        ? "Activé · les 3 réglages"
+                        : root.mixed ? "Personnalisé · " + root.patches-on + " réglages sur 3 activés" : "Désactivé · les 3 réglages";
                     font-size: 12px;
                     color: root.mixed ? MyPalette.accent-background : MyPalette.foreground.transparentize(0.35);
                 }
@@ -256,7 +256,7 @@ export component DashlaunchCard inherits ToolboxCard {
                 horizontal-stretch: 1;
 
                 PatchRow {
-                    label: "Add-ons (DLC)";
+                    label: "Extensions (DLC)";
                     key: "contpatch";
                     checked: UiState.dashlaunch.contpatch;
                     enabled: root.can-edit;
@@ -266,7 +266,7 @@ export component DashlaunchCard inherits ToolboxCard {
                 }
 
                 PatchRow {
-                    label: "Arcade games";
+                    label: "Jeux Arcade";
                     key: "xblapatch";
                     checked: UiState.dashlaunch.xblapatch;
                     enabled: root.can-edit;
@@ -276,7 +276,7 @@ export component DashlaunchCard inherits ToolboxCard {
                 }
 
                 PatchRow {
-                    label: "License check";
+                    label: "Vérification des licences";
                     key: "licpatch";
                     checked: UiState.dashlaunch.licpatch;
                     enabled: root.can-edit;
@@ -292,17 +292,17 @@ export component DashlaunchCard inherits ToolboxCard {
 
     ProtectionRow {
         ok: UiState.dashlaunch.liveblock;
-        ok-text: "Xbox Live is blocked";
-        bad-text: "Xbox Live isn't blocked";
-        risk: "A modded console that reaches Xbox Live can be banned for good.";
+        ok-text: "Xbox Live est bloqué";
+        bad-text: "Xbox Live n’est pas bloqué";
+        risk: "Une console modifiée qui accède au Xbox Live risque un bannissement définitif.";
         fix: "liveblock = true";
     }
 
     ProtectionRow {
         ok: UiState.dashlaunch.noupdater;
-        ok-text: "System updates are blocked";
-        bad-text: "System updates aren't blocked";
-        risk: "An update could stop the hack from working.";
+        ok-text: "Les mises à jour système sont bloquées";
+        bad-text: "Les mises à jour système ne sont pas bloquées";
+        risk: "Une mise à jour pourrait empêcher la modification de fonctionner.";
         fix: "noupdater = true";
     }
 
@@ -332,7 +332,7 @@ export component DashlaunchCard inherits ToolboxCard {
         }
 
         if UiState.config.expert-mode: Text {
-            text: "Changes apply the next time the console restarts.";
+            text: "Les changements s’appliquent au prochain redémarrage de la console.";
             font-size: 11px;
             wrap: word-wrap;
             color: MyPalette.foreground.transparentize(0.5);

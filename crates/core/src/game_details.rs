@@ -31,7 +31,7 @@ fn is_media_id(name: &str) -> bool {
 fn disc_description(info: Option<stfs::StfsInfo>) -> String {
     match info {
         Some(info) if info.disc_in_set > 1 => {
-            format!("Disc {}", info.disc_number)//, info.disc_in_set)
+            format!("Disque {}", info.disc_number)//, info.disc_in_set)
         }
         _ => "Disc".to_string(),
     }
@@ -152,7 +152,7 @@ fn delete_content_local(
     match kind {
         ContentKind::Disc => {
             let content_type =
-                god_content_type(game).context("deleting a disc from a non-GOD game")?;
+                god_content_type(game).context("suppression d’un disque d’un jeu qui n’est pas au format GOD")?;
             let type_dir = game.path.join(content_type);
             let data_dir = type_dir.join(format!("{file_name}.data"));
             // Remove the (potentially large) payload with progress, then the
@@ -193,7 +193,7 @@ fn delete_content_remote(
     match kind {
         ContentKind::Disc => {
             let content_type =
-                god_content_type(game).context("deleting a disc from a non-GOD game")?;
+                god_content_type(game).context("suppression d’un disque d’un jeu qui n’est pas au format GOD")?;
             let type_dir = format!("{remote}/{content_type}");
             // A corrupted disc may have a header but no `.data` folder, so
             // its absence is fine — but a genuine removal failure (network,

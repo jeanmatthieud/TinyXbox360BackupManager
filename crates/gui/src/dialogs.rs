@@ -12,7 +12,7 @@ const INPUT_DIALOG_FILTER: &[&str] = &["iso", "7z", "zip", "rar"];
 pub fn pick_mount_point(window_handle: &WindowHandle) -> Option<PathBuf> {
     FileDialog::new()
         .set_parent(window_handle)
-        .set_title("Select Drive/Mount Point")
+        .set_title("Choisir le disque / point de montage")
         .pick_folder()
 }
 
@@ -21,7 +21,7 @@ pub fn pick_mount_point(window_handle: &WindowHandle) -> Option<PathBuf> {
 pub fn pick_storage_folder(window_handle: &WindowHandle, start_dir: &Path) -> Option<PathBuf> {
     FileDialog::new()
         .set_parent(window_handle)
-        .set_title("Select storage folder")
+        .set_title("Choisir le dossier de stockage")
         .set_directory(start_dir)
         .pick_folder()
 }
@@ -34,9 +34,9 @@ pub fn save_compat_backup(window_handle: &WindowHandle) -> Option<PathBuf> {
     // keep a backup, and the desktop already reopens where the user last saved.
     let path = FileDialog::new()
         .set_parent(window_handle)
-        .set_title("Save the current compatibility files")
+        .set_title("Sauvegarder les fichiers de rétrocompatibilité actuels")
         .set_file_name("compatibility-backup.zip")
-        .add_filter("Zip archive", &["zip"])
+        .add_filter("Archive ZIP", &["zip"])
         .save_file()?;
 
     // A filter is a hint, not a rule: some desktops hand back whatever was
@@ -62,8 +62,8 @@ pub fn save_compat_backup(window_handle: &WindowHandle) -> Option<PathBuf> {
 pub fn pick_compat_backup(window_handle: &WindowHandle) -> Option<PathBuf> {
     FileDialog::new()
         .set_parent(window_handle)
-        .set_title("Select a compatibility backup")
-        .add_filter("Zip archive", &["zip"])
+        .set_title("Choisir une sauvegarde de rétrocompatibilité")
+        .add_filter("Archive ZIP", &["zip"])
         .pick_file()
 }
 
@@ -73,19 +73,19 @@ pub fn pick_compat_backup(window_handle: &WindowHandle) -> Option<PathBuf> {
 pub fn pick_fatx_image(window_handle: &WindowHandle) -> Option<PathBuf> {
     FileDialog::new()
         .set_parent(window_handle)
-        .set_title("Select an Xbox 360 disk image")
-        .add_filter("Disk images", &["img", "bin", "raw", "hdd"])
-        .add_filter("All files", &["*"])
+        .set_title("Choisir une image disque Xbox 360")
+        .add_filter("Images disque", &["img", "bin", "raw", "hdd"])
+        .add_filter("Tous les fichiers", &["*"])
         .pick_file()
 }
 
 pub fn pick_games(window_handle: &WindowHandle) -> Vec<PathBuf> {
     FileDialog::new()
         .set_parent(window_handle)
-        .set_title("Select Games")
-        .add_filter("Xbox games (ISO / XBLA archive)", INPUT_DIALOG_FILTER)
+        .set_title("Choisir les jeux")
+        .add_filter("Jeux Xbox (ISO / archive XBLA)", INPUT_DIALOG_FILTER)
         // STFS packages (XBLA/DLC) usually have no extension.
-        .add_filter("All files", &["*"])
+        .add_filter("Tous les fichiers", &["*"])
         .pick_files()
         .unwrap_or_default()
 }
@@ -93,7 +93,7 @@ pub fn pick_games(window_handle: &WindowHandle) -> Vec<PathBuf> {
 pub fn pick_games_r(window_handle: &WindowHandle) -> Vec<PathBuf> {
     let res = FileDialog::new()
         .set_parent(window_handle)
-        .set_title("Select folder (games will be searched recursively)")
+        .set_title("Choisir un dossier (recherche dans les sous-dossiers)")
         .pick_folder();
 
     let mut paths = Vec::new();

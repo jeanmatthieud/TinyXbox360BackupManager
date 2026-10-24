@@ -10,7 +10,7 @@
 use txbm_core::{abadavatar::ComponentDownloadError, download::DownloadError};
 
 /// Where the Toolbox download URLs are edited.
-const DOWNLOAD_SOURCES: &str = "Settings › Download sources";
+const DOWNLOAD_SOURCES: &str = "Paramètres › Sources de téléchargement";
 
 /// Rewords an ABadAvatar component download failure, pointing at the settings
 /// where its source can be changed. `None` if `err` is not one.
@@ -18,9 +18,9 @@ pub fn abadavatar(err: &anyhow::Error) -> Option<String> {
     let failure = ComponentDownloadError::find(err)?;
     log(&failure.cause);
     let advice = if failure.field.sources().is_empty() {
-        format!("Try again later, or point it at another URL in {DOWNLOAD_SOURCES}.")
+        format!("Réessayez plus tard ou choisissez une autre adresse dans {DOWNLOAD_SOURCES}.")
     } else {
-        format!("Pick another source for it in {DOWNLOAD_SOURCES}.")
+        format!("Choisissez une autre source dans {DOWNLOAD_SOURCES}.")
     };
     Some(format!("{}. {advice}", failure.cause))
 }
@@ -32,14 +32,13 @@ pub fn compat(err: &anyhow::Error) -> Option<String> {
     let failure = DownloadError::find(err)?;
     log(failure);
     Some(format!(
-        "{failure}. The host may be down for now — try again later, or use another \
-         source in {DOWNLOAD_SOURCES}."
+        "{failure}. Le serveur est peut-être indisponible : réessayez plus tard ou choisissez une autre source dans {DOWNLOAD_SOURCES}."
     ))
 }
 
 fn log(failure: &DownloadError) {
     eprintln!(
-        "Download of {} failed ({}): {}",
+        "Échec du téléchargement de {} ({}) : {}",
         failure.label, failure.url, failure.detail
     );
 }

@@ -188,7 +188,7 @@ pub fn game_info(title_id: &str, locale: &str) -> Result<Option<GameInfo>> {
             bytes
         }
     };
-    let product: Product = serde_json::from_slice(&bytes).context("invalid product record")?;
+    let product: Product = serde_json::from_slice(&bytes).context("enregistrement de produit invalide")?;
     Ok(Some(product.localized(&locale.to_lowercase())))
 }
 

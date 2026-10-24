@@ -30,9 +30,9 @@ use txbm_core::{
 /// Shown once per console drive, the first time it is opened directly. Writing
 /// to FATX from a PC is young, and a mistake here costs the user their whole
 /// game library — so they get told before, not after.
-const NEW_FATX_DRIVE_TEXT: &str = "Experimental: this directly writes to the console filesystem\nBack up your drive before modifying games.";
+const NEW_FATX_DRIVE_TEXT: &str = "Expérimental : écriture directe dans le système de fichiers de la console\nSauvegardez le disque avant de modifier les jeux.";
 
-const NEW_DRIVE_TEXT: &str = "New drive detected\nOnce the games are on the console, remember to add the content paths in Aurora\n(Settings > Content Paths)";
+const NEW_DRIVE_TEXT: &str = "Nouveau disque détecté\nAprès le transfert des jeux, ajoutez les chemins dans Aurora\n(Settings > Content Paths)";
 
 /// Result of the asynchronous scan of the target, deposited by the scan thread
 /// then retrieved in the ScanFinished handler.
@@ -93,9 +93,9 @@ impl State {
     fn notify_rejected(&mut self, rejected: &[(String, &'static str)]) {
         let text = match rejected {
             [] => return,
-            [(name, reason)] => format!("Not added: {name} — {reason}"),
+            [(name, reason)] => format!("Non ajouté : {name} — {reason}"),
             files => format!(
-                "{} files not added (e.g. {} — {})",
+                "{} fichiers non ajoutés (ex. : {} — {})",
                 files.len(),
                 files[0].0,
                 files[0].1
@@ -142,8 +142,8 @@ impl State {
 
         if !skipped.is_empty() {
             let text = match skipped.as_slice() {
-                [name] => format!("Already in the queue: {name}"),
-                names => format!("{} files are already in the queue", names.len()),
+                [name] => format!("Déjà dans la file : {name}"),
+                names => format!("{} fichiers sont déjà dans la file", names.len()),
             };
             self.notifications.push(Notification::info(text));
         }
@@ -264,7 +264,7 @@ impl State {
     ) {
         if self.job_queue.iter().any(|queued| queued.is_same_as(&job)) {
             self.notifications
-                .push(Notification::info("Already in the queue"));
+                .push(Notification::info("Déjà dans la file d’attente"));
             return;
         }
 
@@ -283,7 +283,7 @@ impl State {
             // Said once per batch, not once per game of it.
             if self.job_queue.len() == 1 {
                 self.notifications.push(Notification::info(
-                    "Queued: it starts once ABadAvatar is removed from the hard drive",
+                    "En attente : démarrage après le retrait d’ABadAvatar du disque dur",
                 ));
             }
             return;
@@ -400,7 +400,7 @@ impl State {
             }
         }
         ui_state.set_inspecting_compat(true);
-        ui_state.set_status("Reading the console's compatibility partition…".into());
+        ui_state.set_status("Lecture de la partition de rétrocompatibilité de la console…".into());
 
         let weak = weak.clone();
         std::thread::spawn(move || {
@@ -468,8 +468,7 @@ impl State {
                         if outcome.backup_was_empty {
                             dispatcher.invoke_dispatch(
                                 Message::NotifyInfoSticky,
-                                "No backup was written — the compatibility partition held no \
-                                 file to save."
+                                "Aucune sauvegarde créée : la partition de rétrocompatibilité ne contenait aucun fichier."
                                     .to_shared_string(),
                             );
                         }
@@ -477,17 +476,16 @@ impl State {
                             dispatcher.invoke_dispatch(
                                 Message::NotifyInfoSticky,
                                 slint::format!(
-                                    "The damaged partition could not be backed up and was \
-                                     formatted anyway: {why}"
+                                    "La partition endommagée n’a pas pu être sauvegardée et a tout de même été formatée : {why}"
                                 ),
                             );
                         }
                         dispatcher.invoke_dispatch(
                             Message::NotifySuccessSticky,
                             if outcome.created {
-                                "Compatibility partition created"
+                                "Partition de rétrocompatibilité créée"
                             } else {
-                                "Compatibility partition formatted"
+                                "Partition de rétrocompatibilité formatée"
                             }
                             .to_shared_string(),
                         );
@@ -497,17 +495,16 @@ impl State {
                     Err(e) if crate::compat::is_cancelled(&e) => {
                         dispatcher.invoke_dispatch(
                             Message::NotifyInfo,
-                            "Format cancelled".to_shared_string(),
+                            "Formatage annulé".to_shared_string(),
                         );
                     }
                     Err(e) => {
                         let text = if partition_touched {
                             slint::format!(
-                                "Failed to format the compatibility partition: {e:#}\n\n\
-                                 It may be unusable until it is formatted again."
+                                "Impossible de formater la partition de rétrocompatibilité : {e:#}\n\nElle pourrait être inutilisable jusqu’à un nouveau formatage."
                             )
                         } else {
-                            slint::format!("Failed to format the compatibility partition: {e:#}")
+                            slint::format!("Impossible de formater la partition de rétrocompatibilité : {e:#}")
                         };
                         dispatcher.invoke_dispatch(Message::NotifyError, text);
                     }
@@ -588,7 +585,7 @@ impl State {
                 ))));
 
                 if let Err(e) = self.config.write() {
-                    let text = slint::format!("Failed to write config: {e}");
+                    let text = slint::format!("Impossible d’enregistrer la configuration : {e}");
                     self.notifications.push(Notification::error(text));
                 }
             }
@@ -610,7 +607,7 @@ impl State {
                 let path = PathBuf::from(payload.as_str());
                 if !path.is_dir() {
                     self.notifications
-                        .push(Notification::error("This drive is no longer available"));
+                        .push(Notification::error("Ce disque n’est plus disponible"));
                     // The confirm button already closed the modal; re-open it so
                     // the user can pick another drive instead of being stuck.
                     let app = weak.upgrade().unwrap();
@@ -912,7 +909,7 @@ impl State {
 
                 message_queue.push_back((
                     Message::SetStatus,
-                    slint::format!("⟳  Scanning  {}", target.display()),
+                    slint::format!("⟳  Analyse  {}", target.display()),
                 ));
 
                 let weak = weak.clone();
@@ -985,7 +982,7 @@ impl State {
                         message_queue.push_back((Message::DownloadCovers, SharedString::new()));
                     }
                     Some(Err(e)) if e.to_string().contains(txbm_core::target::SCAN_CANCELLED) => {
-                        self.notifications.push(Notification::info("Scan cancelled"));
+                        self.notifications.push(Notification::info("Analyse annulée"));
                     }
                     Some(Err(e)) => {
                         // A real scan failure (timeout, unreachable console...)
@@ -995,7 +992,7 @@ impl State {
                         // "Disconnect from..." button) after a failed target.
                         message_queue.push_back((Message::Disconnect, SharedString::new()));
 
-                        let text = slint::format!("Failed to scan the target: {e:#}");
+                        let text = slint::format!("Impossible d’analyser la destination : {e:#}");
                         self.notifications.push(Notification::error(text));
                     }
                     None => {}
@@ -1003,7 +1000,7 @@ impl State {
             }
             Message::SetTargetFtp => {
                 if self.config.contents.console_ip.trim().is_empty() {
-                    let text = "No console IP configured";
+                    let text = "Aucune adresse IP de console configurée";
                     self.notifications.push(Notification::error(text));
                     return;
                 }
@@ -1031,7 +1028,7 @@ impl State {
                         // recorded: bail out and re-open the target selection.
                         if !loc.mount_point.is_dir() {
                             self.notifications.push(Notification::error(
-                                "This location is no longer available (drive unplugged?)",
+                                "Cet emplacement n’est plus disponible (disque débranché ?)",
                             ));
                             let app = weak.upgrade().unwrap();
                             app.global::<UiState<'_>>().set_selecting_target(true);
@@ -1086,7 +1083,7 @@ impl State {
                 // window's close button still lands here.
                 if self.abadavatar_hdd_busy {
                     self.notifications.push(Notification::warning(
-                        "Wait until ABadAvatar is done with the hard drive",
+                        "Attendez la fin de l’opération ABadAvatar sur le disque dur",
                     ));
                     return;
                 }
@@ -1232,7 +1229,7 @@ impl State {
                             // Sentinel appended for the "custom path" case; the
                             // modal reveals a free-text / browse field for it.
                             // Must match the OTHER literal in the Slint modal.
-                            candidates.push(SharedString::from("Other…"));
+                            candidates.push(SharedString::from("Autre…"));
                             ui.set_storage_candidates(ModelRc::from(Rc::new(VecModel::from(
                                 candidates,
                             ))));
@@ -1249,7 +1246,7 @@ impl State {
                     }
                     Some(Err(e)) => {
                         ui.set_configuring_storage(false);
-                        let text = slint::format!("Failed to analyze the target: {e:#}");
+                        let text = slint::format!("Impossible d’analyser la destination : {e:#}");
                         self.notifications.push(Notification::error(text));
                         message_queue.push_back((Message::Disconnect, SharedString::new()));
                     }
@@ -1308,7 +1305,7 @@ impl State {
                             Err(e) => {
                                 dispatcher.invoke_dispatch(
                                     Message::NotifyError,
-                                    slint::format!("Failed to save the storage configuration: {e:#}"),
+                                    slint::format!("Impossible d’enregistrer la configuration du stockage : {e:#}"),
                                 );
                                 dispatcher
                                     .invoke_dispatch(Message::Disconnect, SharedString::new());
@@ -1389,7 +1386,7 @@ impl State {
                             let dispatcher = app.global::<Dispatcher<'_>>();
 
                             if let Err(e) = res {
-                                let text = slint::format!("Could not download covers: {e}");
+                                let text = slint::format!("Impossible de télécharger les jaquettes : {e}");
                                 dispatcher.invoke_dispatch(Message::NotifyError, text);
                             }
 
@@ -1439,7 +1436,7 @@ impl State {
                 if let Err(e) = fs::remove_dir_all(&covers_dir)
                     && covers_dir.exists()
                 {
-                    let text = slint::format!("Failed to clear the covers cache: {e}");
+                    let text = slint::format!("Impossible de vider le cache des jaquettes : {e}");
                     self.notifications.push(Notification::error(text));
                     return;
                 }
@@ -1452,14 +1449,14 @@ impl State {
                 crate::games::clear_thumb_cache();
 
                 self.notifications
-                    .push(Notification::info("Covers cache cleared"));
+                    .push(Notification::info("Cache des jaquettes vidé"));
 
                 message_queue.push_back((Message::RefreshDisplayedGames, SharedString::new()));
                 message_queue.push_back((Message::DownloadCovers, SharedString::new()));
             }
             Message::OpenThat => {
                 if let Err(e) = open::that(&payload) {
-                    let text = slint::format!("Failed to open URL: {e}");
+                    let text = slint::format!("Impossible d’ouvrir l’adresse : {e}");
                     self.notifications.push(Notification::error(text));
                 }
             }
@@ -1478,10 +1475,10 @@ impl State {
                                 dispatcher.invoke_dispatch(Message::SetLatestVersion, value);
                             }
                             Ok(None) => {
-                                eprintln!("No updates available");
+                                eprintln!("Aucune mise à jour disponible");
                             }
                             Err(e) => {
-                                eprintln!("Failed to check for updates: {e}");
+                                eprintln!("Impossible de rechercher les mises à jour : {e}");
                             }
                         }
                     });
@@ -1661,12 +1658,12 @@ impl State {
                 let ftp_config = self.config.contents.ftp_config();
 
                 if ftp_config.host.is_empty() {
-                    let text = "No console IP configured";
+                    let text = "Aucune adresse IP de console configurée";
                     self.notifications.push(Notification::error(text));
                     return;
                 }
 
-                let text = slint::format!("Testing FTP connection to {}...", ftp_config.host);
+                let text = slint::format!("Test de la connexion FTP à {}…", ftp_config.host);
                 self.notifications.push(Notification::info(text));
 
                 let weak = weak.clone();
@@ -1683,13 +1680,13 @@ impl State {
                         match res {
                             Ok(roots) => {
                                 let text = slint::format!(
-                                    "FTP connection successful\nConsole root: {}",
+                                    "Connexion FTP réussie\nRacine de la console : {}",
                                     roots.join(", ")
                                 );
                                 dispatcher.invoke_dispatch(Message::NotifySuccess, text);
                             }
                             Err(e) => {
-                                let text = slint::format!("FTP connection failed: {e:#}");
+                                let text = slint::format!("Échec de la connexion FTP : {e:#}");
                                 dispatcher.invoke_dispatch(Message::NotifyError, text);
                             }
                         }
@@ -1770,12 +1767,12 @@ impl State {
                 let ftp_config = self.config.contents.ftp_config();
 
                 if ftp_config.host.is_empty() {
-                    let text = "No console IP configured";
+                    let text = "Aucune adresse IP de console configurée";
                     self.notifications.push(Notification::error(text));
                     return;
                 }
 
-                let text = "Restarting Aurora...";
+                let text = "Redémarrage d’Aurora…";
                 self.notifications.push(Notification::info(text));
 
                 let weak = weak.clone();
@@ -1791,14 +1788,14 @@ impl State {
 
                         match res {
                             Ok(()) => {
-                                let text = "Aurora is ready 🎉";
+                                let text = "Aurora est prêt 🎉";
                                 dispatcher.invoke_dispatch(
                                     Message::NotifySuccess,
                                     SharedString::from(text),
                                 );
                             }
                             Err(e) => {
-                                let text = slint::format!("Failed to restart Aurora: {e:#}");
+                                let text = slint::format!("Impossible de redémarrer Aurora : {e:#}");
                                 dispatcher.invoke_dispatch(Message::NotifyError, text);
                             }
                         }
@@ -1880,7 +1877,7 @@ impl State {
                 let titles = self.aurora_import_candidates();
                 if titles.is_empty() {
                     self.notifications
-                        .push(Notification::info("No game to prepare in the library"));
+                        .push(Notification::info("Aucun jeu à préparer dans la bibliothèque"));
                     return;
                 }
                 self.enqueue_job(
@@ -1990,14 +1987,14 @@ impl State {
                     Err(e) if was_write => {
                         message_queue.push_back((
                             Message::NotifyError,
-                            slint::format!("Couldn't update launch.ini: {e:#}"),
+                            slint::format!("Impossible de modifier launch.ini : {e:#}"),
                         ));
                         message_queue.push_back((Message::FetchDashlaunch, SharedString::new()));
                     }
                     // A read failure only hides the card: the Aurora scan paths
                     // card already reports a target that can't be read.
                     Err(e) => {
-                        eprintln!("Failed to read launch.ini: {e:#}");
+                        eprintln!("Impossible de lire launch.ini : {e:#}");
                         ui.set_dashlaunch(DisplayedDashlaunch::default());
                         self.dashlaunch_location = None;
                     }
@@ -2057,7 +2054,7 @@ impl State {
                     // Only hides the card: a drive that can't be read is
                     // already reported by the scan.
                     Err(e) => {
-                        eprintln!("Failed to read the ABadAvatar state: {e:#}");
+                        eprintln!("Impossible de lire l’état d’ABadAvatar : {e:#}");
                         ui.set_abadavatar_hdd(DisplayedABadAvatarHdd::default());
                     }
                 }
@@ -2089,7 +2086,7 @@ impl State {
                 let app = weak.upgrade().unwrap();
                 let ui = app.global::<UiState<'_>>();
                 ui.set_inspecting_abadavatar_hdd(true);
-                ui.set_status("Reading the hard drive…".into());
+                ui.set_status("Lecture du disque dur…".into());
 
                 let weak = weak.clone();
                 std::thread::spawn(move || {
@@ -2165,7 +2162,7 @@ impl State {
                     // write.
                     if Target::from_config(&self.config.contents).is_some() {
                         self.notifications.push(Notification::error(
-                            "Install cancelled — disconnect from the current target first",
+                            "Installation annulée : déconnectez d’abord la destination actuelle",
                         ));
                         return;
                     }
@@ -2181,7 +2178,7 @@ impl State {
                     // while the modal was up.
                     if self.is_job_running || ui.get_writing_dashlaunch() {
                         self.notifications.push(Notification::error(
-                            "Not started — wait for the queue to finish first",
+                            "Opération non démarrée : attendez la fin de la file d’attente",
                         ));
                         return;
                     }
@@ -2233,11 +2230,11 @@ impl State {
                         match res {
                             Ok(()) if installing => dispatcher.invoke_dispatch(
                                 Message::NotifySuccessSticky,
-                                "ABadAvatar is installed on the hard drive. Unplug any ABadAvatar USB key before starting the console.".to_shared_string(),
+                                "ABadAvatar est installé sur le disque dur. Retirez toute clé USB ABadAvatar avant de démarrer la console.".to_shared_string(),
                             ),
                             Ok(()) => dispatcher.invoke_dispatch(
                                 Message::NotifySuccess,
-                                "ABadAvatar removed from the hard drive".to_shared_string(),
+                                "ABadAvatar retiré du disque dur".to_shared_string(),
                             ),
                             Err(e)
                                 if e.to_string()
@@ -2245,7 +2242,7 @@ impl State {
                             {
                                 dispatcher.invoke_dispatch(
                                     Message::NotifyInfo,
-                                    "ABadAvatar install cancelled".to_shared_string(),
+                                    "Installation d’ABadAvatar annulée".to_shared_string(),
                                 );
                             }
                             Err(e) => {
@@ -2254,9 +2251,9 @@ impl State {
                                 {
                                     text.into()
                                 } else if installing {
-                                    slint::format!("Failed to install ABadAvatar: {e:#}")
+                                    slint::format!("Impossible d’installer ABadAvatar : {e:#}")
                                 } else {
-                                    slint::format!("Failed to remove ABadAvatar: {e:#}")
+                                    slint::format!("Impossible de retirer ABadAvatar : {e:#}")
                                 };
                                 dispatcher.invoke_dispatch(Message::NotifyError, text);
                             }
@@ -2411,7 +2408,7 @@ impl State {
                     // as an unsupported file.
                     if txbm_core::util::in_flatpak() && !path.exists() {
                         self.notifications.push(Notification::error(
-                            "Dropped files are out of reach of the Flatpak sandbox. Use the Add buttons instead.",
+                            "Les fichiers déposés sont inaccessibles depuis Flatpak. Utilisez les boutons d’ajout.",
                         ));
                         return;
                     }
@@ -2518,7 +2515,7 @@ impl State {
                 match result {
                     Ok(updates) => self.displayed_title_updates.set_vec(updates),
                     Err(e) => {
-                        let text = slint::format!("Failed to fetch title updates: {e:#}");
+                        let text = slint::format!("Impossible de récupérer les mises à jour du jeu : {e:#}");
                         self.notifications.push(Notification::error(text));
                     }
                 }
@@ -2528,7 +2525,7 @@ impl State {
                 // the queue's own write either (see `console_write_in_flight`).
                 if self.console_write_in_flight() {
                     self.notifications.push(Notification::info(
-                        "Wait for the transfer queue to finish before changing a title update",
+                        "Attendez la fin des transferts avant de modifier une mise à jour de jeu",
                     ));
                     return;
                 }
@@ -2557,12 +2554,12 @@ impl State {
                             Ok(()) => {
                                 dispatcher.invoke_dispatch(
                                     Message::NotifyInfo,
-                                    "Title update installed".to_shared_string(),
+                                    "Mise à jour du jeu installée".to_shared_string(),
                                 );
                             }
                             Err(e) => {
                                 let text =
-                                    slint::format!("Failed to install title update: {e:#}");
+                                    slint::format!("Impossible d’installer la mise à jour du jeu : {e:#}");
                                 dispatcher.invoke_dispatch(Message::NotifyError, text);
                             }
                         }
@@ -2575,7 +2572,7 @@ impl State {
                 // A write too: same rule as `ActivateTitleUpdate` above.
                 if self.console_write_in_flight() {
                     self.notifications.push(Notification::info(
-                        "Wait for the transfer queue to finish before changing a title update",
+                        "Attendez la fin des transferts avant de modifier une mise à jour de jeu",
                     ));
                     return;
                 }
@@ -2604,11 +2601,11 @@ impl State {
                             Ok(()) => {
                                 dispatcher.invoke_dispatch(
                                     Message::NotifyInfo,
-                                    "Title update removed".to_shared_string(),
+                                    "Mise à jour du jeu retirée".to_shared_string(),
                                 );
                             }
                             Err(e) => {
-                                let text = slint::format!("Failed to remove title update: {e:#}");
+                                let text = slint::format!("Impossible de retirer la mise à jour du jeu : {e:#}");
                                 dispatcher.invoke_dispatch(Message::NotifyError, text);
                             }
                         }
@@ -2685,7 +2682,7 @@ impl State {
                 let dest = PathBuf::from(payload.as_str());
                 if !dest.is_dir() {
                     self.notifications
-                        .push(Notification::error("This drive is no longer available"));
+                        .push(Notification::error("Ce disque n’est plus disponible"));
                     return;
                 }
                 let path_text = txbm_core::util::display_path(&dest).to_shared_string();
@@ -2750,7 +2747,7 @@ impl State {
                         });
                     };
 
-                    status("Creating the ABadAvatar USB key…");
+                    status("Création de la clé USB ABadAvatar…");
 
                     let res =
                         txbm_core::abadavatar::create_abadavatar(&dest, &cfg, &cancel, &status);
@@ -2768,7 +2765,7 @@ impl State {
                                 // elsewhere when it lands.
                                 dispatcher.invoke_dispatch(
                                     Message::NotifySuccessSticky,
-                                    "ABadAvatar USB key ready 🎉".to_shared_string(),
+                                    "Clé USB ABadAvatar prête 🎉".to_shared_string(),
                                 );
                                 app.global::<UiState<'_>>().set_celebrating(true);
                             }
@@ -2778,14 +2775,14 @@ impl State {
                             {
                                 dispatcher.invoke_dispatch(
                                     Message::NotifyInfo,
-                                    "ABadAvatar creation cancelled".to_shared_string(),
+                                    "Création d’ABadAvatar annulée".to_shared_string(),
                                 );
                             }
                             Err(e) => {
                                 let text = match crate::download_errors::abadavatar(&e) {
                                     Some(text) => text.into(),
                                     None => {
-                                        slint::format!("Failed to create ABadAvatar key: {e:#}")
+                                        slint::format!("Impossible de créer la clé ABadAvatar : {e:#}")
                                     }
                                 };
                                 dispatcher.invoke_dispatch(Message::NotifyError, text);
@@ -2957,8 +2954,7 @@ impl State {
                     Ok(true) => {}
                     Ok(false) => {
                         self.notifications.push(Notification::error(slint::format!(
-                            "{} has no `Compatibility` folder at its root, so it is not a \
-                             compatibility backup.",
+                            "{} ne contient aucun dossier `Compatibility` à la racine : ce n’est pas une sauvegarde de rétrocompatibilité.",
                             zip.file_name().unwrap_or_default().to_string_lossy()
                         )));
                         return;
@@ -2998,7 +2994,7 @@ impl State {
                 let config = self.config.contents.ftp_config();
                 if config.host.is_empty() {
                     self.notifications
-                        .push(Notification::error("No console address entered"));
+                        .push(Notification::error("Aucune adresse de console saisie"));
                     return;
                 }
                 self.start_compat_inspection(CompatTarget::Ftp(config), weak);
@@ -3059,9 +3055,9 @@ impl State {
                         // surprise.
                         self.abandon_compat_run(weak);
                         self.notifications.push(Notification::info(if formatting {
-                            "Format cancelled — no destination picked for the backup"
+                            "Formatage annulé : aucun emplacement choisi pour la sauvegarde"
                         } else {
-                            "Install cancelled — no destination picked for the backup"
+                            "Installation annulée : aucun emplacement choisi pour la sauvegarde"
                         }));
                         return;
                     };
@@ -3103,7 +3099,7 @@ impl State {
                 // leaves a console with games it can no longer read.
                 if Target::from_config(&self.config.contents).is_some() {
                     self.notifications.push(Notification::error(
-                        "Install cancelled — disconnect from the current target first",
+                        "Installation annulée : déconnectez d’abord la destination actuelle",
                     ));
                     return;
                 }
@@ -3131,9 +3127,9 @@ impl State {
                     let status = compat_status_line(&weak);
 
                     status(if restoring {
-                        "Restoring the compatibility files…"
+                        "Restauration des fichiers de rétrocompatibilité…"
                     } else {
-                        "Installing the compatibility files…"
+                        "Installation des fichiers de rétrocompatibilité…"
                     });
 
                     let res = crate::compat::install(
@@ -3163,8 +3159,7 @@ impl State {
                                 if outcome.backup_was_empty {
                                     dispatcher.invoke_dispatch(
                                         Message::NotifyInfoSticky,
-                                        "No backup was written — the console's compatibility \
-                                         partition held no file to save."
+                                        "Aucune sauvegarde créée : la partition de rétrocompatibilité de la console ne contenait aucun fichier."
                                             .to_shared_string(),
                                     );
                                 }
@@ -3173,9 +3168,9 @@ impl State {
                                 dispatcher.invoke_dispatch(
                                     Message::NotifySuccessSticky,
                                     if restoring {
-                                        "Compatibility backup files restored 🎉"
+                                        "Sauvegarde de rétrocompatibilité restaurée 🎉"
                                     } else {
-                                        "Compatibility files installed 🎉"
+                                        "Fichiers de rétrocompatibilité installés 🎉"
                                     }
                                     .to_shared_string(),
                                 );
@@ -3189,29 +3184,24 @@ impl State {
                                 if partition_touched {
                                     dispatcher.invoke_dispatch(
                                         Message::NotifyError,
-                                        "Compatibility install cancelled after the partition \
-                                         was already being replaced — it is now incomplete, \
-                                         and original Xbox games will not run until the \
-                                         install is run again."
+                                        "Installation de la rétrocompatibilité annulée après le début du remplacement de la partition : elle est incomplète. Les jeux Xbox originale ne fonctionneront pas avant une nouvelle installation."
                                             .to_shared_string(),
                                     );
                                 } else {
                                     dispatcher.invoke_dispatch(
                                         Message::NotifyInfo,
-                                        "Compatibility install cancelled".to_shared_string(),
+                                        "Installation de la rétrocompatibilité annulée".to_shared_string(),
                                     );
                                 }
                             }
                             Err(e) => {
                                 let reason = crate::download_errors::compat(&e)
                                     .unwrap_or_else(|| {
-                                        format!("Failed to install the compatibility files: {e:#}")
+                                        format!("Impossible d’installer les fichiers de rétrocompatibilité : {e:#}")
                                     });
                                 let text = if partition_touched {
                                     slint::format!(
-                                        "{reason}\n\n\
-                                         The partition is now incomplete — original Xbox \
-                                         games will not run until the install is run again."
+                                        "{reason}\n\nLa partition est incomplète : les jeux Xbox originale ne fonctionneront pas avant une nouvelle installation."
                                     )
                                 } else {
                                     reason.into()
@@ -3367,7 +3357,7 @@ impl State {
     /// Error shown when a picked storage folder is not on the selected drive.
     fn off_drive_text(&self) -> SharedString {
         slint::format!(
-            "That folder is not on the selected drive ({}).\nPick a folder inside it.",
+            "Ce dossier n’est pas sur le disque sélectionné ({}).\nChoisissez un dossier situé sur ce disque.",
             txbm_core::util::display_path(&self.config.contents.mount_point)
         )
     }

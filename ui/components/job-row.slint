@@ -62,7 +62,7 @@ export component JobRow inherits Rectangle {
         IconButton {
             horizontal-stretch: 0;
             icon: IconSet.ChevronUp;
-            tooltip: "Move up in the queue";
+            tooltip: "Monter dans la file";
             disabled: !can-move-up;
             height: 24px;
             width: 24px;
@@ -73,7 +73,7 @@ export component JobRow inherits Rectangle {
         IconButton {
             horizontal-stretch: 0;
             icon: IconSet.ChevronDown;
-            tooltip: "Move down in the queue";
+            tooltip: "Descendre dans la file";
             disabled: !can-move-down;
             height: 24px;
             width: 24px;
@@ -84,7 +84,7 @@ export component JobRow inherits Rectangle {
         IconButton {
             horizontal-stretch: 0;
             icon: IconSet.X;
-            tooltip: "Remove from the queue";
+            tooltip: "Retirer de la file";
             height: 24px;
             width: 24px;
             squared: true;

@@ -116,12 +116,12 @@ pub fn convert_to_god(
     progress: &mut dyn FnMut(u64, u64),
 ) -> Result<PathBuf> {
     let source_iso_file_meta =
-        fs::metadata(source_iso).context("reading ISO metadata")?;
+        fs::metadata(source_iso).context("lecture des métadonnées ISO")?;
 
-    let mut image = XdvdImage::open(source_iso).context("reading source ISO")?;
+    let mut image = XdvdImage::open(source_iso).context("lecture de l’ISO source")?;
     let root_offset = image.root_offset()?;
 
-    let title_info = image.title_info().context("reading game executable")?;
+    let title_info = image.title_info().context("lecture de l’exécutable du jeu")?;
     let exe_info = title_info.execution_info;
     let content_type = title_info.content_type;
 
@@ -135,7 +135,7 @@ pub fn convert_to_god(
         .checked_sub(root_offset)
         .with_context(|| {
             format!(
-                "{} is truncated: its filesystem starts past the end of the file",
+                "{} est tronqué : son système de fichiers commence au-delà de la fin du fichier",
                 source_iso.display()
             )
         })?;
@@ -145,7 +145,7 @@ pub fn convert_to_god(
     let part_count = block_count.div_ceil(god::BLOCKS_PER_PART);
     if part_count == 0 {
         anyhow::bail!(
-            "{} holds no data to convert: it is truncated or not a readable image",
+            "{} ne contient aucune donnée à convertir : fichier tronqué ou image illisible",
             source_iso.display()
         );
     }
@@ -156,7 +156,7 @@ pub fn convert_to_god(
     if fs::exists(&data_dir)? {
         fs::remove_dir_all(&data_dir)?;
     }
-    fs::create_dir_all(&data_dir).context("creating GOD data folder")?;
+    fs::create_dir_all(&data_dir).context("création du dossier de données GOD")?;
 
     let title_dir = content_dir.join(format!("{:08X}", exe_info.title_id));
 
@@ -183,7 +183,7 @@ pub fn convert_to_god(
             .create(true)
             .truncate(true)
             .open(file_layout.part_file_path(part_index))
-            .context("creating GOD part file")?;
+            .context("création d’une partie GOD")?;
 
         let base = part_index * PART_DATA_SIZE;
         let res = write_part(
@@ -206,7 +206,7 @@ pub fn convert_to_god(
                 cleanup_partial(&file_layout, &title_dir);
                 anyhow::bail!(crate::convert::CONVERSION_CANCELLED);
             }
-            return Err(e.context("writing GOD part file"));
+            return Err(e.context("écriture d’une partie GOD"));
         }
 
         // The last part reads up to the end of the file, which may lie past
@@ -229,7 +229,7 @@ pub fn convert_to_god(
 
     let last_part_size = fs::metadata(file_layout.part_file_path(part_count - 1))
         .map(|m| m.len())
-        .context("reading the last part")?;
+        .context("lecture de la dernière partie")?;
 
     let mut con_header = god::ConHeaderBuilder::new()
         .with_execution_info(&exe_info)
@@ -255,10 +255,10 @@ pub fn convert_to_god(
         .create(true)
         .truncate(true)
         .open(file_layout.con_header_file_path())
-        .context("creating CON header file")?;
+        .context("création du fichier d’en-tête CON")?;
     con_header_file
         .write_all(&con_header)
-        .context("writing CON header")?;
+        .context("écriture de l’en-tête CON")?;
 
     Ok(title_dir)
 }

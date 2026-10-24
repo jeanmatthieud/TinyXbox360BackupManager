@@ -37,7 +37,7 @@ export component GameTableHeaderCell inherits TooltipArea {
     property <string> descending: "\{sort-key}Descending";
     property <bool> is-active: UiState.config.sort-by == ascending || UiState.config.sort-by == descending;
 
-    tooltip: "Sort by \{label}";
+    tooltip: "Trier par \{label}";
     background: self.has-hover ? MyPalette.alternate-background : transparent;
 
     clicked => {

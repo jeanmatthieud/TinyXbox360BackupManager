@@ -36,17 +36,17 @@ export component DownloadSourcesCard inherits ToolboxCard {
     // The tools read these when they start: changing them mid-run would
     // mislead, since the run in progress keeps the URLs it started with.
     disabled: UiState.creating-abadavatar || UiState.abadavatar-hdd-busy || UiState.compat-busy;
-    disabled-tooltip: "Available once the running Toolbox tool is done.";
+    disabled-tooltip: "Disponible lorsque l’outil en cours aura terminé.";
 
     CardHeader {
         icon: IconSet.Download;
-        title: "Download sources";
+        title: "Sources de téléchargement";
     }
 
     HorizontalLine { }
 
     Text {
-        text: "Advanced users only: update the package source URLs before downloading and installing them.";
+        text: "Utilisateurs avancés : modifiez les adresses des packs avant de les télécharger et de les installer.";
         font-size: 12px;
         wrap: word-wrap;
         color: MyPalette.foreground.transparentize(0.35);
@@ -64,7 +64,7 @@ export component DownloadSourcesCard inherits ToolboxCard {
     }
 
     ABadAvatarUrlField {
-        label: "ABadAvatar 1.3-beta (also used for the hard drive)";
+        label: "ABadAvatar 1.3-beta (également utilisé sur disque dur)";
         url: UiState.abadavatar.abadavatar-v13-url;
         default-url: UiState.abadavatar.abadavatar-v13-default-url;
         field-key: "abadavatar_v13";
@@ -78,7 +78,7 @@ export component DownloadSourcesCard inherits ToolboxCard {
     }
 
     ABadAvatarUrlField {
-        label: "XeUnshackle Max (used when Aurora starts without delay)";
+        label: "XeUnshackle Max (démarrage d’Aurora sans délai)";
         url: UiState.abadavatar.xeunshackle-max-url;
         default-url: UiState.abadavatar.xeunshackle-max-default-url;
         field-key: "xeunshackle_max";
@@ -93,7 +93,7 @@ export component DownloadSourcesCard inherits ToolboxCard {
     }
 
     ABadAvatarUrlField {
-        label: "System update";
+        label: "Mise à jour système";
         url: UiState.abadavatar.system-update-url;
         default-url: UiState.abadavatar.system-update-default-url;
         field-key: "system_update";
@@ -102,21 +102,21 @@ export component DownloadSourcesCard inherits ToolboxCard {
     HorizontalLine { }
 
     SectionTitle {
-        text: "Original Xbox compatibility";
+        text: "Rétrocompatibilité Xbox originale";
 
         // Only once there is something to take away.
         if UiState.compat-custom-packs.length > 0: IconButton {
             icon: IconSet.RotateCcw;
-            label: "Restore defaults";
+            label: "Rétablir les valeurs par défaut";
             font-size: 12px;
             horizontal-stretch: 0;
-            tooltip: "Remove the packs you added";
+            tooltip: "Retirer les packs ajoutés";
             clicked => Dispatcher.dispatch(Message.ResetCompatPacks, "");
         }
 
         IconButton {
             icon: IconSet.Plus;
-            label: "Add pack";
+            label: "Ajouter un pack";
             font-size: 12px;
             horizontal-stretch: 0;
             clicked => Dispatcher.dispatch(Message.AddCompatPack, "");
@@ -124,7 +124,7 @@ export component DownloadSourcesCard inherits ToolboxCard {
     }
 
     Text {
-        text: "Built-in packs are fixed; the ones you add follow them in the Toolbox.";
+        text: "Les packs intégrés sont fixes ; vos packs apparaissent à leur suite dans les outils.";
         font-size: 12px;
         wrap: word-wrap;
         color: MyPalette.foreground.transparentize(0.35);
@@ -143,7 +143,7 @@ export component DownloadSourcesCard inherits ToolboxCard {
     HorizontalLine { }
 
     DownloadUrlField {
-        label: "Per-title configs";
+        label: "Configurations par jeu";
         url: UiState.compat.configs-url;
         default-url: UiState.compat.configs-default-url;
         url-edited(url) => {

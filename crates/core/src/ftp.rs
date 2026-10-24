@@ -229,14 +229,14 @@ impl FtpSession {
 
         let addr = (config.host.as_str(), config.port)
             .to_socket_addrs()
-            .with_context(|| format!("invalid address: {}:{}", config.host, config.port))?
+            .with_context(|| format!("adresse invalide : {}:{}", config.host, config.port))?
             .next()
-            .with_context(|| format!("address not found: {}", config.host))?;
+            .with_context(|| format!("adresse introuvable : {}", config.host))?;
 
         let mut stream = FtpStream::connect_timeout(addr, CONNECT_TIMEOUT)
             .with_context(|| {
                 format!(
-                    "connection to {}:{} (timeout of {}s exceeded?)",
+                    "connexion à {}:{} (délai de {} s dépassé ?)",
                     config.host,
                     config.port,
                     CONNECT_TIMEOUT.as_secs()
@@ -247,10 +247,10 @@ impl FtpSession {
 
         stream
             .login(&config.user, &config.password)
-            .context("FTP authentication refused")?;
+            .context("authentification FTP refusée")?;
         stream
             .transfer_type(FileType::Binary)
-            .context("switching to binary mode")?;
+            .context("passage en mode binaire")?;
         Ok(Self {
             stream,
             poisoned: false,
@@ -385,7 +385,7 @@ impl FtpSession {
         let mut stream = self
             .stream
             .retr_as_stream(&name)
-            .with_context(|| format!("starting partial download of {remote_path}"))?;
+            .with_context(|| format!("démarrage du téléchargement partiel de {remote_path}"))?;
 
         let mut buf = vec![0u8; max_bytes];
         let mut filled = 0;
@@ -437,7 +437,7 @@ impl FtpSession {
 
         self.stream
             .finalize_retr_stream(stream)
-            .with_context(|| format!("finishing the download of {remote_path}"))?;
+            .with_context(|| format!("fin du téléchargement de {remote_path}"))?;
         Ok(hash)
     }
 
@@ -692,7 +692,7 @@ impl FtpSession {
 
         self.stream
             .custom_command("SITE RESTART", &[Status::CommandOk, Status::System])
-            .context("sending SITE RESTART")?;
+            .context("envoi de SITE RESTART")?;
         Ok(())
     }
 

@@ -54,14 +54,14 @@ pub fn cover_info(title_id: &str) -> Result<Vec<CoverEntry>> {
     let mut response = AGENT
         .get(format!("{RAW_BASE}/Covers/{title_id}/metadata.json"))
         .call()
-        .context("metadata request")?;
+        .context("requête de métadonnées")?;
     if response.status().as_u16() != 200 {
-        bail!("title {title_id} is not in the XboxUnity mirror");
+        bail!("jeu {title_id} absent du miroir XboxUnity");
     }
     let metadata: MetadataResponse = response
         .body_mut()
         .read_json()
-        .context("invalid metadata.json")?;
+        .context("metadata.json invalide")?;
     Ok(metadata.covers)
 }
 
@@ -80,7 +80,7 @@ pub fn cover_url(title_id: &str, cover_id: &str) -> String {
 pub fn download_best_cover(title_id: &str) -> Result<Vec<u8>> {
     let mut covers = cover_info(title_id)?;
     if covers.is_empty() {
-        bail!("no cover for title {title_id}");
+        bail!("aucune jaquette pour le jeu {title_id}");
     }
     sort_covers_best_first(&mut covers);
 
@@ -100,7 +100,7 @@ pub fn download_best_cover(title_id: &str) -> Result<Vec<u8>> {
             return Ok(bytes);
         }
     }
-    bail!("no downloadable cover for title {title_id}")
+    bail!("aucune jaquette téléchargeable pour le jeu {title_id}")
 }
 
 /// URL of the archived icon of a title, a 64x64 PNG.

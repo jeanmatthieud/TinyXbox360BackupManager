@@ -30,7 +30,7 @@ export component GameFilter inherits Card {
             alignment: center;
 
             MyLineEdit {
-                placeholder-text: "Search by Title/ID";
+                placeholder-text: "Titre / identifiant";
                 edited() => Dispatcher.dispatch(Message.FilterGames, self.text);
             }
         }

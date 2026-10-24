@@ -63,7 +63,7 @@ export component SelectableCard inherits TooltipArea {
 // owns `selected-drive` (an index into that list, -1 when nothing is picked)
 // and provides the surrounding confirm/cancel buttons.
 export component RemovableDrivePicker inherits VerticalLayout {
-    in property <string> title: "Select a removable drive";
+    in property <string> title: "Choisir un disque amovible";
     // Index of the drive picked (into UiState.removable-drives), -1 until the
     // user makes an explicit choice. Bound two-way by the parent.
     in-out property <int> selected-drive: -1;
@@ -87,7 +87,7 @@ export component RemovableDrivePicker inherits VerticalLayout {
 
         IconButton {
             icon: IconSet.RefreshCw;
-            tooltip: "Refresh";
+            tooltip: "Actualiser";
             width: 30px;
             clicked => {
                 root.selected-drive = -1;
@@ -100,12 +100,12 @@ export component RemovableDrivePicker inherits VerticalLayout {
         spacing: 6px;
 
         Text {
-            text: "No removable drive detected.";
+            text: "Aucun disque amovible détecté.";
             color: MyPalette.foreground.transparentize(0.3);
         }
 
         Text {
-            text: "Plug in a USB stick or external disk, then tap Refresh.";
+            text: "Branchez une clé USB ou un disque externe, puis actualisez.";
             color: MyPalette.foreground.transparentize(0.5);
             font-size: 12px;
             wrap: word-wrap;
@@ -117,7 +117,7 @@ export component RemovableDrivePicker inherits VerticalLayout {
         title: drive.name;
         subtitle: drive.is-fat32
             ? (drive.size-text == "" ? "FAT32" : drive.size-text + "  ·  FAT32")
-            : drive.fs-label + " — not supported (FAT32 required)";
+            : drive.fs-label + " — non pris en charge (FAT32 requis)";
         selected: root.selected-drive == i;
         // Only FAT32 drives are usable by the console.
         disabled: !drive.is-fat32;
@@ -133,7 +133,7 @@ export component RemovableDrivePicker inherits VerticalLayout {
 // subtitle — a disk missing from the list is far more puzzling than a disk
 // shown greyed out next to "access denied".
 export component FatxDrivePicker inherits VerticalLayout {
-    in property <string> title: "Select an Xbox 360 hard drive";
+    in property <string> title: "Choisir un disque dur Xbox 360";
     in-out property <int> selected-drive: -1;
 
     spacing: 10px;
@@ -155,7 +155,7 @@ export component FatxDrivePicker inherits VerticalLayout {
 
         IconButton {
             icon: IconSet.RefreshCw;
-            tooltip: "Refresh";
+            tooltip: "Actualiser";
             width: 30px;
             disabled: UiState.scanning-fatx-drives;
             clicked => {
@@ -167,7 +167,7 @@ export component FatxDrivePicker inherits VerticalLayout {
 
     // Probing every disk of the machine is slow enough to be worth saying so.
     if UiState.scanning-fatx-drives: Text {
-        text: "Looking for Xbox 360 hard drives…";
+        text: "Recherche de disques durs Xbox 360…";
         color: MyPalette.foreground.transparentize(0.3);
     }
 
@@ -176,13 +176,13 @@ export component FatxDrivePicker inherits VerticalLayout {
         padding-bottom: 10px;
 
         Text {
-            text: "No Xbox 360 hard drive detected.";
+            text: "Aucun disque dur Xbox 360 détecté.";
             color: MyPalette.foreground.transparentize(0.3);
         }
 
         Text {
-            text: "Connect the console's drive (a SATA or USB adapter), then tap Refresh. "
-                + "Reading a raw disk needs dedicated privileges.";
+            text: "Branchez le disque de la console (adaptateur SATA ou USB), puis actualisez. "
+                + "L’accès direct à un disque nécessite des droits spécifiques.";
             color: MyPalette.foreground.transparentize(0.5);
             font-size: 12px;
             wrap: word-wrap;
@@ -209,7 +209,7 @@ export component FatxDrivePicker inherits VerticalLayout {
         padding-top: 4px;
 
         Link {
-            label: "How do I get the required privileges?";
+            label: "Comment obtenir les droits nécessaires ?";
             uri: UiState.fatx-privileges-help-url;
             icon: IconSet.ShieldQuestionMark;
         }

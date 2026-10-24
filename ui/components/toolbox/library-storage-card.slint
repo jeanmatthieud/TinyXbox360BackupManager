@@ -51,15 +51,15 @@ component IconRow inherits HorizontalLayout {
 // App storage folders (and, on a console, their Aurora scan coverage).
 export component LibraryStorageCard inherits ToolboxCard {
     function god-layout-label(v: GodLayout) -> string {
-        return v == GodLayout.NameSlashTitleId ? "Name / TitleID" :
-            v == GodLayout.NameDashTitleId ? "Name - TitleID / TitleID" :
-            v == GodLayout.TitleIdDashName ? "TitleID - Name / TitleID" :
+        return v == GodLayout.NameSlashTitleId ? "Nom / TitleID" :
+            v == GodLayout.NameDashTitleId ? "Nom - TitleID / TitleID" :
+            v == GodLayout.TitleIdDashName ? "TitleID - Nom / TitleID" :
             "TitleID";
     }
 
     CardHeader {
         icon: IconSet.FolderCog;
-        title: "Library storage";
+        title: "Stockage de la bibliothèque";
 
         if UiState.fetching-aurora-paths: Spinner {
             width: 27px;
@@ -83,14 +83,14 @@ export component LibraryStorageCard inherits ToolboxCard {
     HorizontalLine { }
 
     Text {
-        text: "Folders where this app installs and scans your games.";
+        text: "Dossiers utilisés pour installer et rechercher vos jeux.";
         font-size: 12px;
         wrap: word-wrap;
         color: MyPalette.foreground.transparentize(0.4);
     }
 
     if UiState.fetching-aurora-paths && !UiState.aurora-paths-loaded: Text {
-        text: "Reading the storage configuration…";
+        text: "Lecture de la configuration du stockage…";
     }
 
     if UiState.app-storage-paths.length > 0: VerticalLayout {
@@ -115,7 +115,7 @@ export component LibraryStorageCard inherits ToolboxCard {
             }
 
             if UiState.storage-aurora-compared && !p.covered: Text {
-                text: "Not scanned by Aurora yet.";
+                text: "Pas encore analysé par Aurora.";
                 font-size: 11px;
                 color: #e0a12f;
             }
@@ -123,7 +123,7 @@ export component LibraryStorageCard inherits ToolboxCard {
 
         IconRow {
             icon: IconSet.FolderTree;
-            title: "GOD Storage Layout";
+            title: "Organisation du stockage GOD";
 
             Text {
                 text: god-layout-label(UiState.storage-god-layout);
@@ -142,7 +142,7 @@ export component LibraryStorageCard inherits ToolboxCard {
         HorizontalLine { }
 
         Text {
-            text: "Add the folders marked above to Aurora (Settings > Content Paths, Scan Depth 3+) so your games show up on the console, then rescan.";
+            text: "Ajoutez les dossiers indiqués dans Aurora (Settings > Content Paths, profondeur 3 ou plus) pour afficher les jeux sur la console, puis relancez l’analyse.";
             wrap: word-wrap;
             color: #e0a12f;
         }
@@ -151,7 +151,7 @@ export component LibraryStorageCard inherits ToolboxCard {
 
         CardActionRow {
             icon: IconSet.CircleQuestionMark;
-            text: "Help me add the content paths to Aurora";
+            text: "Aide pour ajouter les chemins dans Aurora";
             clicked => { UiState.showing-aurora-help = true };
         }
     }
@@ -160,7 +160,7 @@ export component LibraryStorageCard inherits ToolboxCard {
 
     CardActionRow {
         icon: IconSet.FolderCog;
-        text: "Change storage folders";
+        text: "Modifier les dossiers de stockage";
         disabled: UiState.fetching-aurora-paths;
         clicked => Dispatcher.dispatch(Message.EditStorageConfig, "");
     }

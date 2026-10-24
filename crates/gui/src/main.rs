@@ -45,7 +45,7 @@ fn restart_with_sw_rendering() -> Result<()> {
 
 fn main() -> Result<()> {
     if DATA_DIR.as_os_str().is_empty() {
-        bail!("Failed to get data dir");
+        bail!("Impossible de trouver le dossier des données");
     }
 
     // Only one copy of the app may run: a second one moves the scratch folders
@@ -159,7 +159,7 @@ fn main() -> Result<()> {
             }
             let _ = weak.upgrade_in_event_loop(move |app| {
                 let text = slint::format!(
-                    "Reclaimed {} of temporary files left by an interrupted run",
+                    "{} de fichiers temporaires récupérés après une exécution interrompue",
                     txbm_core::util::human_size(reclaimed)
                 );
                 app.global::<Dispatcher<'_>>()

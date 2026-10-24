@@ -40,7 +40,7 @@ export component AppWindow inherits Window {
     min-width: 800px;
     min-height: 600px;
     background: MyPalette.background;
-    title: UiState.drive-info.label.is-empty ? "TinyXbox360BackupManager  ›  No target selected" : (UiState.drive-info.total-gib > 0 ? "TinyXbox360BackupManager  ›  \{UiState.drive-info.label}  (\{UiState.drive-info.used-gib.to-fixed(2)}/\{UiState.drive-info.total-gib.to-fixed(2)} GiB)" : "TinyXbox360BackupManager  ›  \{UiState.drive-info.label}");
+    title: UiState.drive-info.label.is-empty ? "TinyXbox360BackupManager FR  ›  Aucune destination sélectionnée" : (UiState.drive-info.total-gib > 0 ? "TinyXbox360BackupManager FR  ›  \{UiState.drive-info.label}  (\{UiState.drive-info.used-gib.to-fixed(2)}/\{UiState.drive-info.total-gib.to-fixed(2)} Gio)" : "TinyXbox360BackupManager FR  ›  \{UiState.drive-info.label}");
     icon: @image-url("../package/windows/TinyXbox360BackupManager-64x64.png");
     default-font-size: 14px;
 
@@ -112,7 +112,7 @@ export component AppWindow inherits Window {
 
                     if UiState.scanning: IconButton {
                         icon: IconSet.X;
-                        tooltip: "Cancel the scan";
+                        tooltip: "Annuler l’analyse";
                         height: 24px;
                         width: 24px;
                         squared: true;
@@ -121,7 +121,7 @@ export component AppWindow inherits Window {
 
                     if UiState.creating-abadavatar: IconButton {
                         icon: IconSet.X;
-                        tooltip: "Cancel the ABadAvatar creation";
+                        tooltip: "Annuler la création de la clé ABadAvatar";
                         height: 24px;
                         width: 24px;
                         squared: true;
@@ -130,7 +130,7 @@ export component AppWindow inherits Window {
 
                     if UiState.abadavatar-hdd-busy && !UiState.abadavatar-hdd-writing: IconButton {
                         icon: IconSet.X;
-                        tooltip: "Cancel the ABadAvatar install";
+                        tooltip: "Annuler l’installation d’ABadAvatar";
                         height: 24px;
                         width: 24px;
                         squared: true;
@@ -139,7 +139,7 @@ export component AppWindow inherits Window {
 
                     if UiState.installing-compat: IconButton {
                         icon: IconSet.X;
-                        tooltip: "Cancel the compatibility install";
+                        tooltip: "Annuler l’installation de la rétrocompatibilité";
                         height: 24px;
                         width: 24px;
                         squared: true;
@@ -156,9 +156,9 @@ export component AppWindow inherits Window {
     // (current-game stays set), so that modal remains open underneath.
     if UiState.content-to-delete.id != "": ConfirmationModal {
         Text {
-            text: "Delete \{UiState.content-to-delete.description} (\{UiState.content-to-delete.kind})?\nThis content will be removed from the game. This action cannot be undone."
+            text: "Supprimer \{UiState.content-to-delete.description} (\{UiState.content-to-delete.kind}) ?\nCe contenu sera retiré du jeu. Cette action est irréversible."
                 + (UiState.job-queue.length > 0
-                    ? "\nThe queue is busy: the deletion starts once the jobs before it are done."
+                    ? "\nLa file est occupée : la suppression commencera après les tâches précédentes."
                     : "");
             wrap: word-wrap;
         }
@@ -183,9 +183,9 @@ export component AppWindow inherits Window {
 
     if !UiState.game-to-delete.path.is-empty: ConfirmationModal {
         Text {
-            text: "Are you sure you want to delete \{UiState.game-to-delete.title}?\nThis action cannot be undone."
+            text: "Voulez-vous vraiment supprimer \{UiState.game-to-delete.title} ?\nCette action est irréversible."
                 + (UiState.job-queue.length > 0
-                    ? "\nThe queue is busy: the deletion starts once the jobs before it are done."
+                    ? "\nLa file est occupée : la suppression commencera après les tâches précédentes."
                     : "");
             wrap: word-wrap;
         }
@@ -201,15 +201,15 @@ export component AppWindow inherits Window {
 
     if UiState.games-to-add.length > 0: ConfirmationModal {
         Text {
-            text: "Are you sure you want to add \{UiState.games-to-add.length} conversions to the queue?";
+            text: "Ajouter \{UiState.games-to-add.length} conversions à la file d’attente ?";
         }
 
         // An entry whose TitleID is already installed on the target is called
         // out here rather than failing later: the conversion overwrites it.
         if UiState.games-to-add-conflicts > 0: Text {
             text: UiState.games-to-add-conflicts == 1
-                ? "1 of them is already installed on the target and will be overwritten."
-                : "\{UiState.games-to-add-conflicts} of them are already installed on the target and will be overwritten.";
+                ? "Un jeu est déjà installé à cette destination et sera remplacé."
+                : "\{UiState.games-to-add-conflicts} jeux sont déjà installés à cette destination et seront remplacés.";
             color: MyPalette.warning;
             wrap: word-wrap;
         }
@@ -221,7 +221,7 @@ export component AppWindow inherits Window {
             }
 
             if entry.already-installed: Text {
-                text: "    ↻ overwrites \"\{entry.installed-title}\"";
+                text: "    ↻ remplace \"\{entry.installed-title}\"";
                 color: MyPalette.warning;
                 overflow: elide;
             }
@@ -233,7 +233,7 @@ export component AppWindow inherits Window {
 
     if UiState.abadavatar-pending-path != "": ConfirmationModal {
         Text {
-            text: "Create the ABadAvatar USB key at \{UiState.abadavatar-pending-path}?\nAny existing content at this location may be overwritten.";
+            text: "Créer la clé USB ABadAvatar dans \{UiState.abadavatar-pending-path} ?\nLe contenu déjà présent à cet emplacement pourra être remplacé.";
             wrap: word-wrap;
         }
         btn-icon: IconSet.Hammer;
@@ -245,29 +245,29 @@ export component AppWindow inherits Window {
         Text {
             text: UiState.compat-formatting
                 ? (UiState.compat-creating
-                    ? "Create the compatibility partition"
-                    : "Format the compatibility partition")
+                    ? "Créer la partition de rétrocompatibilité"
+                    : "Formater la partition de rétrocompatibilité")
                 : UiState.compat-restoring
-                    ? "Restore from backup"
-                    : "Install Xbox OG compatibility pack";
+                    ? "Restaurer une sauvegarde"
+                    : "Installer le pack de rétrocompatibilité Xbox originale";
             font-size: 18px;
         }
 
         Rectangle { height: 5px; } // Spacing
 
         if !UiState.compat-formatting: Text {
-            text: (UiState.compat-restoring ? "Backup selected: " : "Pack selected: ")
+            text: (UiState.compat-restoring ? "Sauvegarde sélectionnée : " : "Pack sélectionné : ")
                 + UiState.compat-pending-source;
             wrap: word-wrap;
         }
 
         if UiState.compat-creating: Text {
-            text: "This drive has no compatibility partition. It is created in the space the console reserves for it, in front of the games partition, which is left untouched.";
+            text: "Ce disque n’a pas de partition de rétrocompatibilité. Elle sera créée dans l’espace réservé par la console, avant la partition des jeux. La partition des jeux sera conservée.";
             wrap: word-wrap;
         }
 
         Text {
-            text: "Target: \{UiState.compat-pending-target}";
+            text: "Destination : \{UiState.compat-pending-target}";
             wrap: word-wrap;
         }
 
@@ -281,55 +281,55 @@ export component AppWindow inherits Window {
 
         destructive: UiState.compat-pending-summary != "";
         btn-icon: IconSet.Hammer;
-        confirm-label: "Confirm";
+        confirm-label: "Confirmer";
         cancelled => Dispatcher.dispatch(Message.CancelInstallCompat, "");
         confirmed => Dispatcher.dispatch(Message.ConfirmInstallCompat, "");
     }
 
     if UiState.abadavatar-hdd-pending-target != "": ConfirmationModal {
         Text {
-            text: "Install ABadAvatar on the hard drive";
+            text: "Installer ABadAvatar sur le disque dur";
             font-size: 18px;
         }
 
         Rectangle { height: 5px; } // Spacing
 
         Text {
-            text: "Your console must run dashboard 2.0.17559.0 (Settings › System › Console Info), with the avatar data of that update installed. Check it before going on: the exploit only works on that version.";
+            text: "La console doit utiliser le dashboard 2.0.17559.0 (Paramètres › Système › Infos console), avec les données d’avatar de cette mise à jour. Vérifiez-le avant de continuer : l’exploit fonctionne uniquement avec cette version.";
             color: MyPalette.warning;
             wrap: word-wrap;
         }
 
         Text {
-            text: "Written to \{UiState.abadavatar-hdd-pending-target}: ABadAvatar 1.3-beta, XeUnshackle"
-                + ", Dashlaunch's launch.ini with its plugins"
+            text: "Installation dans \{UiState.abadavatar-hdd-pending-target} : ABadAvatar 1.3-beta, XeUnshackle"
+                + ", le fichier launch.ini de Dashlaunch et ses plugins"
                 + (UiState.abadavatar-hdd-pending-aurora != ""
-                    ? ", starting the Aurora already at \{UiState.abadavatar-hdd-pending-aurora}."
-                    : ", and Aurora, installed at Hdd:\\Aurora.");
+                    ? ", avec lancement d’Aurora déjà présent dans \{UiState.abadavatar-hdd-pending-aurora}."
+                    : ", et Aurora, installé dans Hdd:\\Aurora.");
             wrap: word-wrap;
         }
 
         Text {
-            text: "Before booting the console: disconnect it from the Internet, turn off automatic sign-in, and unplug any ABadAvatar USB key (the console looks for one first).";
+            text: "Avant de démarrer la console : déconnectez-la d’Internet, désactivez la connexion automatique au profil et retirez toute clé USB ABadAvatar (la console la recherche en priorité).";
             wrap: word-wrap;
         }
 
         btn-icon: IconSet.Hammer;
-        confirm-label: "Install";
+        confirm-label: "Installer";
         cancelled => Dispatcher.dispatch(Message.CancelInstallABadAvatarHdd, "");
         confirmed => Dispatcher.dispatch(Message.ConfirmInstallABadAvatarHdd, "");
     }
 
     if UiState.confirming-abadavatar-hdd-uninstall: ConfirmationModal {
         Text {
-            text: "Remove ABadAvatar from the hard drive";
+            text: "Retirer ABadAvatar du disque dur";
             font-size: 18px;
         }
 
         Rectangle { height: 5px; } // Spacing
 
         Text {
-            text: "Every file that comes with ABadAvatar is deleted from \{UiState.config.target}, so the console boots as a retail one again:";
+            text: "Tous les fichiers fournis avec ABadAvatar seront supprimés de \{UiState.config.target}, pour rétablir le démarrage d’origine de la console :";
             wrap: word-wrap;
         }
 
@@ -339,14 +339,14 @@ export component AppWindow inherits Window {
         }
 
         Text {
-            text: "Your games are not touched.";
+            text: "Vos jeux seront conservés.";
             wrap: word-wrap;
             color: MyPalette.foreground.transparentize(0.35);
         }
 
         destructive: true;
         btn-icon: IconSet.Trash2;
-        confirm-label: "Remove";
+        confirm-label: "Retirer";
         cancelled => {
             UiState.confirming-abadavatar-hdd-uninstall = false;
         }
@@ -359,8 +359,8 @@ export component AppWindow inherits Window {
     if UiState.confirming-cancel-all: ConfirmationModal {
         Text {
             text: UiState.job-running
-                ? "Cancel every queued job?\nThe one in progress will be stopped: a conversion has its partial output cleaned up where possible, a deletion leaves the game partially removed. Anything already written to the target stays in place."
-                : "Cancel all pending jobs?";
+                ? "Annuler toutes les tâches ?\nLa tâche en cours sera arrêtée : les fichiers partiels d’une conversion sont nettoyés si possible ; une suppression laisse le jeu partiellement supprimé. Les fichiers déjà écrits sur la destination sont conservés."
+                : "Annuler toutes les tâches en attente ?";
             wrap: word-wrap;
         }
         destructive: true;
@@ -377,10 +377,10 @@ export component AppWindow inherits Window {
     if UiState.confirming-cancel-current: ConfirmationModal {
         Text {
             text: UiState.job-kind == JobKind.Add
-                ? "Cancel the conversion of \{UiState.job-label}?\nIts partial output is cleaned up where possible, but anything already written to the target is left in place. The other queued jobs are kept and the next one starts right away."
+                ? "Annuler la conversion de \{UiState.job-label} ?\nLes fichiers partiels sont nettoyés si possible, mais les fichiers déjà écrits sur la destination sont conservés. Les autres tâches sont conservées et la suivante démarre immédiatement."
                 : UiState.job-kind == JobKind.AuroraImport
-                ? "Cancel the preparation of the Aurora game assets?\nThe games already prepared stay ready to import; the remaining ones are skipped. The other queued jobs are kept and the next one starts right away."
-                : "Cancel the deletion of \{UiState.job-label}?\nWhat has already been removed is not restored: it is left partially deleted on the target, and deleting it again finishes the job. The other queued jobs are kept and the next one starts right away.";
+                ? "Annuler la préparation des ressources Aurora ?\nLes jeux déjà préparés restent prêts à importer ; les autres sont ignorés. Les autres tâches sont conservées et la suivante démarre immédiatement."
+                : "Annuler la suppression de \{UiState.job-label} ?\nLes fichiers supprimés ne seront pas restaurés : le jeu restera partiellement supprimé. Relancez sa suppression pour la terminer. Les autres tâches sont conservées et la suivante démarre immédiatement.";
             wrap: word-wrap;
         }
         destructive: true;
@@ -396,7 +396,7 @@ export component AppWindow inherits Window {
 
     if UiState.confirming-clear-aurora-import: ConfirmationModal {
         Text {
-            text: "Delete the Aurora game assets to import?\nAurora's import folder is emptied. What Aurora has already imported is kept.";
+            text: "Supprimer les ressources Aurora à importer ?\nLe dossier d’importation d’Aurora sera vidé. Les ressources déjà importées dans Aurora seront conservées.";
             wrap: word-wrap;
         }
         destructive: true;
@@ -415,10 +415,10 @@ export component AppWindow inherits Window {
     if UiState.pending-queue-action != PendingQueueAction.None && !UiState.draining-queue: ConfirmationModal {
         Text {
             text: (UiState.pending-queue-action == PendingQueueAction.Quit
-                ? "Jobs are still queued.\nCancel the queue and quit?"
-                : "Jobs are still queued.\nCancel the queue and disconnect?")
+                ? "Des tâches sont encore en attente.\nAnnuler la file et quitter ?"
+                : "Des tâches sont encore en attente.\nAnnuler la file et déconnecter ?")
                 + (UiState.job-running
-                    ? "\nThe job in progress will be stopped. Files already written to (or removed from) the target are left as they are."
+                    ? "\nLa tâche en cours sera arrêtée. Les fichiers déjà écrits ou supprimés sur la destination resteront en l’état."
                     : "");
             wrap: word-wrap;
         }

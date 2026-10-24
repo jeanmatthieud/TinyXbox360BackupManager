@@ -386,7 +386,7 @@ fn prepare(
             }
             // No folder: the next run tries this title again.
             Err(e) => {
-                eprintln!("Aurora import of {title_id} skipped: {e:#}");
+                eprintln!("Importation Aurora ignorée pour {title_id} : {e:#}");
                 report.failed += 1;
             }
         }
@@ -447,7 +447,7 @@ fn cover(title_id: &str, is_x360: bool, source: CoverSource) -> Option<(String, 
     let img = match image::load_from_memory(&bytes) {
         Ok(img) => img,
         Err(e) => {
-            eprintln!("Unusable cover for {title_id}: {e}");
+            eprintln!("Jaquette inutilisable pour {title_id} : {e}");
             return None;
         }
     };
@@ -477,7 +477,7 @@ fn cover(title_id: &str, is_x360: bool, source: CoverSource) -> Option<(String, 
     match resized.write_to(&mut png, image::ImageFormat::Png) {
         Ok(()) => Some(("cover.png".to_string(), png.into_inner())),
         Err(e) => {
-            eprintln!("Unusable cover for {title_id}: {e}");
+            eprintln!("Jaquette inutilisable pour {title_id} : {e}");
             None
         }
     }

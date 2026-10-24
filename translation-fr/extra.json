@@ -1,0 +1,19 @@
+{
+  "{} deleted": "{} supprimé",
+  "1 game": "1 jeu",
+  "{n} games": "{n} jeux",
+  "↑  Adding  {filename}  {percentage}%  ({mbps:.1} MB/s)": "↑  Ajout  {filename}  {percentage}%  ({mbps:.1} Mo/s)",
+  "↑  Adding  {filename}  {percentage}%": "↑  Ajout  {filename}  {percentage}%",
+  "{mbps:.1} MB/s": "{mbps:.1} Mo/s",
+  "✕  Deleting  {}": "✕  Suppression  {}",
+  "{} of {total}  ·  {title}": "{} sur {total}  ·  {title}",
+  "{:.1} GiB": "{:.1} Gio",
+  "Retail — unmodified": "D’origine — non modifié",
+  "Downloading {label}…  {}%": "Téléchargement de {label}…  {}%",
+  "Downloading {label}…  {mib:.1} MiB": "Téléchargement de {label}…  {mib:.1} Mio",
+  "⟳  Scanning  {}": "⟳  Analyse  {}",
+  "Downloading {label}…": "Téléchargement de {label}…",
+  "Extracting {}…": "Extraction de {}…",
+  "Extracting {label}…": "Extraction de {label}…",
+  "Disc {}": "Disque {}"
+}

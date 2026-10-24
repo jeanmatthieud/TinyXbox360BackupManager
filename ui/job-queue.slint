@@ -56,10 +56,10 @@ export component JobQueuePage inherits VerticalLayout {
                 Text {
                     horizontal-stretch: 1;
                     text: UiState.pending-queue-action == PendingQueueAction.Quit
-                        ? "Cancelling the job in progress, the app will close once done..."
+                        ? "Annulation de la tâche en cours ; l’application se fermera ensuite…"
                         : (UiState.pending-queue-action == PendingQueueAction.Disconnect
-                            ? "Cancelling the job in progress, the target will be disconnected once done..."
-                            : "Cancelling the job in progress...");
+                            ? "Annulation de la tâche en cours ; la destination sera ensuite déconnectée…"
+                            : "Annulation de la tâche en cours…");
                     color: MyPalette.destructive;
                     vertical-alignment: center;
                     wrap: word-wrap;
@@ -71,10 +71,10 @@ export component JobQueuePage inherits VerticalLayout {
                     horizontal-stretch: 0;
                     icon: UiState.pending-queue-action == PendingQueueAction.Quit ? IconSet.Power : IconSet.Unplug;
                     label: UiState.pending-queue-action == PendingQueueAction.Quit
-                        ? "Terminate and quit"
-                        : "Terminate and disconnect";
+                        ? "Forcer l’arrêt et quitter"
+                        : "Forcer l’arrêt et déconnecter";
                     kind: IconButtonKind.Destructive;
-                    tooltip: "Don't wait for the job in progress to stop";
+                    tooltip: "Ne pas attendre la fin de l’annulation";
                     clicked => Dispatcher.dispatch(Message.ForceQueueAction, "");
                 }
             }
@@ -85,8 +85,8 @@ export component JobQueuePage inherits VerticalLayout {
     if UiState.job-queue.length == 0: EmptyState {
         boxed: true;
         icon: IconSet.ListChecks;
-        title: "The queue is empty";
-        description: "Games you add or delete are handled here one at a time. Nothing is pending right now";
+        title: "La file d’attente est vide";
+        description: "Les ajouts et suppressions de jeux sont traités ici, un par un. Aucune tâche en attente";
     }
 
     if UiState.job-queue.length > 0: ScrollView {

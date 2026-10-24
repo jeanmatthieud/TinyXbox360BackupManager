@@ -13,7 +13,7 @@ import { Message, Dispatcher } from "messages.slint";
 
 export component SettingsPage inherits VerticalLayout {
     PageHeader {
-        title: "Settings";
+        title: "Paramètres";
     }
 
     ScrollView {
@@ -26,14 +26,14 @@ export component SettingsPage inherits VerticalLayout {
 
             if UiState.config.expert-mode-switchable: SettingCard {
                 icon: IconSet.FlaskConical;
-                label: "Expert mode";
+                label: "Mode expert";
                 items: [
-                    { value: "false", label: "Off" },
-                    { value: "true", label: "On" }
+                    { value: "false", label: "Désactivé" },
+                    { value: "true", label: "Activé" }
                 ];
                 active-item: UiState.config.expert-mode ? "true" : "false";
                 set-property: Message.SetExpertMode;
-                note: "Shows the advanced tools and settings: console hard drive access, title updates, Dashlaunch options, download sources, and more!";
+                note: "Affiche les outils avancés : accès au disque dur de la console, mises à jour des jeux, options Dashlaunch, sources de téléchargement…";
                 // Turning it off would hide the card of a tool still at work,
                 // its status line and Cancel button with it.
                 disabled: UiState.job-queue.length > 0
@@ -44,42 +44,42 @@ export component SettingsPage inherits VerticalLayout {
                     // it is only switched with none connected.
                     || !UiState.config.target.is-empty;
                 disabled-tooltip: UiState.job-queue.length > 0
-                    ? "Unavailable while the queue is running"
+                    ? "Indisponible pendant le traitement de la file"
                     : !UiState.config.target.is-empty
-                        ? "Unavailable while connected to a target"
-                        : "Unavailable while a Toolbox tool is running";
+                        ? "Indisponible lorsqu’une destination est connectée"
+                        : "Indisponible pendant l’utilisation d’un outil";
             }
 
             SettingCard {
                 icon: IconSet.Trash;
-                label: "Delete source file when adding games";
-                items: [{ value: "false", label: "No (recommended)" }, { value: "true", label: "Yes" }];
+                label: "Supprimer le fichier source après l’ajout du jeu";
+                items: [{ value: "false", label: "Non (recommandé)" }, { value: "true", label: "Oui" }];
                 active-item: UiState.config.remove-sources-games;
                 set-property: Message.SetRemoveSourcesGames;
                 disabled: UiState.job-queue.length > 0;
-                disabled-tooltip: "Unavailable while the queue is running";
+                disabled-tooltip: "Indisponible pendant le traitement de la file";
             }
 
             if UiState.config.expert-mode: SettingCard {
                 icon: IconSet.Package;
-                label: "Xbox 360 storage format";
+                label: "Format de stockage Xbox 360";
                 items: [
-                    { value: "God", label: "GOD (Games On Demand, recommended)" },
-                    { value: "Xex", label: "XEX (extracted game folder, experimental)" }
+                    { value: "God", label: "GOD (Games On Demand, recommandé)" },
+                    { value: "Xex", label: "XEX (dossier de jeu extrait, expérimental)" }
                 ];
                 active-item: UiState.config.xbox360-format;
                 set-property: Message.SetXbox360Format;
                 disabled: UiState.job-queue.length > 0;
-                disabled-tooltip: "Unavailable while the queue is running";
+                disabled-tooltip: "Indisponible pendant le traitement de la file";
             }
 
             SettingCard {
                 icon: IconSet.SunMoon;
-                label: "Theme";
+                label: "Thème";
                 items: [
-                    { value: "System", label: "System (requires restart)" },
-                    { value: "Light", label: "Light" },
-                    { value: "Dark", label: "Dark" }
+                    { value: "System", label: "Système (redémarrage nécessaire)" },
+                    { value: "Light", label: "Clair" },
+                    { value: "Dark", label: "Sombre" }
                 ];
                 active-item: UiState.config.theme-preference;
                 set-property: Message.SetThemePreference;
@@ -95,23 +95,23 @@ export component SettingsPage inherits VerticalLayout {
 
             if UiState.config.expert-mode: SettingCard {
                 icon: IconSet.Image;
-                label: "Xbox 360 cover source";
+                label: "Source des jaquettes Xbox 360";
                 items: [
-                    { value: "XboxUnity", label: "XboxUnity (recommended)" },
-                    { value: "Mirror", label: "XboxUnity-Scraper mirror" }
+                    { value: "XboxUnity", label: "XboxUnity (recommandé)" },
+                    { value: "Mirror", label: "Miroir XboxUnity-Scraper" }
                 ];
                 active-item: UiState.config.cover-source;
                 set-property: Message.SetCoverSource;
-                note: "Switching applies to missing covers only: already-cached covers are kept. Use \"Redownload all covers\" in the Toolbox to refetch everything.";
+                note: "Ce choix concerne uniquement les jaquettes manquantes. Celles en cache sont conservées. Utilisez « Retélécharger toutes les jaquettes » dans les outils pour tout récupérer à nouveau.";
             }
 
             SettingCard {
                 icon: IconSet.Images;
-                label: "Prepare Aurora game assets when adding games";
-                items: [{ value: "false", label: "No" }, { value: "true", label: "Yes (🧪 experimental)" }];
+                label: "Préparer les ressources Aurora lors de l’ajout des jeux";
+                items: [{ value: "false", label: "Non" }, { value: "true", label: "Oui (🧪 expérimental)" }];
                 active-item: UiState.config.aurora-import-on-add;
                 set-property: Message.SetAuroraImportOnAdd;
-                note: "Covers, artwork and descriptions are copied to the target along with each game, so Aurora can show them without the console being connected to the internet. To load them, open Aurora and go to Settings > Assets > Import.\n\nThe language applies to the titles and descriptions the Xbox 360 marketplace had in it (English otherwise). Assets already prepared are kept as they are.";
+                note: "Les jaquettes, illustrations et descriptions sont copiées avec chaque jeu pour qu’Aurora les affiche sans connexion Internet. Dans Aurora, ouvrez Settings > Assets > Import.\n\nLa langue s’applique aux titres et descriptions disponibles dans cette langue sur le marché Xbox 360 (anglais sinon). Les ressources déjà préparées sont conservées.";
 
                 HorizontalLayout {
                     spacing: 10px;
@@ -120,7 +120,7 @@ export component SettingsPage inherits VerticalLayout {
                         alignment: center;
 
                         Text {
-                            text: "Language of the titles and descriptions:";
+                            text: "Langue des titres et descriptions :";
                         }
                     }
 
@@ -140,12 +140,12 @@ export component SettingsPage inherits VerticalLayout {
 
             SettingCard {
                 icon: IconSet.Cable;
-                label: "Reconnect to the last target on startup";
+                label: "Se reconnecter à la dernière destination au démarrage";
                 items: [
-                    { value: "Never", label: "Never" },
-                    { value: "Always", label: "Always" },
-                    { value: "FtpOnly", label: "Only if the last target was over FTP" },
-                    { value: "UsbOnly", label: "Only if the last target was a USB drive" }
+                    { value: "Never", label: "Jamais" },
+                    { value: "Always", label: "Toujours" },
+                    { value: "FtpOnly", label: "Seulement si la dernière connexion était en FTP" },
+                    { value: "UsbOnly", label: "Seulement si la dernière destination était un disque USB" }
                 ];
                 active-item: UiState.config.auto-reconnect;
                 set-property: Message.SetAutoReconnect;
